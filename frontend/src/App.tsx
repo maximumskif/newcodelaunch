@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 
 import { WalletConnect } from './features/auth/WalletConnect'
 import { ContractsPage } from './features/contracts/ContractsPage'
+import { HomePage } from './features/marketing/HomePage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
 import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 
@@ -20,19 +21,6 @@ function ComingSoon({ title }: { title: string }) {
     <div className="p-8">
       <h1 className="text-2xl font-semibold text-ink">{title}</h1>
       <p className="mt-2 text-ink-muted">Not built yet — see docs/REBUILD_PROGRESS.md for real status.</p>
-    </div>
-  )
-}
-
-function Home() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-semibold text-ink">NewCodeLaunch</h1>
-      <p className="mt-2 max-w-xl text-ink-muted">
-        Build and launch tokens, NFT collections, and Web3 projects through guided no-code workflows. This is the
-        early rebuild — no marketing homepage or dashboard yet. Connect a wallet above to try the Token Launchpad,
-        Smart Contracts Hub, or NFT Generator.
-      </p>
     </div>
   )
 }
@@ -59,7 +47,7 @@ export default function App() {
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/tokens" element={<TokenLaunchpadPage />} />
           <Route path="/nft" element={<NFTGeneratorPage />} />

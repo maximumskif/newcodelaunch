@@ -17,10 +17,10 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - [x] Visual direction dialed back per spec — removed all gradient buttons, blurred glow blobs (`PageHero`), and competing accent hues (indigo/purple/violet/fuchsia/sky simplified to one violet accent + semantic status colors) across every feature (nft, contracts, tokens, auth, app shell). Radii reduced from `-2xl/-3xl` to `-md/-lg` throughout.
 
 ## Phase 2 — Homepage & app shell
-- [ ] Marketing homepage — not started. `Home()` in `App.tsx` is a 2-line placeholder.
-- [ ] Global nav redesign (logo, Products, Templates, How It Works, Docs, sign-in/dashboard, Start Building CTA) — not started.
+- [x] Marketing homepage — `frontend/src/features/marketing/HomePage.tsx`, wired at `/`. Hero (real CTAs → `/tokens`, `/contracts`), "Start here" creation-path cards (Token/NFT/Contracts Hub marked "Live" and link out; Mint Site marked "Coming soon" and is a non-clickable disabled tile — no dead links), a 5-step "how it works today" that only describes what's actually implemented (no testnet-gate or dashboard step, since those don't exist yet), an honest security/transparency section (4 points, all independently true today), minimal footer (no links to pages/docs that don't exist, no link to the still-private GitHub repo). Deliberately skipped the spec's "interactive wizard preview" widget in the hero — real content shipped first, decorative-but-functional preview can follow later.
+- [ ] Global nav redesign (logo, Products, Templates, How It Works, Docs, sign-in/dashboard, Start Building CTA) — not started. Current header nav is still the flat feature-link list from the old design, reused as-is on the homepage too.
 - [ ] Authenticated app shell (sidebar, project switcher, network selector, wallet state, user menu) — not started. Every feature is currently a flat top-level route.
-- [x] Shared UI component library — `frontend/src/components/ui/` (Button, Card, Badge, EmptyState, Dropzone, Stepper, PageHero, icons), used by every feature. Still small — grows as Phase 2/3 need more primitives (nav, sidebar, dialog, toast).
+- [x] Shared UI component library — `frontend/src/components/ui/` (Button incl. `buttonClassName` for non-`<button>` CTAs like `Link`, Card, Badge, EmptyState, Dropzone, Stepper, PageHero, icons — added Coin/Code/Shield/Wallet/ArrowRight for the homepage), used by every feature. Still small — grows as Phase 3 needs more primitives (sidebar, dialog, toast).
 
 ## Phase 3 — Core project system
 - [ ] `Project` model (type/network/status/draft) — not started. Token deployments and NFT collections exist as separate per-feature records, no unifying project.
