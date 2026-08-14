@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import ai_traits, ipfs, nft_collections, nft_generation
+from ...services import ai_traits, ipfs, nft_collections, nft_generation, projects
 
 nft_bp = Blueprint("nft", __name__)
 
@@ -21,6 +21,17 @@ def create_collection():
         collection_size=int(data.get("collection_size") or 100),
         image_size=int(data.get("image_size") or 1024),
     )
+
+    project_id = data.get("project_id")
+    if project_id:
+        # Best-effort: the collection already exists by this point, so a
+        # stale/foreign project_id must not fail creating it.
+        try:
+            project = projects.get_owned_project(project_id, get_jwt_identity())
+            projects.link_nft_collection(project, collection)
+        except projects.NotFoundError:
+            pass
+
     return jsonify(collection=collection.to_dict()), 201
 
 

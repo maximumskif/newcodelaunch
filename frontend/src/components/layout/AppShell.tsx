@@ -5,7 +5,7 @@ import { WalletConnect } from '../../features/auth/WalletConnect'
 import { EVM_NETWORKS, useNetwork } from '../../features/network/NetworkContext'
 import { PRODUCTS } from '../../lib/products'
 import { Badge } from '../ui/Badge'
-import { IconArrowRight } from '../ui/icons'
+import { IconArrowRight, IconGrid } from '../ui/icons'
 
 // Only these routes actually consume the selected EVM network today — the
 // NFT generator's flow (traits/rarity/IPFS) has no network concept at all,
@@ -33,12 +33,8 @@ function NetworkSelector() {
   )
 }
 
-// Wraps the live product pages (tokens/nft/contracts) with a persistent
-// sidebar + top bar, distinct from the marketing site's top nav. The
-// project/dashboard switcher called for in the original spec is left out on
-// purpose — there's no Project model or persisted-draft backend yet
-// (that's Phase 3), and this repo's rule is no invented data standing in
-// for a feature that doesn't exist server-side yet.
+// Wraps the live product pages (tokens/nft/contracts/dashboard) with a
+// persistent sidebar + top bar, distinct from the marketing site's top nav.
 export function AppShell() {
   const location = useLocation()
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1')
@@ -74,6 +70,19 @@ export function AppShell() {
         </div>
 
         <nav className="flex-1 space-y-0.5 px-2 py-3">
+          <NavLink
+            to="/dashboard"
+            title={isCollapsed ? 'Dashboard' : undefined}
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm ${
+                isActive ? 'bg-accent-500/10 text-ink' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
+              }`
+            }
+          >
+            <IconGrid className="h-4 w-4 shrink-0" />
+            {!isCollapsed && <span>Dashboard</span>}
+          </NavLink>
+          <div className="my-2 border-t border-border" />
           {liveProducts.map((item) => {
             const Icon = item.icon
             return (

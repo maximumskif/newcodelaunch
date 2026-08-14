@@ -6,6 +6,8 @@ import { MarketingLayout } from './components/layout/MarketingLayout'
 import { ContractsPage } from './features/contracts/ContractsPage'
 import { HomePage } from './features/marketing/HomePage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
+import { NewProjectWizard } from './features/projects/NewProjectWizard'
+import { ProjectsDashboard } from './features/projects/ProjectsDashboard'
 import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 
 // Not-yet-built features get an honest placeholder route rather than a 404
@@ -53,6 +55,8 @@ export default function App() {
           ))}
         </Route>
         <Route element={<AppShell />}>
+          <Route path="/dashboard" element={<ProjectsDashboard />} />
+          <Route path="/projects/new" element={<NewProjectWizard />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/tokens" element={<TokenLaunchpadPage />} />
           <Route path="/nft" element={<NFTGeneratorPage />} />

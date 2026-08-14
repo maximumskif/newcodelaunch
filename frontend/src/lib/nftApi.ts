@@ -52,7 +52,7 @@ export function maxPossibleCombinations(layers: NFTLayer[]): number {
 export const nftApi = {
   createCollection: (
     token: string,
-    payload: { name: string; description: string; collection_size: number; image_size: number },
+    payload: { name: string; description: string; collection_size: number; image_size: number; project_id?: string },
   ) => request<{ collection: NFTCollection }>('/nft/collections', { method: 'POST', body: JSON.stringify(payload) }, token),
 
   listCollections: (token: string) => request<{ collections: NFTCollection[] }>('/nft/collections', {}, token),

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
 import { Stepper } from '../../components/ui/Stepper'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
+import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { CollectionSidebar } from './CollectionSidebar'
 import { GenerateStep } from './GenerateStep'
@@ -12,12 +14,15 @@ import { LayerEditor } from './LayerEditor'
 
 export function NFTGeneratorPage() {
   const { accessToken } = useAuth()
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('project')
 
   const [collections, setCollections] = useState<NFTCollection[]>([])
   const [isLoadingCollections, setIsLoadingCollections] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collection, setCollection] = useState<NFTCollection | null>(null)
   const [isLoadingCollection, setIsLoadingCollection] = useState(false)
+  const [project, setProject] = useState<Project | null>(null)
 
   const refreshCollections = async (token: string) => {
     setIsLoadingCollections(true)
@@ -43,6 +48,22 @@ export function NFTGeneratorPage() {
   useEffect(() => {
     if (accessToken) void refreshCollections(accessToken)
   }, [accessToken])
+
+  // Resume: arriving via ?project= either jumps straight to the collection
+  // that project already links to, or (if it's still a bare draft) leaves
+  // selection alone and lets CollectionSidebar pre-fill the create form.
+  useEffect(() => {
+    if (!accessToken || !projectId) return
+    let cancelled = false
+    projectsApi.get(accessToken, projectId).then(({ project: fetched }) => {
+      if (cancelled) return
+      setProject(fetched)
+      if (fetched.nft_collection) setSelectedId(fetched.nft_collection.id)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, projectId])
 
   useEffect(() => {
     if (accessToken && selectedId) void refreshCollection(accessToken, selectedId)
@@ -77,6 +98,8 @@ export function NFTGeneratorPage() {
               setCollections((prev) => [created, ...prev])
               setSelectedId(created.id)
             }}
+            projectId={project && !project.nft_collection ? project.id : null}
+            initialName={project && !project.nft_collection ? project.name : undefined}
           />
 
           <div className="space-y-5">

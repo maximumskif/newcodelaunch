@@ -1,6 +1,11 @@
+import { useSearchParams } from 'react-router-dom'
+
 import { DeployPanel } from '../contracts/DeployPanel'
 
 export function TokenLaunchpadPage() {
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('project')
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-semibold text-ink">Token Launchpad</h1>
@@ -11,6 +16,7 @@ export function TokenLaunchpadPage() {
           title="Deploy Your Token"
           description="Pick a template, fill in the parameters, and deploy with your connected wallet — no private key ever leaves your browser."
           templateType="erc20"
+          projectId={projectId}
         />
       </div>
     </div>

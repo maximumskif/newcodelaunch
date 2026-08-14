@@ -12,6 +12,8 @@ interface Props {
   isLoading: boolean
   onSelect: (id: string) => void
   onCreated: (collection: NFTCollection) => void
+  projectId?: string | null
+  initialName?: string
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -20,9 +22,20 @@ const STATUS_DOT: Record<string, string> = {
   published: 'bg-success',
 }
 
-export function CollectionSidebar({ token, collections, selectedId, isLoading, onSelect, onCreated }: Props) {
-  const [isCreating, setIsCreating] = useState(false)
-  const [name, setName] = useState('')
+export function CollectionSidebar({
+  token,
+  collections,
+  selectedId,
+  isLoading,
+  onSelect,
+  onCreated,
+  projectId,
+  initialName,
+}: Props) {
+  // Arriving from the new-project wizard with a not-yet-created collection —
+  // open the create form pre-filled with the name already chosen there.
+  const [isCreating, setIsCreating] = useState(Boolean(projectId && initialName))
+  const [name, setName] = useState(initialName ?? '')
   const [description, setDescription] = useState('')
   const [size, setSize] = useState('100')
   const [imageSize, setImageSize] = useState('1024')
@@ -42,6 +55,7 @@ export function CollectionSidebar({ token, collections, selectedId, isLoading, o
         description: description.trim(),
         collection_size: Number(size) || 100,
         image_size: Number(imageSize) || 1024,
+        project_id: projectId ?? undefined,
       })
       onCreated(collection)
       setIsCreating(false)

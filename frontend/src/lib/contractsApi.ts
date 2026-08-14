@@ -59,6 +59,7 @@ export interface CreateDeploymentPayload {
   transaction_hash: string
   deployer_address: string
   parameters: Record<string, unknown>
+  project_id?: string
 }
 
 export const contractsApi = {

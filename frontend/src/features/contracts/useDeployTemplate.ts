@@ -23,6 +23,7 @@ interface PendingRecord {
   templateId: string
   network: string
   parameters: Record<string, unknown>
+  projectId?: string
 }
 
 // Shared by both the Smart Contracts Hub and Token Launchpad pages — the deploy flow
@@ -57,6 +58,7 @@ export function useDeployTemplate() {
         transaction_hash: receipt.transactionHash,
         deployer_address: address,
         parameters: pendingRecord.parameters,
+        project_id: pendingRecord.projectId,
       })
       .then(({ deployment: recorded }) => {
         if (cancelled) return
@@ -75,7 +77,7 @@ export function useDeployTemplate() {
   }, [receipt, pendingRecord, accessToken, address, step])
 
   const deploy = useCallback(
-    async (templateId: string, parameters: Record<string, unknown>, network: string) => {
+    async (templateId: string, parameters: Record<string, unknown>, network: string, projectId?: string) => {
       if (!address) {
         setError('Connect an EVM wallet first')
         return
@@ -99,7 +101,7 @@ export function useDeployTemplate() {
         }
 
         setStep('deploying')
-        setPendingRecord({ templateId, network, parameters })
+        setPendingRecord({ templateId, network, parameters, projectId })
         const hash = await deployContractAsync({
           abi: compiled.abi as Abi,
           bytecode: compiled.bytecode as `0x${string}`,

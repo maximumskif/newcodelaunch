@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import blockchain, contract_templates, contracts
+from ...services import blockchain, contract_templates, contracts, projects
 
 contracts_bp = Blueprint("contracts", __name__)
 
@@ -90,6 +90,16 @@ def create_deployment():
         return jsonify(error=str(exc)), 404
     except ValueError as exc:
         return jsonify(error=str(exc)), 422
+
+    project_id = data.get("project_id")
+    if project_id:
+        # Best-effort: the on-chain deployment already happened by this point,
+        # so a stale/foreign project_id must not fail recording it.
+        try:
+            project = projects.get_owned_project(project_id, get_jwt_identity())
+            projects.link_deployment(project, deployment)
+        except projects.NotFoundError:
+            pass
 
     return jsonify(deployment=deployment.to_dict()), 201
 

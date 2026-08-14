@@ -36,4 +36,8 @@ def create_app(config_object=Config):
 
     app.register_blueprint(nft_bp, url_prefix="/api/nft")
 
+    from .blueprints.projects import projects_bp
+
+    app.register_blueprint(projects_bp, url_prefix="/api/projects")
+
     return app

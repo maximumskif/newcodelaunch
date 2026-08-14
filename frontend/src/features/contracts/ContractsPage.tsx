@@ -1,7 +1,12 @@
+import { useSearchParams } from 'react-router-dom'
+
 import { DeployPanel } from './DeployPanel'
 import { NetworkStatusGrid } from './NetworkStatusGrid'
 
 export function ContractsPage() {
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('project')
+
   return (
     <div className="space-y-10 p-8">
       <div>
@@ -16,6 +21,7 @@ export function ContractsPage() {
       <DeployPanel
         title="Deploy a Contract"
         description="Your connected wallet signs the deployment transaction — the backend only compiles the contract and records the result afterward."
+        projectId={projectId}
       />
     </div>
   )

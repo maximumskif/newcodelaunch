@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 
 import { Button } from '../../components/ui/Button'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
+import { projectsApi } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, useNetwork } from '../network/NetworkContext'
 import { DeploymentHistory } from './DeploymentHistory'
@@ -10,20 +11,22 @@ import { TemplateForm } from './TemplateForm'
 import { useDeployTemplate } from './useDeployTemplate'
 
 const BUSY_STEPS = new Set(['compiling', 'deploying', 'confirming', 'recording'])
+const DRAFT_SAVE_DEBOUNCE_MS = 800
 
 interface Props {
   title: string
   description: string
   templateType?: 'erc20' | 'erc721'
+  projectId?: string | null
 }
 
 // Shared by the Smart Contracts Hub (all templates) and Token Launchpad
 // (templateType='erc20') pages — same compile/estimate/deploy/history flow,
 // just a different template subset and page chrome around it.
-export function DeployPanel({ title, description, templateType }: Props) {
+export function DeployPanel({ title, description, templateType, projectId }: Props) {
   const { address } = useAccount()
   const { accessToken } = useAuth()
-  const { network } = useNetwork()
+  const { network, setNetwork } = useNetwork()
 
   const [templates, setTemplates] = useState<ContractTemplateSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -32,6 +35,7 @@ export function DeployPanel({ title, description, templateType }: Props) {
   const [estimateError, setEstimateError] = useState<string | null>(null)
   const [isEstimating, setIsEstimating] = useState(false)
   const [history, setHistory] = useState<ContractDeployment[]>([])
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(!projectId)
 
   const { deploy, step, error, deployment, txHash } = useDeployTemplate()
 
@@ -46,6 +50,39 @@ export function DeployPanel({ title, description, templateType }: Props) {
     if (!accessToken) return
     contractsApi.listDeployments(accessToken).then(({ deployments }) => setHistory(deployments))
   }, [accessToken, deployment])
+
+  // Resume: pull the last-saved template/parameter selection (and network)
+  // back out of the project's draft_data, once, when arriving via ?project=.
+  useEffect(() => {
+    if (!accessToken || !projectId) return
+    let cancelled = false
+    projectsApi.get(accessToken, projectId).then(({ project }) => {
+      if (cancelled) return
+      const draft = project.draft_data as { template_id?: string; parameters?: Record<string, string> }
+      if (draft.template_id) setSelectedId(draft.template_id)
+      if (draft.parameters) setValues(draft.parameters)
+      if (project.network) setNetwork(project.network)
+      setHasRestoredDraft(true)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per projectId, not on every accessToken/setNetwork identity change
+  }, [accessToken, projectId])
+
+  // Autosave: keep the project's draft_data in sync with the in-progress
+  // form so resuming later restores exactly where the user left off.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => {
+    if (!accessToken || !projectId || !hasRestoredDraft || !selectedId) return
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      void projectsApi.update(accessToken, projectId, {
+        draft_data: { template_id: selectedId, parameters: values },
+      })
+    }, DRAFT_SAVE_DEBOUNCE_MS)
+    return () => clearTimeout(saveTimer.current)
+  }, [accessToken, projectId, hasRestoredDraft, selectedId, values])
 
   const selectedTemplate = templates.find((template) => template.id === selectedId) ?? null
 
@@ -77,7 +114,7 @@ export function DeployPanel({ title, description, templateType }: Props) {
 
   const handleDeploy = () => {
     if (!selectedTemplate) return
-    void deploy(selectedTemplate.id, collectParameters(), network)
+    void deploy(selectedTemplate.id, collectParameters(), network, projectId ?? undefined)
   }
 
   const isBusy = BUSY_STEPS.has(step)
