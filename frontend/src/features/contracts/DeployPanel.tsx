@@ -3,9 +3,10 @@ import { useAccount } from 'wagmi'
 
 import { Button } from '../../components/ui/Button'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
-import { projectsApi } from '../../lib/projectsApi'
+import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, useNetwork } from '../network/NetworkContext'
+import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { DeploymentHistory } from './DeploymentHistory'
 import { TemplateForm } from './TemplateForm'
 import { useDeployTemplate } from './useDeployTemplate'
@@ -36,6 +37,7 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
   const [isEstimating, setIsEstimating] = useState(false)
   const [history, setHistory] = useState<ContractDeployment[]>([])
   const [hasRestoredDraft, setHasRestoredDraft] = useState(!projectId)
+  const [project, setProject] = useState<Project | null>(null)
 
   const { deploy, step, error, deployment, txHash } = useDeployTemplate()
 
@@ -56,12 +58,13 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
   useEffect(() => {
     if (!accessToken || !projectId) return
     let cancelled = false
-    projectsApi.get(accessToken, projectId).then(({ project }) => {
+    projectsApi.get(accessToken, projectId).then(({ project: fetched }) => {
       if (cancelled) return
-      const draft = project.draft_data as { template_id?: string; parameters?: Record<string, string> }
+      setProject(fetched)
+      const draft = fetched.draft_data as { template_id?: string; parameters?: Record<string, string> }
       if (draft.template_id) setSelectedId(draft.template_id)
       if (draft.parameters) setValues(draft.parameters)
-      if (project.network) setNetwork(project.network)
+      if (fetched.network) setNetwork(fetched.network)
       setHasRestoredDraft(true)
     })
     return () => {
@@ -69,6 +72,14 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per projectId, not on every accessToken/setNetwork identity change
   }, [accessToken, projectId])
+
+  // Once a deploy actually lands and gets recorded (and best-effort linked
+  // server-side), re-fetch so the context bar's "Deployed" badge reflects
+  // reality instead of staying on "Configuring" after the fact.
+  useEffect(() => {
+    if (!accessToken || !projectId || !deployment) return
+    projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
+  }, [accessToken, projectId, deployment])
 
   // Autosave: keep the project's draft_data in sync with the in-progress
   // form so resuming later restores exactly where the user left off.
@@ -121,7 +132,14 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      {project && (
+        <ProjectContextBar
+          project={project}
+          currentStepLabel={templateType === 'erc20' ? 'Configuring token' : 'Configuring contract'}
+        />
+      )}
+
+      <div className={`flex flex-wrap items-start justify-between gap-3 ${project ? 'mt-4' : ''}`}>
         <div>
           <h2 className="text-lg font-medium text-ink">{title}</h2>
           <p className="mt-1 text-ink-muted">{description}</p>

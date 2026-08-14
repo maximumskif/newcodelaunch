@@ -8,6 +8,7 @@ import { Stepper } from '../../components/ui/Stepper'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
+import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { CollectionSidebar } from './CollectionSidebar'
 import { GenerateStep } from './GenerateStep'
 import { LayerEditor } from './LayerEditor'
@@ -82,6 +83,8 @@ export function NFTGeneratorPage() {
         description="Build a layered trait system with AI-assisted rarity suggestions, composite real artwork with rarity-weighted generation, and publish straight to IPFS — no fake URLs, no round-robin trait picking."
       />
 
+      {project && <ProjectContextBar project={project} currentStepLabel="Building collection" />}
+
       {!accessToken ? (
         <Card padding="lg" className="text-center">
           <p className="text-ink-muted">Connect and sign in with a wallet above to create and manage collections.</p>
@@ -97,6 +100,12 @@ export function NFTGeneratorPage() {
             onCreated={(created) => {
               setCollections((prev) => [created, ...prev])
               setSelectedId(created.id)
+              // The collection was created with this project's id, so the
+              // backend already linked it — re-fetch so the context bar's
+              // badge and the sidebar's "still a draft" gating catch up.
+              if (accessToken && projectId) {
+                void projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
+              }
             }}
             projectId={project && !project.nft_collection ? project.id : null}
             initialName={project && !project.nft_collection ? project.name : undefined}

@@ -36,7 +36,7 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - [x] Client-side signed deploy (no server-side private key) — `frontend/src/features/contracts/DeployPanel.tsx` + `useDeployTemplate.ts`.
 - [x] Deployment history persisted — Postgres via `ContractDeployment` model.
 - [ ] Testnet-first default — **gap**. `backend/app/config.py` network defaults are mainnet RPCs; frontend network picker defaults to `'ethereum'`.
-- [ ] Folded into the Phase-3 project wizard — currently a standalone page, not part of a guided multi-step flow.
+- [x] Folded into the Phase-3 project wizard — `frontend/src/features/projects/ProjectContextBar.tsx`, shown on `DeployPanel`/`NFTGeneratorPage` when arriving via `?project=`. Not a reimplemented wizard step, just a header ("Project: <name>" + status badge that flips to "Deployed"/"Published" once linked + a link back to `/dashboard`) so continuing a draft into these pages reads as step 2 of the project, not a disconnected standalone page.
 
 ## Phase 5 — NFT workflow
 - [x] Layer/trait upload, rarity weighting — `backend/app/services/nft_collections.py`, frontend `LayerEditor`/`LayerCard`.
