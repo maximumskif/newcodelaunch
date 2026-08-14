@@ -4,6 +4,8 @@ import bs58 from 'bs58'
 import { useState } from 'react'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
 import { apiClient, type Chain } from '../../lib/apiClient'
 import { useAuth } from './AuthContext'
 
@@ -77,12 +79,12 @@ export function WalletConnect() {
   if (accessToken && user) {
     return (
       <div className="flex items-center gap-3 text-sm">
-        <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-400">
+        <Badge tone="success">
           {user.chain.toUpperCase()} · {user.wallet_address.slice(0, 6)}…{user.wallet_address.slice(-4)}
-        </span>
-        <button onClick={handleLogout} className="rounded-md border border-white/10 px-3 py-1 hover:bg-white/5">
+        </Badge>
+        <Button variant="secondary" size="sm" onClick={handleLogout}>
           Disconnect
-        </button>
+        </Button>
       </div>
     )
   }
@@ -91,39 +93,25 @@ export function WalletConnect() {
     <div className="flex flex-col items-end gap-2 text-sm">
       <div className="flex gap-2">
         {!isEvmConnected ? (
-          <button
-            onClick={handleConnectEvm}
-            className="rounded-md bg-purple-600 px-3 py-1.5 font-medium hover:bg-purple-500"
-          >
+          <Button variant="primary" onClick={handleConnectEvm}>
             Connect EVM Wallet
-          </button>
+          </Button>
         ) : (
-          <button
-            onClick={handleSignEvm}
-            disabled={isAuthenticating}
-            className="rounded-md bg-purple-600 px-3 py-1.5 font-medium hover:bg-purple-500 disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={handleSignEvm} isLoading={isAuthenticating}>
             Sign in with {address?.slice(0, 6)}…{address?.slice(-4)}
-          </button>
+          </Button>
         )}
         {!isSolanaConnected ? (
-          <button
-            onClick={handleConnectSolana}
-            className="rounded-md bg-violet-700 px-3 py-1.5 font-medium hover:bg-violet-600"
-          >
+          <Button variant="primary" onClick={handleConnectSolana}>
             Connect Solana Wallet
-          </button>
+          </Button>
         ) : (
-          <button
-            onClick={handleSignSolana}
-            disabled={isAuthenticating}
-            className="rounded-md bg-violet-700 px-3 py-1.5 font-medium hover:bg-violet-600 disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={handleSignSolana} isLoading={isAuthenticating}>
             Sign in with {publicKey?.toBase58().slice(0, 6)}…
-          </button>
+          </Button>
         )}
       </div>
-      {error && <p className="max-w-xs text-right text-red-400">{error}</p>}
+      {error && <p className="max-w-xs text-right text-danger">{error}</p>}
     </div>
   )
 }

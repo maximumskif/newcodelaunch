@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 
+import { Card } from '../../components/ui/Card'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { PageHero } from '../../components/ui/PageHero'
+import { Stepper } from '../../components/ui/Stepper'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 import { useAuth } from '../auth/AuthContext'
 import { CollectionSidebar } from './CollectionSidebar'
 import { GenerateStep } from './GenerateStep'
 import { LayerEditor } from './LayerEditor'
-import { PageHero } from './ui/PageHero'
-import { Stepper } from './ui/Stepper'
 
 export function NFTGeneratorPage() {
   const { accessToken } = useAuth()
@@ -60,9 +62,9 @@ export function NFTGeneratorPage() {
       />
 
       {!accessToken ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center">
-          <p className="text-white/70">Connect and sign in with a wallet above to create and manage collections.</p>
-        </div>
+        <Card padding="lg" className="text-center">
+          <p className="text-ink-muted">Connect and sign in with a wallet above to create and manage collections.</p>
+        </Card>
       ) : (
         <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
           <CollectionSidebar
@@ -79,16 +81,16 @@ export function NFTGeneratorPage() {
 
           <div className="space-y-5">
             {!collection ? (
-              <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center text-white/40">
-                {isLoadingCollection ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
-              </div>
+              <EmptyState
+                title={isLoadingCollection ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
+              />
             ) : (
               <>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <Card>
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                      <h2 className="text-xl font-semibold">{collection.name}</h2>
-                      {collection.description && <p className="mt-1 text-sm text-white/60">{collection.description}</p>}
+                      <h2 className="text-xl font-semibold text-ink">{collection.name}</h2>
+                      {collection.description && <p className="mt-1 text-sm text-ink-muted">{collection.description}</p>}
                     </div>
                     <Stepper
                       activeId={activeId}
@@ -98,7 +100,7 @@ export function NFTGeneratorPage() {
                       ]}
                     />
                   </div>
-                </div>
+                </Card>
 
                 <LayerEditor
                   token={accessToken}

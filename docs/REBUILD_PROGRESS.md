@@ -10,16 +10,17 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 
 ## Phase 1 — Architecture & design system
 - [x] Canonical architecture decided: `backend/` (Flask app-factory, blueprints, services, SQLAlchemy) + `frontend/` (Vite/React/TS) + `services/candy-machine/` (Node sidecar). Documented in audit §8.
-- [ ] React-vs-Jinja choice explicitly ratified by the user (audit recommends keeping React; needs a yes/no).
+- [x] React-vs-Jinja choice explicitly ratified by the user (2026-08-14) — keeping React.
 - [x] Legacy code split out — this repo (`newcodelaunch`) carries over only `backend/`, `frontend/`, `services/candy-machine/`; legacy monolith stays in `nocodelaunchyeet`, not copied here.
-- [ ] Design tokens (color/type/spacing/radii/shadow/motion/breakpoints) — not started. Current frontend uses ad hoc Tailwind per component.
-- [ ] Visual direction dialed back per spec (one primary accent, no gradient/glow overuse) — the most recent design pass (in the source repo, pre-audit) went the other way and needs revisiting here.
+- [x] Design tokens defined — `frontend/src/index.css` `@theme`: one accent hue (violet, `accent-50..800`), semantic status colors (success/warning/danger/info), semantic neutral surfaces (canvas/surface/surface-hover/border/border-strong/ink/ink-muted/ink-faint), restrained radii (sm/md/lg), one shadow token, motion tokens + `prefers-reduced-motion` support. Spacing/breakpoints/typography scale left as Tailwind v4 defaults (already sound, no need to reinvent) with a semantic `--font-sans`/`--font-mono` pair.
+- [x] Reusable component library started — `frontend/src/components/ui/`: `Button` (primary/secondary/ghost/danger), `Card`, `Badge` (status pill), `EmptyState`, plus `Dropzone`/`Stepper`/`PageHero`/icon set promoted out of the NFT feature into app-wide components (closes the audit's "scoped to one feature" gap). `RarityBadge` stays NFT-specific, now built on top of `Badge`.
+- [x] Visual direction dialed back per spec — removed all gradient buttons, blurred glow blobs (`PageHero`), and competing accent hues (indigo/purple/violet/fuchsia/sky simplified to one violet accent + semantic status colors) across every feature (nft, contracts, tokens, auth, app shell). Radii reduced from `-2xl/-3xl` to `-md/-lg` throughout.
 
 ## Phase 2 — Homepage & app shell
 - [ ] Marketing homepage — not started. `Home()` in `App.tsx` is a 2-line placeholder.
 - [ ] Global nav redesign (logo, Products, Templates, How It Works, Docs, sign-in/dashboard, Start Building CTA) — not started.
 - [ ] Authenticated app shell (sidebar, project switcher, network selector, wallet state, user menu) — not started. Every feature is currently a flat top-level route.
-- [ ] Shared UI component library — partially exists (`frontend/src/features/nft/ui/*`: Dropzone, RarityBadge, Stepper, PageHero) but scoped to one feature, not app-wide.
+- [x] Shared UI component library — `frontend/src/components/ui/` (Button, Card, Badge, EmptyState, Dropzone, Stepper, PageHero, icons), used by every feature. Still small — grows as Phase 2/3 need more primitives (nav, sidebar, dialog, toast).
 
 ## Phase 3 — Core project system
 - [ ] `Project` model (type/network/status/draft) — not started. Token deployments and NFT collections exist as separate per-feature records, no unifying project.

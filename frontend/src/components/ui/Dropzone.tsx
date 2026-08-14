@@ -49,25 +49,25 @@ export function Dropzone({
       role="button"
       tabIndex={0}
       title={iconOnly ? 'Click or drag an image here' : undefined}
-      className={`group flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed text-center transition-colors ${
+      className={`group flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-center transition-colors duration-150 ${
         iconOnly ? 'p-1.5' : compact ? 'p-4' : 'p-8'
       } ${
         isDragging
-          ? 'border-purple-400 bg-purple-500/10'
-          : 'border-white/15 bg-white/[0.02] hover:border-white/30 hover:bg-white/[0.04]'
+          ? 'border-accent-400 bg-accent-500/10'
+          : 'border-border-strong bg-surface hover:border-ink-faint hover:bg-surface-hover'
       }`}
     >
-      <IconUpload className={`${iconOnly ? 'h-4 w-4' : compact ? 'h-5 w-5' : 'h-7 w-7'} text-white/40 group-hover:text-white/60`} />
+      <IconUpload className={`${iconOnly ? 'h-4 w-4' : compact ? 'h-5 w-5' : 'h-7 w-7'} text-ink-faint group-hover:text-ink-muted`} />
       {!iconOnly && (
-        <p className={compact ? 'text-xs text-white/60' : 'text-sm text-white/70'}>
+        <p className={compact ? 'text-xs text-ink-muted' : 'text-sm text-ink-muted'}>
           {label ?? (
             <>
-              <span className="text-purple-400">Click to upload</span> or drag and drop
+              <span className="text-accent-400">Click to upload</span> or drag and drop
             </>
           )}
         </p>
       )}
-      {hint && !iconOnly && <p className="text-xs text-white/35">{hint}</p>}
+      {hint && !iconOnly && <p className="text-xs text-ink-faint">{hint}</p>}
       <input
         ref={inputRef}
         type="file"

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { IconLink, IconSparkles, IconSpinner } from '../../components/ui/icons'
 import { ipfsGatewayUrl, maxPossibleCombinations, nftApi, uploadUrl, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
-import { IconLink, IconSparkles, IconSpinner } from './ui/icons'
 
 interface Props {
   token: string
@@ -61,14 +64,14 @@ export function GenerateStep({ token, collection }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-1.5 text-lg font-medium">
-            <IconSparkles className="h-4 w-4 text-purple-400" />
+          <h2 className="flex items-center gap-1.5 text-lg font-medium text-ink">
+            <IconSparkles className="h-4 w-4 text-accent-400" />
             Generate & Publish
           </h2>
-          <p className="mt-1 text-sm text-white/60">
+          <p className="mt-1 text-sm text-ink-muted">
             {ready
               ? `Up to ${maxCombinations.toLocaleString()} unique combinations possible from your current traits.`
               : 'Add at least one trait to every layer before generating.'}
@@ -81,44 +84,35 @@ export function GenerateStep({ token, collection }: Props) {
             max={Math.min(200, maxCombinations || 200)}
             value={count}
             onChange={(e) => setCount(e.target.value)}
-            className="w-24 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm"
+            className="w-24 rounded-md border border-border bg-surface px-3 py-1.5 text-sm"
           />
-          <button
-            onClick={handleGenerate}
-            disabled={!ready || isGenerating}
-            className="flex items-center gap-1.5 rounded-md bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-1.5 text-sm font-medium hover:from-purple-500 hover:to-violet-500 disabled:opacity-40"
-          >
-            {isGenerating && <IconSpinner className="h-3.5 w-3.5" />}
+          <Button variant="primary" onClick={handleGenerate} disabled={!ready} isLoading={isGenerating}>
             Generate
-          </button>
+          </Button>
         </div>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       <div className="mt-5">
-        {isLoadingItems && <p className="text-sm text-white/40">Loading items…</p>}
-        {!isLoadingItems && items.length === 0 && (
-          <p className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-white/40">
-            Nothing generated yet.
-          </p>
-        )}
+        {isLoadingItems && <p className="text-sm text-ink-faint">Loading items…</p>}
+        {!isLoadingItems && items.length === 0 && <EmptyState title="Nothing generated yet." />}
         {items.length > 0 && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {items.map((item) => {
               const isPublished = Boolean(item.ipfs_image_hash)
               return (
-                <div key={item.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                <div key={item.id} className="overflow-hidden rounded-md border border-border bg-canvas">
                   <img src={uploadUrl(item.image_path)} alt={`#${item.token_index}`} className="aspect-square w-full object-cover" />
                   <div className="p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">#{item.token_index}</p>
+                      <p className="text-sm font-medium text-ink">#{item.token_index}</p>
                       {isPublished ? (
                         <a
                           href={ipfsGatewayUrl(item.ipfs_image_hash!)}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center gap-1 text-xs text-emerald-400 hover:underline"
+                          className="flex items-center gap-1 text-xs text-success hover:underline"
                         >
                           <IconLink className="h-3 w-3" /> IPFS
                         </a>
@@ -126,7 +120,7 @@ export function GenerateStep({ token, collection }: Props) {
                         <button
                           onClick={() => handlePublish(item.id)}
                           disabled={publishingId === item.id}
-                          className="flex items-center gap-1 rounded border border-white/10 px-2 py-0.5 text-xs hover:bg-white/5 disabled:opacity-40"
+                          className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-hover disabled:opacity-40"
                         >
                           {publishingId === item.id ? <IconSpinner className="h-3 w-3" /> : <IconLink className="h-3 w-3" />}
                           Publish
@@ -137,7 +131,7 @@ export function GenerateStep({ token, collection }: Props) {
                       {item.attributes.slice(0, 3).map((attribute) => (
                         <span
                           key={attribute.trait_type}
-                          className="truncate rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-white/50"
+                          className="truncate rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-ink-muted"
                           title={`${attribute.trait_type}: ${attribute.value}`}
                         >
                           {attribute.value}
@@ -151,6 +145,6 @@ export function GenerateStep({ token, collection }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

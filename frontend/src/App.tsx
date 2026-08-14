@@ -18,8 +18,8 @@ const NAV_ITEMS = [
 function ComingSoon({ title }: { title: string }) {
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      <p className="mt-2 text-white/60">Scaffolded — real functionality lands in a later phase of the rebuild.</p>
+      <h1 className="text-2xl font-semibold text-ink">{title}</h1>
+      <p className="mt-2 text-ink-muted">Not built yet — see docs/REBUILD_PROGRESS.md for real status.</p>
     </div>
   )
 }
@@ -27,10 +27,11 @@ function ComingSoon({ title }: { title: string }) {
 function Home() {
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-semibold">NoCode Launchpad</h1>
-      <p className="mt-2 text-white/60">
-        Phase 1 scaffold. Connect a wallet above to authenticate against the new backend, or check the Smart
-        Contracts Hub for live chain status.
+      <h1 className="text-2xl font-semibold text-ink">NewCodeLaunch</h1>
+      <p className="mt-2 max-w-xl text-ink-muted">
+        Build and launch tokens, NFT collections, and Web3 projects through guided no-code workflows. This is the
+        early rebuild — no marketing homepage or dashboard yet. Connect a wallet above to try the Token Launchpad,
+        Smart Contracts Hub, or NFT Generator.
       </p>
     </div>
   )
@@ -38,17 +39,17 @@ function Home() {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
-        <nav className="flex flex-wrap items-center gap-4 text-sm text-white/70">
-          <NavLink to="/" className="font-semibold text-white">
-            NoCode Launchpad
+    <div className="min-h-screen bg-canvas text-ink">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4">
+        <nav className="flex flex-wrap items-center gap-4 text-sm text-ink-muted">
+          <NavLink to="/" className="font-semibold text-ink">
+            NewCodeLaunch
           </NavLink>
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
-              className={({ isActive }) => (isActive ? 'text-purple-400' : 'hover:text-white')}
+              className={({ isActive }) => (isActive ? 'text-accent-400' : 'hover:text-ink')}
             >
               {item.label}
             </NavLink>

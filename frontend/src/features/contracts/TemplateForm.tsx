@@ -11,16 +11,16 @@ export function TemplateForm({ params, values, onChange }: Props) {
     <div className="grid gap-3 sm:grid-cols-2">
       {params.map((param) => (
         <label key={param.name} className="flex flex-col gap-1 text-sm">
-          <span className="text-white/70">
+          <span className="text-ink-muted">
             {param.name}
-            {param.required && <span className="text-red-400"> *</span>}
+            {param.required && <span className="text-danger"> *</span>}
           </span>
           <input
             type="text"
             value={values[param.name] ?? (param.default !== undefined ? String(param.default) : '')}
             onChange={(event) => onChange(param.name, event.target.value)}
             placeholder={param.description}
-            className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-white placeholder:text-white/30"
+            className="rounded-md border border-border bg-surface px-3 py-1.5 text-ink placeholder:text-ink-faint"
           />
         </label>
       ))}

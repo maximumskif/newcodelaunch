@@ -1,8 +1,11 @@
 import { useState } from 'react'
 
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { IconPlus } from '../../components/ui/icons'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 import { LayerCard } from './LayerCard'
-import { IconPlus, IconSpinner } from './ui/icons'
 
 interface Props {
   token: string
@@ -33,11 +36,11 @@ export function LayerEditor({ token, collection, onChange }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium">Layers & Traits</h2>
-          <p className="mt-0.5 text-sm text-white/60">
+          <h2 className="text-lg font-medium text-ink">Layers & Traits</h2>
+          <p className="mt-0.5 text-sm text-ink-muted">
             Layers stack bottom-to-top. Every layer needs at least one trait — use AI to suggest a rarity while
             you upload.
           </p>
@@ -48,30 +51,22 @@ export function LayerEditor({ token, collection, onChange }: Props) {
             onChange={(e) => setNewLayerName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddLayer()}
             placeholder="New layer name (e.g. Background)"
-            className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm placeholder:text-white/30"
+            className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm placeholder:text-ink-faint"
           />
-          <button
-            onClick={handleAddLayer}
-            disabled={isSubmitting || !newLayerName.trim()}
-            className="flex items-center gap-1.5 rounded-md border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5 disabled:opacity-40"
-          >
-            {isSubmitting ? <IconSpinner className="h-3.5 w-3.5" /> : <IconPlus className="h-3.5 w-3.5" />}
+          <Button variant="secondary" onClick={handleAddLayer} disabled={!newLayerName.trim()} isLoading={isSubmitting}>
+            <IconPlus className="h-3.5 w-3.5" />
             Add layer
-          </button>
+          </Button>
         </div>
       </div>
-      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
 
       <div className="mt-4 space-y-2.5">
-        {layers.length === 0 && (
-          <p className="rounded-xl border border-dashed border-white/10 py-6 text-center text-sm text-white/40">
-            No layers yet. Add one to start uploading trait images.
-          </p>
-        )}
+        {layers.length === 0 && <EmptyState compact title="No layers yet." description="Add one to start uploading trait images." />}
         {layers.map((layer) => (
           <LayerCard key={layer.id} token={token} layer={layer} onTraitAdded={onChange} />
         ))}
       </div>
-    </div>
+    </Card>
   )
 }

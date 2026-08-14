@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { Button } from '../../components/ui/Button'
+import { Dropzone } from '../../components/ui/Dropzone'
+import { IconPlus, IconSparkles, IconSpinner } from '../../components/ui/icons'
 import { aiTraitsApi, nftApi, uploadUrl, type ImageAnalysis, type NFTLayer } from '../../lib/nftApi'
-import { Dropzone } from './ui/Dropzone'
 import { RarityBadge } from './ui/RarityBadge'
 import { COLOR_HEX } from './ui/colorHex'
-import { IconPlus, IconSparkles, IconSpinner } from './ui/icons'
 
 interface Props {
   token: string
@@ -77,20 +78,17 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+    <div className="rounded-md border border-border bg-surface p-3">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-white">{layer.name}</h3>
+        <h3 className="text-sm font-medium text-ink">{layer.name}</h3>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-white/40">
+          <span className="text-xs text-ink-faint">
             {layer.traits.length} trait{layer.traits.length === 1 ? '' : 's'}
           </span>
           {!isFormOpen && (
-            <button
-              onClick={() => setIsFormOpen(true)}
-              className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-xs hover:bg-white/5"
-            >
+            <Button variant="secondary" size="sm" onClick={() => setIsFormOpen(true)}>
               <IconPlus className="h-3 w-3" /> Add
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -98,21 +96,21 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
       {layer.traits.length > 0 && (
         <div className="mb-2 grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5">
           {layer.traits.map((trait) => (
-            <div key={trait.id} className="overflow-hidden rounded-md border border-white/10 bg-black/20" title={`${trait.name} · weight ${trait.rarity_weight}`}>
+            <div key={trait.id} className="overflow-hidden rounded-md border border-border bg-canvas" title={`${trait.name} · weight ${trait.rarity_weight}`}>
               <img src={uploadUrl(trait.image_path)} alt={trait.name} className="aspect-square w-full object-contain" />
-              <p className="truncate px-1 py-0.5 text-[9px] text-white/50">{trait.name}</p>
+              <p className="truncate px-1 py-0.5 text-[9px] text-ink-faint">{trait.name}</p>
             </div>
           ))}
         </div>
       )}
 
       {isFormOpen && (
-        <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+        <div className="rounded-md border border-border bg-canvas p-2">
           <div className="flex flex-wrap items-center gap-2">
             {previewUrl ? (
               <div
                 onClick={() => handleFile(null)}
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-white/10 bg-black/20"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-canvas"
                 title="Click to remove"
               >
                 <img src={previewUrl} alt="preview" className="h-full w-full object-contain" />
@@ -127,7 +125,7 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Trait name"
-              className="min-w-[7rem] flex-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm placeholder:text-white/30"
+              className="min-w-[7rem] flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm placeholder:text-ink-faint"
             />
 
             <div className="flex items-center gap-1.5" title="Rarity weight">
@@ -137,29 +135,24 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
                 max={100}
                 value={rarity}
                 onChange={(e) => setRarity(Number(e.target.value))}
-                className="w-16 accent-purple-500"
+                className="w-16 accent-accent-500"
               />
-              <span className="w-6 text-right text-xs text-white/50">{rarity}</span>
+              <span className="w-6 text-right text-xs text-ink-faint">{rarity}</span>
             </div>
 
             <button
               onClick={handleAiSuggest}
               disabled={!pendingFile || isAnalyzing}
               title="Suggest rarity from AI image analysis"
-              className="flex items-center gap-1 rounded-md border border-purple-400/30 px-2 py-1 text-xs text-purple-300 hover:bg-purple-500/10 disabled:opacity-40"
+              className="flex items-center gap-1 rounded-md border border-accent-500/30 px-2 py-1 text-xs text-accent-300 hover:bg-accent-500/10 disabled:opacity-40"
             >
               {isAnalyzing ? <IconSpinner className="h-3 w-3" /> : <IconSparkles className="h-3 w-3" />}
               AI
             </button>
 
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !pendingFile || !name.trim()}
-              className="flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1 text-xs font-medium hover:bg-purple-500 disabled:opacity-40"
-            >
-              {isSubmitting && <IconSpinner className="h-3 w-3" />}
+            <Button variant="primary" size="sm" onClick={handleSubmit} disabled={!pendingFile || !name.trim()} isLoading={isSubmitting}>
               Add
-            </button>
+            </Button>
 
             {layer.traits.length > 0 && (
               <button
@@ -167,7 +160,7 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
                   resetForm()
                   setIsFormOpen(false)
                 }}
-                className="text-xs text-white/40 hover:text-white/70"
+                className="text-xs text-ink-faint hover:text-ink-muted"
               >
                 Cancel
               </button>
@@ -175,21 +168,21 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
           </div>
 
           {aiResult && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-white/10 pt-1.5 text-xs">
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-border pt-1.5 text-xs">
               <RarityBadge tier={aiResult.suggested_rarity} />
               <span
-                className="h-3 w-3 rounded-full border border-white/20"
+                className="h-3 w-3 rounded-full border border-border-strong"
                 style={{ backgroundColor: COLOR_HEX[aiResult.traits.dominant_color] ?? COLOR_HEX.unknown }}
               />
-              <span className="capitalize text-white/50">{aiResult.traits.art_style}</span>
+              <span className="capitalize text-ink-faint">{aiResult.traits.art_style}</span>
               {aiResult.traits.ai_style_classification && (
-                <span className="text-white/40">· {aiResult.traits.ai_style_classification}</span>
+                <span className="text-ink-faint">· {aiResult.traits.ai_style_classification}</span>
               )}
             </div>
           )}
         </div>
       )}
-      {error && <p className="mt-1.5 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
     </div>
   )
 }

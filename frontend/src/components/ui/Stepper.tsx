@@ -16,16 +16,16 @@ export function Stepper({ steps, activeId }: { steps: StepInfo[]; activeId: stri
             <div
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1 ${
                 step.done
-                  ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/30'
+                  ? 'bg-success/15 text-success ring-success/30'
                   : isActive
-                    ? 'bg-gradient-to-br from-purple-600 to-violet-600 text-white ring-transparent'
-                    : 'bg-white/5 text-white/40 ring-white/10'
+                    ? 'bg-accent-600 text-white ring-transparent'
+                    : 'bg-surface-hover text-ink-faint ring-border'
               }`}
             >
               {step.done ? <IconCheck className="h-3.5 w-3.5" /> : index + 1}
             </div>
-            <span className={`text-sm ${isActive ? 'font-medium text-white' : 'text-white/50'}`}>{step.label}</span>
-            {index < steps.length - 1 && <div className="mx-2 h-px w-8 bg-white/10" />}
+            <span className={`text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-muted'}`}>{step.label}</span>
+            {index < steps.length - 1 && <div className="mx-2 h-px w-8 bg-border" />}
           </div>
         )
       })}
