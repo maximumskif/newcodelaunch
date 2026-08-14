@@ -22,10 +22,16 @@ function NetworkSelector() {
           key={item.id}
           type="button"
           onClick={() => setNetwork(item.id)}
-          className={`rounded px-2 py-1 transition-colors duration-150 ${
-            network === item.id ? 'bg-accent-500/10 text-ink' : 'text-ink-muted hover:text-ink'
+          title={item.isTestnet ? undefined : 'Mainnet — deploys cost real funds'}
+          className={`flex items-center gap-1 rounded px-2 py-1 transition-colors duration-150 ${
+            network === item.id
+              ? item.isTestnet
+                ? 'bg-accent-500/10 text-ink'
+                : 'bg-warning/10 text-ink'
+              : 'text-ink-muted hover:text-ink'
           }`}
         >
+          {!item.isTestnet && <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />}
           {item.label}
         </button>
       ))}

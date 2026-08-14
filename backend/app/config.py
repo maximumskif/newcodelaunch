@@ -43,8 +43,14 @@ class Config:
     RATE_LIMIT_STORAGE_URI = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
 
     # Chain RPCs are not secrets — public endpoints are a fine default, same as the old config.
+    # Testnets are listed first and are what the frontend network picker
+    # defaults to (see NetworkContext.tsx) — mainnet requires the user to
+    # deliberately switch networks and confirm before a deploy goes through.
+    SEPOLIA_RPC_URL = os.environ.get("SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com")
     ETHEREUM_RPC_URL = os.environ.get("ETHEREUM_RPC_URL", "https://eth.llamarpc.com")
+    POLYGON_AMOY_RPC_URL = os.environ.get("POLYGON_AMOY_RPC_URL", "https://rpc-amoy.polygon.technology")
     POLYGON_RPC_URL = os.environ.get("POLYGON_RPC_URL", "https://polygon-rpc.com")
+    BSC_TESTNET_RPC_URL = os.environ.get("BSC_TESTNET_RPC_URL", "https://bsc-testnet-rpc.publicnode.com")
     BSC_RPC_URL = os.environ.get("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
     SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 

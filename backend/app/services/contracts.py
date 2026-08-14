@@ -17,8 +17,11 @@ from ..models.deployment import ContractDeployment
 from . import blockchain, contract_templates, solidity
 
 NATIVE_TOKENS = {
+    "sepolia": "ETH",
     "ethereum": "ETH",
-    "polygon": "MATIC",
+    "polygon_amoy": "POL",
+    "polygon": "POL",
+    "bsc_testnet": "tBNB",
     "bsc": "BNB",
 }
 

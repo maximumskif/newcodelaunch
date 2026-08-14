@@ -38,8 +38,17 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
   const [history, setHistory] = useState<ContractDeployment[]>([])
   const [hasRestoredDraft, setHasRestoredDraft] = useState(!projectId)
   const [project, setProject] = useState<Project | null>(null)
+  const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
 
   const { deploy, step, error, deployment, txHash } = useDeployTemplate()
+
+  const isMainnet = EVM_NETWORKS.find((item) => item.id === network)?.isTestnet === false
+
+  // Re-arm the confirmation every time the network changes so switching
+  // straight from one mainnet to another still requires a fresh tick.
+  useEffect(() => {
+    setMainnetConfirmed(false)
+  }, [network])
 
   useEffect(() => {
     contractsApi.listTemplates(templateType).then(({ templates: fetched }) => {
@@ -145,7 +154,11 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
           <p className="mt-1 text-ink-muted">{description}</p>
         </div>
         <p className="text-sm text-ink-faint">
-          Network: <span className="text-ink-muted">{EVM_NETWORKS.find((item) => item.id === network)?.label ?? network}</span>{' '}
+          Network:{' '}
+          <span className={isMainnet ? 'font-medium text-warning' : 'text-ink-muted'}>
+            {EVM_NETWORKS.find((item) => item.id === network)?.label ?? network}
+            {isMainnet ? ' (mainnet)' : ''}
+          </span>{' '}
           — change it in the top bar
         </p>
       </div>
@@ -170,11 +183,30 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
           <div className="space-y-4">
             <TemplateForm params={selectedTemplate.deployment_params} values={values} onChange={handleChange} />
 
+            {isMainnet && (
+              <label className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={mainnetConfirmed}
+                  onChange={(e) => setMainnetConfirmed(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  This deploys to <span className="font-medium text-ink">mainnet</span> using real funds from your
+                  wallet — not reversible. I understand and want to continue.
+                </span>
+              </label>
+            )}
+
             <div className="flex flex-wrap items-center gap-3">
               <Button variant="secondary" onClick={handleEstimate} disabled={!address} isLoading={isEstimating}>
                 Estimate cost
               </Button>
-              <Button variant="primary" onClick={handleDeploy} disabled={!address || isBusy}>
+              <Button
+                variant="primary"
+                onClick={handleDeploy}
+                disabled={!address || isBusy || (isMainnet && !mainnetConfirmed)}
+              >
                 {isBusy ? `${step}…` : 'Deploy'}
               </Button>
               {!address && <span className="text-sm text-ink-faint">Connect an EVM wallet to estimate or deploy</span>}

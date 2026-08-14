@@ -12,8 +12,11 @@ import { useAuth } from '../auth/AuthContext'
 // idle -> compiling -> deploying -> confirming -> recording -> done.
 
 const NETWORK_TO_CHAIN_ID: Record<string, number> = {
+  sepolia: 11155111,
   ethereum: 1,
+  polygon_amoy: 80002,
   polygon: 137,
+  bsc_testnet: 97,
   bsc: 56,
 }
 

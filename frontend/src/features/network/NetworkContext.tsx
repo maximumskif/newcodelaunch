@@ -3,12 +3,19 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 export interface EvmNetwork {
   id: string
   label: string
+  isTestnet: boolean
 }
 
+// Testnets listed (and defaulted to) first — Phase 4's testnet-first
+// requirement. Mainnet entries still work, they're just not the default and
+// DeployPanel requires an explicit confirmation before deploying to one.
 export const EVM_NETWORKS: EvmNetwork[] = [
-  { id: 'ethereum', label: 'Ethereum' },
-  { id: 'polygon', label: 'Polygon' },
-  { id: 'bsc', label: 'BNB Smart Chain' },
+  { id: 'sepolia', label: 'Sepolia', isTestnet: true },
+  { id: 'ethereum', label: 'Ethereum', isTestnet: false },
+  { id: 'polygon_amoy', label: 'Amoy', isTestnet: true },
+  { id: 'polygon', label: 'Polygon', isTestnet: false },
+  { id: 'bsc_testnet', label: 'BSC Testnet', isTestnet: true },
+  { id: 'bsc', label: 'BNB Smart Chain', isTestnet: false },
 ]
 
 interface NetworkContextValue {
@@ -24,7 +31,7 @@ const NetworkContext = createContext<NetworkContextValue | null>(null)
 // compile/estimate/deploy flow. Solana has no equivalent — the NFT generator
 // doesn't read this.
 export function NetworkProvider({ children }: { children: ReactNode }) {
-  const [network, setNetwork] = useState('ethereum')
+  const [network, setNetwork] = useState('sepolia')
   const value = useMemo(() => ({ network, setNetwork }), [network])
   return <NetworkContext.Provider value={value}>{children}</NetworkContext.Provider>
 }

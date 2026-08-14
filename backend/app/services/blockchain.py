@@ -32,19 +32,47 @@ from web3 import HTTPProvider, Web3
 from web3.middleware import geth_poa_middleware
 
 EVM_NETWORKS = {
+    # Testnets first — this is also the order the frontend network picker
+    # renders in, and it defaults to the first entry (see NetworkContext.tsx).
+    "sepolia": {
+        "name": "Ethereum Sepolia",
+        "chain_id": 11155111,
+        "explorer_url": "https://sepolia.etherscan.io",
+        "native_token": "ETH",
+        "poa": False,
+        "is_testnet": True,
+    },
     "ethereum": {
         "name": "Ethereum Mainnet",
         "chain_id": 1,
         "explorer_url": "https://etherscan.io",
         "native_token": "ETH",
         "poa": False,
+        "is_testnet": False,
+    },
+    "polygon_amoy": {
+        "name": "Polygon Amoy",
+        "chain_id": 80002,
+        "explorer_url": "https://amoy.polygonscan.com",
+        "native_token": "POL",
+        "poa": True,
+        "is_testnet": True,
     },
     "polygon": {
         "name": "Polygon Mainnet",
         "chain_id": 137,
         "explorer_url": "https://polygonscan.com",
-        "native_token": "MATIC",
+        "native_token": "POL",
         "poa": True,
+        "is_testnet": False,
+    },
+    "bsc_testnet": {
+        "name": "BNB Smart Chain Testnet",
+        "chain_id": 97,
+        "explorer_url": "https://testnet.bscscan.com",
+        "native_token": "tBNB",
+        "poa": True,
+        "is_testnet": True,
     },
     "bsc": {
         "name": "BNB Smart Chain",
@@ -52,6 +80,7 @@ EVM_NETWORKS = {
         "explorer_url": "https://bscscan.com",
         "native_token": "BNB",
         "poa": True,
+        "is_testnet": False,
     },
 }
 
@@ -64,8 +93,11 @@ SOLANA_NETWORKS = {
 }
 
 _RPC_CONFIG_KEYS = {
+    "sepolia": "SEPOLIA_RPC_URL",
     "ethereum": "ETHEREUM_RPC_URL",
+    "polygon_amoy": "POLYGON_AMOY_RPC_URL",
     "polygon": "POLYGON_RPC_URL",
+    "bsc_testnet": "BSC_TESTNET_RPC_URL",
     "bsc": "BSC_RPC_URL",
     "solana": "SOLANA_RPC_URL",
 }

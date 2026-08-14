@@ -35,7 +35,7 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - [x] Gas/cost estimation — `contracts.py` `estimate_deployment`.
 - [x] Client-side signed deploy (no server-side private key) — `frontend/src/features/contracts/DeployPanel.tsx` + `useDeployTemplate.ts`.
 - [x] Deployment history persisted — Postgres via `ContractDeployment` model.
-- [ ] Testnet-first default — **gap**. `backend/app/config.py` network defaults are mainnet RPCs; frontend network picker defaults to `'ethereum'`.
+- [x] Testnet-first default — `backend/app/services/blockchain.py` `EVM_NETWORKS` now lists a testnet alongside each mainnet (`sepolia`/`ethereum`, `polygon_amoy`/`polygon`, `bsc_testnet`/`bsc`, each tagged `is_testnet`), with RPC defaults in `config.py`/`.env.example`. Frontend `NetworkContext.tsx` defaults `network` to `'sepolia'` and lists testnets first; `wagmiConfig.ts` registers all six chains. Mainnet still fully works — it's not removed, just not the default — and `DeployPanel.tsx` now requires an explicit checkbox ("this deploys to mainnet using real funds... I understand") before the Deploy button is enabled whenever a mainnet network is selected, re-armed on every network switch. The top-bar network selector (`AppShell.tsx`) marks mainnet entries with a small warning-colored dot.
 - [x] Folded into the Phase-3 project wizard — `frontend/src/features/projects/ProjectContextBar.tsx`, shown on `DeployPanel`/`NFTGeneratorPage` when arriving via `?project=`. Not a reimplemented wizard step, just a header ("Project: <name>" + status badge that flips to "Deployed"/"Published" once linked + a link back to `/dashboard`) so continuing a draft into these pages reads as step 2 of the project, not a disconnected standalone page.
 
 ## Phase 5 — NFT workflow
@@ -61,5 +61,5 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - [x] README reflects only verified capabilities — done as part of the 2026-08-14 split (`README.md` explicitly separates "works today" from "not built yet").
 
 ## Known security items to close before mainnet is ever enabled
-- [ ] Testnet-default + explicit mainnet-confirmation gate (see Phase 4).
+- [x] Testnet-default + explicit mainnet-confirmation gate (see Phase 4).
 - [x] Legacy server-side private-key signing routes (confirmed live in `nocodelaunchyeet`'s `app.py`, `smart_contract_deployer.py`, `blockchain_manager.py`) — resolved by not carrying that code into this repo at all.
