@@ -6,6 +6,8 @@ import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { Dropdown } from '../../components/ui/Dropdown'
+import { IconChevronDown } from '../../components/ui/icons'
 import { apiClient, type Chain } from '../../lib/apiClient'
 import { useAuth } from './AuthContext'
 
@@ -13,6 +15,7 @@ export function WalletConnect() {
   const { user, accessToken, login, logout } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticating, setIsAuthenticating] = useState(false)
+  const [didCopy, setDidCopy] = useState(false)
 
   const { address, isConnected: isEvmConnected } = useAccount()
   const { connectors, connect } = useConnect()
@@ -77,15 +80,43 @@ export function WalletConnect() {
   }
 
   if (accessToken && user) {
+    const handleCopy = () => {
+      void navigator.clipboard.writeText(user.wallet_address)
+      setDidCopy(true)
+      setTimeout(() => setDidCopy(false), 1500)
+    }
+
     return (
-      <div className="flex items-center gap-3 text-sm">
-        <Badge tone="success">
-          {user.chain.toUpperCase()} · {user.wallet_address.slice(0, 6)}…{user.wallet_address.slice(-4)}
-        </Badge>
-        <Button variant="secondary" size="sm" onClick={handleLogout}>
+      <Dropdown
+        align="right"
+        trigger={
+          <>
+            <Badge tone="success">
+              {user.chain.toUpperCase()} · {user.wallet_address.slice(0, 6)}…{user.wallet_address.slice(-4)}
+            </Badge>
+            <IconChevronDown className="h-3.5 w-3.5" />
+          </>
+        }
+      >
+        <div className="px-3 py-2">
+          <p className="text-xs text-ink-faint">Signed in as</p>
+          <p className="mt-0.5 break-all font-mono text-xs text-ink">{user.wallet_address}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="block w-full rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-surface-hover"
+        >
+          {didCopy ? 'Copied' : 'Copy address'}
+        </button>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="block w-full rounded-md px-3 py-2 text-left text-sm text-danger hover:bg-surface-hover"
+        >
           Disconnect
-        </Button>
-      </div>
+        </button>
+      </Dropdown>
     )
   }
 

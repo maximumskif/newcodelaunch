@@ -1,16 +1,18 @@
 import { useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 
-import { Nav } from './components/layout/Nav'
+import { AppShell } from './components/layout/AppShell'
+import { MarketingLayout } from './components/layout/MarketingLayout'
 import { ContractsPage } from './features/contracts/ContractsPage'
 import { HomePage } from './features/marketing/HomePage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
 import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 
-const NAV_ITEMS = [
-  { path: '/tokens', label: 'Token Launchpad' },
-  { path: '/nft', label: 'NFT Generator' },
-  { path: '/contracts', label: 'Smart Contracts Hub' },
+// Not-yet-built features get an honest placeholder route rather than a 404
+// or a link that goes nowhere. Nothing in the nav or sidebar links to these
+// anymore (both show a "Soon" badge instead) — these routes only matter if
+// someone hits the URL directly.
+const COMING_SOON_ROUTES = [
   { path: '/defi', label: 'DeFi Scanner' },
   { path: '/market', label: 'Market Intelligence' },
   { path: '/marketplace', label: 'Template Marketplace' },
@@ -41,20 +43,21 @@ function ComingSoon({ title }: { title: string }) {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-canvas text-ink">
+    <>
       <ScrollToHash />
-      <Nav />
-      <main>
-        <Routes>
+      <Routes>
+        <Route element={<MarketingLayout />}>
           <Route path="/" element={<HomePage />} />
+          {COMING_SOON_ROUTES.map((item) => (
+            <Route key={item.path} path={item.path} element={<ComingSoon title={item.label} />} />
+          ))}
+        </Route>
+        <Route element={<AppShell />}>
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/tokens" element={<TokenLaunchpadPage />} />
           <Route path="/nft" element={<NFTGeneratorPage />} />
-          {NAV_ITEMS.filter((item) => !['/contracts', '/tokens', '/nft'].includes(item.path)).map((item) => (
-            <Route key={item.path} path={item.path} element={<ComingSoon title={item.label} />} />
-          ))}
-        </Routes>
-      </main>
-    </div>
+        </Route>
+      </Routes>
+    </>
   )
 }

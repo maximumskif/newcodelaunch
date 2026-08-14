@@ -4,15 +4,10 @@ import { useAccount } from 'wagmi'
 import { Button } from '../../components/ui/Button'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
 import { useAuth } from '../auth/AuthContext'
+import { EVM_NETWORKS, useNetwork } from '../network/NetworkContext'
 import { DeploymentHistory } from './DeploymentHistory'
 import { TemplateForm } from './TemplateForm'
 import { useDeployTemplate } from './useDeployTemplate'
-
-const NETWORKS = [
-  { id: 'ethereum', label: 'Ethereum' },
-  { id: 'polygon', label: 'Polygon' },
-  { id: 'bsc', label: 'BNB Smart Chain' },
-]
 
 const BUSY_STEPS = new Set(['compiling', 'deploying', 'confirming', 'recording'])
 
@@ -28,10 +23,10 @@ interface Props {
 export function DeployPanel({ title, description, templateType }: Props) {
   const { address } = useAccount()
   const { accessToken } = useAuth()
+  const { network } = useNetwork()
 
   const [templates, setTemplates] = useState<ContractTemplateSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [network, setNetwork] = useState('ethereum')
   const [values, setValues] = useState<Record<string, string>>({})
   const [estimate, setEstimate] = useState<DeploymentEstimate | null>(null)
   const [estimateError, setEstimateError] = useState<string | null>(null)
@@ -89,8 +84,16 @@ export function DeployPanel({ title, description, templateType }: Props) {
 
   return (
     <div>
-      <h2 className="text-lg font-medium text-ink">{title}</h2>
-      <p className="mt-1 text-ink-muted">{description}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-ink">{title}</h2>
+          <p className="mt-1 text-ink-muted">{description}</p>
+        </div>
+        <p className="text-sm text-ink-faint">
+          Network: <span className="text-ink-muted">{EVM_NETWORKS.find((item) => item.id === network)?.label ?? network}</span>{' '}
+          — change it in the top bar
+        </p>
+      </div>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[280px_1fr]">
         <div className="space-y-2">
@@ -110,20 +113,6 @@ export function DeployPanel({ title, description, templateType }: Props) {
 
         {selectedTemplate && (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {NETWORKS.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setNetwork(item.id)}
-                  className={`rounded-md border px-3 py-1 text-sm transition-colors duration-150 ${
-                    network === item.id ? 'border-accent-500 bg-accent-500/10 text-ink' : 'border-border text-ink-muted hover:bg-surface-hover'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
             <TemplateForm params={selectedTemplate.deployment_params} values={values} onChange={handleChange} />
 
             <div className="flex flex-wrap items-center gap-3">

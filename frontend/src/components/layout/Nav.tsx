@@ -1,27 +1,11 @@
 import { Link, NavLink } from 'react-router-dom'
 
 import { WalletConnect } from '../../features/auth/WalletConnect'
+import { PRODUCTS, type ProductLink } from '../../lib/products'
 import { Badge } from '../ui/Badge'
 import { buttonClassName } from '../ui/Button'
 import { Dropdown } from '../ui/Dropdown'
 import { IconChevronDown } from '../ui/icons'
-
-interface ProductLink {
-  label: string
-  path?: string
-}
-
-// Mirrors what's actually routed in App.tsx — live items link out, everything
-// else shows a "Soon" badge instead of a dead link. Keep this in sync with
-// App.tsx's route table when a placeholder page ships for real.
-const PRODUCTS: ProductLink[] = [
-  { label: 'Token Launchpad', path: '/tokens' },
-  { label: 'NFT Generator', path: '/nft' },
-  { label: 'Smart Contracts Hub', path: '/contracts' },
-  { label: 'Candy Machine' },
-  { label: 'DeFi Scanner' },
-  { label: 'Market Intelligence' },
-]
 
 function ProductRow({ label, path }: ProductLink) {
   if (path) {

@@ -6,6 +6,7 @@ import { WagmiProvider } from 'wagmi'
 
 import App from './App.tsx'
 import { AuthProvider } from './features/auth/AuthContext.tsx'
+import { NetworkProvider } from './features/network/NetworkContext.tsx'
 import './index.css'
 import { SolanaWalletProvider } from './lib/solanaWallets.tsx'
 import { wagmiConfig } from './lib/wagmiConfig.ts'
@@ -18,9 +19,11 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <SolanaWalletProvider>
           <AuthProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
+            <NetworkProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </NetworkProvider>
           </AuthProvider>
         </SolanaWalletProvider>
       </QueryClientProvider>
