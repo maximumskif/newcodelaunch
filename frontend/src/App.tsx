@@ -5,6 +5,8 @@ import { AppShell } from './components/layout/AppShell'
 import { MarketingLayout } from './components/layout/MarketingLayout'
 import { ContractsPage } from './features/contracts/ContractsPage'
 import { HomePage } from './features/marketing/HomePage'
+import { DefiScannerPage } from './features/market/DefiScannerPage'
+import { MarketIntelligencePage } from './features/market/MarketIntelligencePage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
 import { NewProjectWizard } from './features/projects/NewProjectWizard'
 import { ProjectsDashboard } from './features/projects/ProjectsDashboard'
@@ -15,8 +17,6 @@ import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 // anymore (both show a "Soon" badge instead) — these routes only matter if
 // someone hits the URL directly.
 const COMING_SOON_ROUTES = [
-  { path: '/defi', label: 'DeFi Scanner' },
-  { path: '/market', label: 'Market Intelligence' },
   { path: '/marketplace', label: 'Template Marketplace' },
   { path: '/mint', label: 'Candy Machine' },
 ]
@@ -60,6 +60,8 @@ export default function App() {
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/tokens" element={<TokenLaunchpadPage />} />
           <Route path="/nft" element={<NFTGeneratorPage />} />
+          <Route path="/market" element={<MarketIntelligencePage />} />
+          <Route path="/defi" element={<DefiScannerPage />} />
         </Route>
       </Routes>
     </>

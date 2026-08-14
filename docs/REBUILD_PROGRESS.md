@@ -48,7 +48,8 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - [ ] Progress reporting for large generation batches — currently synchronous, capped at 200 items with no progress UI (acceptable at current cap, revisit if the cap is raised).
 
 ## Phase 6 — Secondary features
-- [ ] DeFi Protocol Scanner / Market Intelligence — not started (`ComingSoon` placeholder). Must use real DeFiLlama/CoinGecko calls only when built — no `random.uniform` fallback like the legacy version.
+- [x] Market Intelligence — `backend/app/services/market_intelligence.py` (`GET /api/market/tokens`, unauthenticated read-only), `frontend/src/features/market/MarketIntelligencePage.tsx` at `/market` (now a real app-shell page, moved out of `ComingSoon` and off the "Soon" badge in nav/sidebar — both key off `lib/products.ts`, so this was a one-line flip there). Real CoinGecko `/coins/markets` data — price, 24h change, market cap, volume — refetched every 60s via react-query, no `random.uniform` fallback like the legacy version. `COINGECKO_API_KEY` is optional (works unauthenticated at CoinGecko's public rate limit). Field-shape and reachability verified against the live API from this sandbox (`curl` — this sandbox has outbound network access even though it has no pip/venv to actually run Flask), not through the app itself.
+- [x] DeFi Protocol Scanner — `backend/app/services/defi_scanner.py` (`GET /api/defi/protocols`), `frontend/src/features/market/DefiScannerPage.tsx` at `/defi`, same treatment. Real DeFiLlama `/protocols` data — TVL, 1D/7D change, category, chains — sorted by TVL, no API key needed. Same verification caveat as above.
 - [ ] Template Marketplace — not started. Must use real data when built — legacy version had fictional authors/download counts.
 - [ ] Mint-site / Candy Machine — scaffold only (`services/candy-machine/`), internal-auth contract exists, no real Metaplex Umi minting yet.
 

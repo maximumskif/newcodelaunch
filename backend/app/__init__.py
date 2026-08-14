@@ -40,4 +40,12 @@ def create_app(config_object=Config):
 
     app.register_blueprint(projects_bp, url_prefix="/api/projects")
 
+    from .blueprints.market import market_bp
+
+    app.register_blueprint(market_bp, url_prefix="/api/market")
+
+    from .blueprints.defi import defi_bp
+
+    app.register_blueprint(defi_bp, url_prefix="/api/defi")
+
     return app

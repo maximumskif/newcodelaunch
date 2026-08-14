@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 
-import { IconCode, IconCoin, IconLayers } from '../components/ui/icons'
+import { IconChart, IconCode, IconCoin, IconLayers, IconStack } from '../components/ui/icons'
 
 export interface ProductLink {
   label: string
@@ -16,7 +16,7 @@ export const PRODUCTS: ProductLink[] = [
   { label: 'Token Launchpad', path: '/tokens', icon: IconCoin },
   { label: 'NFT Generator', path: '/nft', icon: IconLayers },
   { label: 'Smart Contracts Hub', path: '/contracts', icon: IconCode },
+  { label: 'Market Intelligence', path: '/market', icon: IconChart },
+  { label: 'DeFi Scanner', path: '/defi', icon: IconStack },
   { label: 'Candy Machine' },
-  { label: 'DeFi Scanner' },
-  { label: 'Market Intelligence' },
 ]

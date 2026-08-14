@@ -54,8 +54,9 @@ class Config:
     BSC_RPC_URL = os.environ.get("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
     SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 
-    # Market/chain-data API keys — used starting Phase 4 (Market Intelligence / DeFi Scanner).
-    # No hardcoded fallback; features that need one degrade to "unavailable", never a leaked key.
+    # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
+    # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
+    # too, just at CoinGecko's lower public rate limit. The others aren't used yet.
     COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "")
     ETHERSCAN_API_KEY = os.environ.get("ETHERSCAN_API_KEY", "")
     MORALIS_API_KEY = os.environ.get("MORALIS_API_KEY", "")

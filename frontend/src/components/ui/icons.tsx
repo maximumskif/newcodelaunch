@@ -142,6 +142,25 @@ export function IconGrid({ className = base }: IconProps) {
   )
 }
 
+export function IconChart({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <path d="M4 20V10M12 20V4M20 20v-6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 20h16" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IconStack({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <rect x="4" y="4" width="16" height="5" rx="1.2" />
+      <rect x="4" y="10.5" width="16" height="5" rx="1.2" />
+      <rect x="4" y="17" width="16" height="3.5" rx="1.2" />
+    </svg>
+  )
+}
+
 export function IconChevronDown({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
