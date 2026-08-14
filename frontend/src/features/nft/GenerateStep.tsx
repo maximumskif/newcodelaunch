@@ -72,11 +72,33 @@ export function GenerateStep({ token, collection }: Props) {
     }
   }
 
+  const refreshPreview = async (itemId: string) => {
+    setPreviewLoadingId(itemId)
+    try {
+      const result = await nftApi.getItemMetadata(token, itemId)
+      setPreviews((prev) => ({ ...prev, [itemId]: result }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load metadata preview')
+    } finally {
+      setPreviewLoadingId(null)
+    }
+  }
+
   const handlePublish = async (itemId: string) => {
     setPublishingId(itemId)
     try {
       const { item } = await nftApi.publishItem(token, itemId)
       setItems((prev) => prev.map((existing) => (existing.id === item.id ? item : existing)))
+      // The cached preview (if any) showed the unpublished placeholder —
+      // drop it so a later "Preview metadata" click refetches the real,
+      // now-published content instead of the stale image:null version.
+      setPreviews((prev) => {
+        if (!(itemId in prev)) return prev
+        const next = { ...prev }
+        delete next[itemId]
+        return next
+      })
+      if (expandedId === itemId) await refreshPreview(itemId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed')
     } finally {
@@ -91,17 +113,7 @@ export function GenerateStep({ token, collection }: Props) {
     }
     setExpandedId(itemId)
     if (previews[itemId]) return
-
-    setPreviewLoadingId(itemId)
-    try {
-      const result = await nftApi.getItemMetadata(token, itemId)
-      setPreviews((prev) => ({ ...prev, [itemId]: result }))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load metadata preview')
-      setExpandedId(null)
-    } finally {
-      setPreviewLoadingId(null)
-    }
+    await refreshPreview(itemId)
   }
 
   return (

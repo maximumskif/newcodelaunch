@@ -42,7 +42,10 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
 
   const { deploy, step, error, deployment, txHash } = useDeployTemplate()
 
-  const isMainnet = EVM_NETWORKS.find((item) => item.id === network)?.isTestnet === false
+  // Fail closed on an unrecognized network id (bad data, future rename) —
+  // treat it as mainnet so the confirmation gate still shows rather than
+  // silently disappearing.
+  const isMainnet = !(EVM_NETWORKS.find((item) => item.id === network)?.isTestnet ?? false)
 
   // Re-arm the confirmation every time the network changes so switching
   // straight from one mainnet to another still requires a fresh tick.
@@ -90,8 +93,11 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
     projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
   }, [accessToken, projectId, deployment])
 
-  // Autosave: keep the project's draft_data in sync with the in-progress
-  // form so resuming later restores exactly where the user left off.
+  // Autosave: keep the project's draft_data (and network — otherwise a
+  // manual mid-session network switch would get silently reverted the next
+  // time this project is resumed, since the restore effect above always
+  // re-applies whatever network was last saved) in sync with the
+  // in-progress form so resuming later restores exactly where things were left.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
     if (!accessToken || !projectId || !hasRestoredDraft || !selectedId) return
@@ -99,10 +105,11 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
     saveTimer.current = setTimeout(() => {
       void projectsApi.update(accessToken, projectId, {
         draft_data: { template_id: selectedId, parameters: values },
+        network,
       })
     }, DRAFT_SAVE_DEBOUNCE_MS)
     return () => clearTimeout(saveTimer.current)
-  }, [accessToken, projectId, hasRestoredDraft, selectedId, values])
+  }, [accessToken, projectId, hasRestoredDraft, selectedId, values, network])
 
   const selectedTemplate = templates.find((template) => template.id === selectedId) ?? null
 

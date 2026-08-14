@@ -12,7 +12,7 @@ recording a deployment or creating a collection that already succeeded.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from ..extensions import db
 from ..models.deployment import ContractDeployment
@@ -85,6 +85,13 @@ def delete_project(project: Project) -> None:
 
 
 def link_deployment(project: Project, deployment: ContractDeployment) -> Project:
+    # First link wins — a project represents one deploy target. Without this
+    # guard, deploying a second time from the same resumed project (nothing
+    # stops that; the Deploy button re-enables after a successful deploy)
+    # would silently repoint the project at the new deployment and orphan
+    # the first one with no way to recover the link via the UI.
+    if project.contract_deployment_id and project.contract_deployment_id != deployment.id:
+        return project
     project.contract_deployment_id = deployment.id
     project.status = ProjectStatus.ACTIVE
     db.session.commit()
@@ -92,7 +99,20 @@ def link_deployment(project: Project, deployment: ContractDeployment) -> Project
 
 
 def link_nft_collection(project: Project, collection: NFTCollection) -> Project:
+    if project.nft_collection_id and project.nft_collection_id != collection.id:
+        return project
     project.nft_collection_id = collection.id
     project.status = ProjectStatus.ACTIVE
     db.session.commit()
     return project
+
+
+def link_if_owned(project_id: str, user_id: str, link_fn: Callable[[Project], Project]) -> None:
+    """Best-effort project link shared by the contracts/nft create routes —
+    swallows NotFoundError so a stale/foreign project_id never blocks
+    recording a deployment or collection that already succeeded."""
+    try:
+        project = get_owned_project(project_id, user_id)
+    except NotFoundError:
+        return
+    link_fn(project)

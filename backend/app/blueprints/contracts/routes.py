@@ -95,11 +95,7 @@ def create_deployment():
     if project_id:
         # Best-effort: the on-chain deployment already happened by this point,
         # so a stale/foreign project_id must not fail recording it.
-        try:
-            project = projects.get_owned_project(project_id, get_jwt_identity())
-            projects.link_deployment(project, deployment)
-        except projects.NotFoundError:
-            pass
+        projects.link_if_owned(project_id, get_jwt_identity(), lambda p: projects.link_deployment(p, deployment))
 
     return jsonify(deployment=deployment.to_dict()), 201
 

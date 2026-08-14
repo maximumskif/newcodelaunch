@@ -22,10 +22,15 @@ def get_top_protocols(limit: int = 20) -> list[dict[str, Any]]:
     try:
         response = requests.get(f"{DEFILLAMA_BASE_URL}/protocols", timeout=15)
         response.raise_for_status()
+        protocols = response.json()
     except requests.RequestException as exc:
         raise DefiDataError(f"DeFiLlama request failed: {exc}") from exc
 
-    protocols = response.json()
+    if not isinstance(protocols, list):
+        # A 200 with a non-list body (e.g. a rate-limit/error object) means
+        # something is wrong even though raise_for_status() didn't catch it.
+        raise DefiDataError(f"DeFiLlama returned an unexpected response shape: {protocols!r}")
+
     protocols.sort(key=lambda p: p.get("tvl") or 0, reverse=True)
 
     return [

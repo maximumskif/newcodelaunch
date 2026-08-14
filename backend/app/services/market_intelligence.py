@@ -41,8 +41,14 @@ def get_top_tokens(limit: int = 20) -> list[dict[str, Any]]:
             timeout=15,
         )
         response.raise_for_status()
+        coins = response.json()
     except requests.RequestException as exc:
         raise MarketDataError(f"CoinGecko request failed: {exc}") from exc
+
+    if not isinstance(coins, list):
+        # A 200 with a non-list body (e.g. a rate-limit/error object) means
+        # something is wrong even though raise_for_status() didn't catch it.
+        raise MarketDataError(f"CoinGecko returned an unexpected response shape: {coins!r}")
 
     return [
         {
@@ -56,5 +62,5 @@ def get_top_tokens(limit: int = 20) -> list[dict[str, Any]]:
             "total_volume": coin.get("total_volume"),
             "price_change_percentage_24h": coin.get("price_change_percentage_24h"),
         }
-        for coin in response.json()
+        for coin in coins
     ]

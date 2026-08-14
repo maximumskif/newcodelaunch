@@ -26,11 +26,7 @@ def create_collection():
     if project_id:
         # Best-effort: the collection already exists by this point, so a
         # stale/foreign project_id must not fail creating it.
-        try:
-            project = projects.get_owned_project(project_id, get_jwt_identity())
-            projects.link_nft_collection(project, collection)
-        except projects.NotFoundError:
-            pass
+        projects.link_if_owned(project_id, get_jwt_identity(), lambda p: projects.link_nft_collection(p, collection))
 
     return jsonify(collection=collection.to_dict()), 201
 

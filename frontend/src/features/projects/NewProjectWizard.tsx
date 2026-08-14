@@ -21,7 +21,7 @@ export function NewProjectWizard() {
 
   const [projectType, setProjectType] = useState<ProjectType | null>(null)
   const [name, setName] = useState('')
-  const [network, setNetwork] = useState('ethereum')
+  const [network, setNetwork] = useState('sepolia')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
