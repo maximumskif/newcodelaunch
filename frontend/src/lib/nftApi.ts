@@ -87,6 +87,13 @@ export const nftApi = {
 
   publishItem: (token: string, itemId: string) =>
     request<{ item: NFTGeneratedItem }>(`/nft/items/${itemId}/publish`, { method: 'POST' }, token),
+
+  getItemMetadata: (token: string, itemId: string) =>
+    request<{ published: boolean; metadata: Record<string, unknown>; metadata_ipfs_hash?: string }>(
+      `/nft/items/${itemId}/metadata`,
+      {},
+      token,
+    ),
 }
 
 export interface ImageTraits {

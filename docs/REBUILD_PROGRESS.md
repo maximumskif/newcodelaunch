@@ -44,7 +44,7 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - [x] Rarity-weighted bulk generation with dedupe — `nft_generation.py`, capped 200/call (documented limitation, needs a job queue for larger collections).
 - [x] AI-assisted rarity suggestion, scoped inside the trait-upload step (not a standalone page) — `ai_traits.py` + inline "AI Suggest" button in `LayerCard.tsx`.
 - [x] IPFS publish (real Pinata calls) — `ipfs.py`.
-- [ ] Metadata preview/export as a distinct step — publish currently pushes straight to IPFS per item; no pre-publish metadata review screen.
+- [x] Metadata preview/export as a distinct step — `GET /api/nft/items/<id>/metadata` (`nft_collections.get_item_metadata`) + a "Preview metadata"/"Download JSON" toggle per item in `GenerateStep.tsx`. For an already-published item this fetches the literal JSON pinned to IPFS (not a locally reconstructed copy — recomputing would fabricate a new `created_at` that doesn't match what's actually on IPFS); for an unpublished item it honestly shows only what's already decided (name/description/attributes) with `image`/`created_at` left `null` rather than guessed. "Download" is a real browser download (Blob + object URL), not a publish action.
 - [ ] Progress reporting for large generation batches — currently synchronous, capped at 200 items with no progress UI (acceptable at current cap, revisit if the cap is raised).
 
 ## Phase 6 — Secondary features

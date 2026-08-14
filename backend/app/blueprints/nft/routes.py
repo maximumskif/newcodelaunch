@@ -139,6 +139,20 @@ def publish_item(item_id):
     return jsonify(item=item.to_dict())
 
 
+@nft_bp.get("/items/<item_id>/metadata")
+@jwt_required()
+def get_item_metadata(item_id):
+    try:
+        item, collection = nft_collections.get_owned_item(item_id, get_jwt_identity())
+        result = nft_collections.get_item_metadata(item, collection)
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except nft_collections.MetadataFetchError as exc:
+        return jsonify(error=str(exc)), 502
+
+    return jsonify(result)
+
+
 @nft_bp.get("/uploads/<path:relative_path>")
 def serve_upload(relative_path):
     # No auth — <img src> can't attach a Bearer token. Paths embed unguessable

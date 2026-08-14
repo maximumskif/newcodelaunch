@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import os
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
+import requests
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
@@ -28,6 +29,10 @@ class NotFoundError(ValueError):
 
 
 class ValidationError(ValueError):
+    pass
+
+
+class MetadataFetchError(RuntimeError):
     pass
 
 
@@ -134,3 +139,36 @@ def publish_item_to_ipfs(item: NFTGeneratedItem, collection: NFTCollection, uplo
     item.ipfs_metadata_hash = metadata_result["hash"]
     db.session.commit()
     return item
+
+
+def get_item_metadata(item: NFTGeneratedItem, collection: NFTCollection) -> dict[str, Any]:
+    """Metadata preview/export (Phase 5) — a distinct read separate from the
+    publish action itself.
+
+    For an already-published item, this fetches the literal JSON pinned to
+    IPFS rather than reconstructing it locally: the metadata's `created_at`
+    is only known at the moment it was actually uploaded, so recomputing it
+    here would silently fabricate a new timestamp that doesn't match what's
+    really on IPFS. For an unpublished item there's nothing to fetch — the
+    preview honestly reflects only what's already decided (name, description,
+    attributes) and leaves `image`/`created_at` null rather than guessing.
+    """
+    name = f"{collection.name} #{item.token_index}"
+
+    if item.ipfs_metadata_hash:
+        try:
+            response = requests.get(f"{ipfs.PINATA_GATEWAY}{item.ipfs_metadata_hash}", timeout=15)
+            response.raise_for_status()
+            return {"published": True, "metadata": response.json(), "metadata_ipfs_hash": item.ipfs_metadata_hash}
+        except requests.RequestException as exc:
+            raise MetadataFetchError(f"Could not fetch published metadata from IPFS: {exc}") from exc
+
+    return {
+        "published": False,
+        "metadata": {
+            "name": name,
+            "description": collection.description,
+            "image": None,
+            "attributes": item.attributes,
+        },
+    }

@@ -3,12 +3,30 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { IconLink, IconSparkles, IconSpinner } from '../../components/ui/icons'
+import { IconCode, IconLink, IconSparkles, IconSpinner } from '../../components/ui/icons'
 import { ipfsGatewayUrl, maxPossibleCombinations, nftApi, uploadUrl, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 
 interface Props {
   token: string
   collection: NFTCollection
+}
+
+interface MetadataPreview {
+  published: boolean
+  metadata: Record<string, unknown>
+}
+
+// Real browser download, not an upload/share action — just saves the exact
+// JSON the preview is already showing so it can be reviewed outside the app
+// before (or instead of) ever publishing to IPFS.
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 export function GenerateStep({ token, collection }: Props) {
@@ -22,6 +40,9 @@ export function GenerateStep({ token, collection }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [publishingId, setPublishingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
+  const [previews, setPreviews] = useState<Record<string, MetadataPreview>>({})
 
   const refreshItems = async () => {
     setIsLoadingItems(true)
@@ -60,6 +81,26 @@ export function GenerateStep({ token, collection }: Props) {
       setError(err instanceof Error ? err.message : 'Publish failed')
     } finally {
       setPublishingId(null)
+    }
+  }
+
+  const handleTogglePreview = async (itemId: string) => {
+    if (expandedId === itemId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(itemId)
+    if (previews[itemId]) return
+
+    setPreviewLoadingId(itemId)
+    try {
+      const result = await nftApi.getItemMetadata(token, itemId)
+      setPreviews((prev) => ({ ...prev, [itemId]: result }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load metadata preview')
+      setExpandedId(null)
+    } finally {
+      setPreviewLoadingId(null)
     }
   }
 
@@ -138,6 +179,37 @@ export function GenerateStep({ token, collection }: Props) {
                         </span>
                       ))}
                     </div>
+
+                    <button
+                      onClick={() => void handleTogglePreview(item.id)}
+                      className="mt-2 flex items-center gap-1 text-[11px] text-ink-faint hover:text-ink"
+                    >
+                      {previewLoadingId === item.id ? (
+                        <IconSpinner className="h-3 w-3" />
+                      ) : (
+                        <IconCode className="h-3 w-3" />
+                      )}
+                      {expandedId === item.id ? 'Hide metadata' : 'Preview metadata'}
+                    </button>
+
+                    {expandedId === item.id && previews[item.id] && (
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-[10px] text-ink-faint">
+                          {previews[item.id].published
+                            ? 'Real content pinned to IPFS.'
+                            : "Preview only — image and created_at are assigned when you publish."}
+                        </p>
+                        <pre className="max-h-40 overflow-auto rounded bg-surface-hover p-2 text-[10px] text-ink-muted">
+                          {JSON.stringify(previews[item.id].metadata, null, 2)}
+                        </pre>
+                        <button
+                          onClick={() => downloadJson(`${collection.name}-${item.token_index}-metadata.json`, previews[item.id].metadata)}
+                          className="text-[11px] text-accent-400 hover:underline"
+                        >
+                          Download JSON
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
