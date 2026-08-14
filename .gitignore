@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+
+# Environments — never commit real secrets
+.env
+.env.local
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Flask instance data / local uploads
+instance/
+uploads/
+*.db
+*.db-journal
+
+# Logs
+*.log
+logs/
+
+# Solana keypairs — never commit an authority/wallet keypair
+*keypair*.json
+authority-keypair.json
+
+# Backups / temp
+*.bak
+*.tmp
+*~

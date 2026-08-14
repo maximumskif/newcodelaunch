@@ -1,0 +1,41 @@
+# Re-pinned for Phase 1 of the rebuild (see /home/mdeff/.claude/plans — rebuild plan).
+# Dropped vs. the old root requirements.txt: fastapi, uvicorn (never used — this is a
+# pure Flask app), ipfshttpclient (ai_ipfs code used raw `requests`, not this library),
+# Flask-WTF/CSRF (CSRF protection is a cookie-session concern; auth here is JWT bearer
+# tokens issued to a separate-origin frontend, so it doesn't apply the same way).
+#
+# NOT execution-verified in this environment — this sandbox has no pip/venv available
+# (python3 -m pip / python3 -m venv both fail). Install into a real environment and run
+# the Phase 1 verification steps in the plan before trusting version pins blindly.
+
+Flask==3.0.3
+Flask-CORS==4.0.1
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+Flask-JWT-Extended==4.6.0
+Flask-Limiter==3.8.0
+SQLAlchemy==2.0.32
+python-dotenv==1.0.1
+psycopg2-binary==2.9.9
+gunicorn==22.0.0
+
+# Chain SDKs
+web3==6.20.1
+eth-account==0.11.2
+solana==0.34.3
+solders==0.21.0
+PyNaCl==1.5.0
+base58==2.1.1
+
+# Solidity compilation (Phase 2). The old app imported `solcx` in
+# smart_contract_deployer.py but never actually listed this package in
+# requirements.txt — a preexisting gap, fixed here. On first use this
+# downloads a solc binary (see app/services/solidity.py for why that's lazy
+# now instead of happening at import time).
+py-solc-x==2.0.3
+
+# NFT Collection Generator + AI Trait Identifier (Phase 3)
+Pillow==10.4.0
+numpy==2.0.1
+requests==2.32.3
+openai==1.42.0

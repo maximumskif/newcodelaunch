@@ -1,0 +1,34 @@
+# Only Postgres and the candy-machine sidecar run in Docker for now — the
+# Flask backend and Vite frontend run locally (`flask run` in backend/,
+# `npm run dev` in frontend/) since this dev environment has no pip/venv
+# available to verify a Python container build.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: launchpad-postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: launchpad
+      POSTGRES_USER: launchpad
+      POSTGRES_PASSWORD: launchpad
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U launchpad']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  candy-machine:
+    build: ./services/candy-machine
+    container_name: launchpad-candy-machine
+    ports:
+      - '4000:4000'
+    env_file:
+      - ./services/candy-machine/.env
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
