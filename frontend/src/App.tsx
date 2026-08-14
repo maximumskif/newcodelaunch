@@ -1,6 +1,7 @@
-import { NavLink, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Route, Routes, useLocation } from 'react-router-dom'
 
-import { WalletConnect } from './features/auth/WalletConnect'
+import { Nav } from './components/layout/Nav'
 import { ContractsPage } from './features/contracts/ContractsPage'
 import { HomePage } from './features/marketing/HomePage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
@@ -16,6 +17,19 @@ const NAV_ITEMS = [
   { path: '/mint', label: 'Candy Machine' },
 ]
 
+// react-router's BrowserRouter doesn't scroll to `#hash` targets on its own —
+// this is what makes the nav's "How It Works" / "Start Building" links land
+// on the right homepage section instead of just changing the URL.
+function ScrollToHash() {
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash) return
+    const element = document.getElementById(hash.slice(1))
+    element?.scrollIntoView({ behavior: 'smooth' })
+  }, [hash])
+  return null
+}
+
 function ComingSoon({ title }: { title: string }) {
   return (
     <div className="p-8">
@@ -28,23 +42,8 @@ function ComingSoon({ title }: { title: string }) {
 export default function App() {
   return (
     <div className="min-h-screen bg-canvas text-ink">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4">
-        <nav className="flex flex-wrap items-center gap-4 text-sm text-ink-muted">
-          <NavLink to="/" className="font-semibold text-ink">
-            NewCodeLaunch
-          </NavLink>
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => (isActive ? 'text-accent-400' : 'hover:text-ink')}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <WalletConnect />
-      </header>
+      <ScrollToHash />
+      <Nav />
       <main>
         <Routes>
           <Route path="/" element={<HomePage />} />

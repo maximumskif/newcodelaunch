@@ -104,7 +104,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="px-6 py-16">
+      <section id="start-here" className="scroll-mt-20 px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-xl font-semibold text-ink">Start here</h2>
           <p className="mt-1 text-sm text-ink-muted">Three of these are real, working flows. One isn't built yet — it says so.</p>
@@ -138,7 +138,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="border-t border-border px-6 py-16">
+      <section id="how-it-works" className="scroll-mt-20 border-t border-border px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-xl font-semibold text-ink">How it works today</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-5">
