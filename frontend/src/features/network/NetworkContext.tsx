@@ -18,6 +18,14 @@ export const EVM_NETWORKS: EvmNetwork[] = [
   { id: 'bsc', label: 'BNB Smart Chain', isTestnet: false },
 ]
 
+// Fails closed on an unrecognized network id (bad data, future rename) —
+// treats it as mainnet so a confirmation gate built on this stays showing
+// rather than silently disappearing. Extracted as a pure function so it's
+// unit-testable without rendering DeployPanel.
+export function isMainnetNetwork(networkId: string): boolean {
+  return !(EVM_NETWORKS.find((item) => item.id === networkId)?.isTestnet ?? false)
+}
+
 interface NetworkContextValue {
   network: string
   setNetwork: (network: string) => void

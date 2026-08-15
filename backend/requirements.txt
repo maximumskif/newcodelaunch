@@ -39,3 +39,8 @@ Pillow==10.4.0
 numpy==2.0.1
 requests==2.32.3
 openai==1.42.0
+
+# Testing (Phase 7). `pytest` from backend/ picks these up via pytest.ini
+# (testpaths = tests) + tests/conftest.py. Written but NOT execution-verified
+# in this sandbox — same no-pip/venv limitation as everything else here.
+pytest==8.3.2

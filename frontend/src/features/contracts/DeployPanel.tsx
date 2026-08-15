@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
-import { EVM_NETWORKS, useNetwork } from '../network/NetworkContext'
+import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { DeploymentHistory } from './DeploymentHistory'
 import { TemplateForm } from './TemplateForm'
@@ -43,10 +43,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
 
   const { deploy, step, error, deployment, txHash } = useDeployTemplate()
 
-  // Fail closed on an unrecognized network id (bad data, future rename) —
-  // treat it as mainnet so the confirmation gate still shows rather than
-  // silently disappearing.
-  const isMainnet = !(EVM_NETWORKS.find((item) => item.id === network)?.isTestnet ?? false)
+  const isMainnet = isMainnetNetwork(network)
 
   // Re-arm the confirmation every time the network changes so switching
   // straight from one mainnet to another still requires a fresh tick.
