@@ -70,7 +70,7 @@ One finding was investigated and not code-fixed: the mainnet confirmation checkb
 - [ ] Test suite — **not started at all**. `backend/tests/` is an empty directory. `frontend/package.json` has no test runner. This is the single biggest process gap right now and should start incrementally during Phases 3-5, not be deferred to the end.
 - [ ] CI actually exercises this rebuild — **not started**. No `.github/workflows/` in this repo yet (the old one, left behind in `nocodelaunchyeet`, only ever tested the legacy app anyway).
 - [ ] Accessibility review — not started.
-- [ ] Performance review — not started (though `vite build` already flags a >500 KB chunk — wallet-adapter/wagmi weight, not yet addressed).
+- [x] Performance review — the recurring `>500KB` chunk warning is fixed: `frontend/vite.config.ts` now splits `wagmi`/`viem` into a `vendor-evm` chunk (257KB) and `@solana/wallet-adapter-*`/`@solana/web3.js`/`bs58` into `vendor-solana` (403KB), separate from app code (295KB). Route-based lazy-loading wasn't viable here — `WalletConnect` (which uses both wagmi and Solana wallet-adapter hooks) renders in the nav/header on every single page, marketing and app-shell alike, so every route needs both stacks regardless. This doesn't reduce total bytes shipped, but it separates rarely-changing vendor code from frequently-changing app code for better long-term browser caching, and each chunk is now individually under the warning threshold. No further perf work scoped this pass (no Lighthouse/real-device profiling available in this sandbox).
 - [ ] Feature registry doc — not started.
 - [x] README reflects only verified capabilities — done as part of the 2026-08-14 split (`README.md` explicitly separates "works today" from "not built yet").
 
