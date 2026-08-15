@@ -31,9 +31,19 @@ jobs:
       # SECRET_KEY has a test-only fallback in tests/conftest.py, but it's
       # set explicitly here too so a stray import of app.config outside a
       # test context (e.g. a future script) doesn't fail startup in CI.
+      #
+      # PYTEST_DISABLE_PLUGIN_AUTOLOAD is required: `web3` ships a pytest
+      # plugin (web3.tools.pytest_ethereum) that pytest auto-loads via
+      # setuptools entry points at startup, unrelated to anything we use —
+      # and it's broken against the eth-typing version requirements.txt
+      # resolves (`ImportError: cannot import name 'ContractName'`), which
+      # crashes pytest before a single test file is even collected. This
+      # disables auto-loading of third-party plugins only — pytest's own
+      # built-in plugins are unaffected. Needed for local runs too.
       - name: Run tests
         env:
           SECRET_KEY: ci-test-secret-key-not-for-real-use
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: pytest
 
   frontend:
