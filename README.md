@@ -2,7 +2,7 @@
 
 Build and launch tokens, NFT collections, and Web3 projects through guided no-code workflows.
 
-This is an early-stage rebuild. The paragraphs below describe what's actually implemented and verified, not a roadmap dressed up as a feature list — see `docs/REBUILD_PROGRESS.md` for the living status and `docs/REBUILD_AUDIT.md` for how this project's predecessor was assessed before this rebuild started.
+This is an early-stage rebuild. The paragraphs below describe what's actually implemented and verified, not a roadmap dressed up as a feature list — see `docs/REBUILD_PROGRESS.md` for the living status, `docs/FEATURE_REGISTRY.md` for a per-action real/capped/optional-config/unavailable breakdown of every visible button in the app, and `docs/REBUILD_AUDIT.md` for how this project's predecessor was assessed before this rebuild started.
 
 ## What works today
 
