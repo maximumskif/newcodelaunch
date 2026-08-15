@@ -51,6 +51,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
             onChange={(e) => setNewLayerName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddLayer()}
             placeholder="New layer name (e.g. Background)"
+            aria-label="New layer name"
             className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm placeholder:text-ink-faint"
           />
           <Button variant="secondary" onClick={handleAddLayer} disabled={!newLayerName.trim()} isLoading={isSubmitting}>

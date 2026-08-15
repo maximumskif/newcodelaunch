@@ -137,6 +137,7 @@ export function GenerateStep({ token, collection }: Props) {
             max={Math.min(200, maxCombinations || 200)}
             value={count}
             onChange={(e) => setCount(e.target.value)}
+            aria-label="Number of items to generate"
             className="w-24 rounded-md border border-border bg-surface px-3 py-1.5 text-sm"
           />
           <Button variant="primary" onClick={handleGenerate} disabled={!ready} isLoading={isGenerating}>

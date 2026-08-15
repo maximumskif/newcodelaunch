@@ -110,10 +110,19 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
             {previewUrl ? (
               <div
                 onClick={() => handleFile(null)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleFile(null)
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="Remove selected image"
                 className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-canvas"
                 title="Click to remove"
               >
-                <img src={previewUrl} alt="preview" className="h-full w-full object-contain" />
+                <img src={previewUrl} alt="" className="h-full w-full object-contain" />
               </div>
             ) : (
               <div className="h-9 w-9 shrink-0">
@@ -125,6 +134,7 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Trait name"
+              aria-label="Trait name"
               className="min-w-[7rem] flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm placeholder:text-ink-faint"
             />
 
@@ -135,6 +145,7 @@ export function LayerCard({ token, layer, onTraitAdded }: Props) {
                 max={100}
                 value={rarity}
                 onChange={(e) => setRarity(Number(e.target.value))}
+                aria-label="Rarity weight"
                 className="w-16 accent-accent-500"
               />
               <span className="w-6 text-right text-xs text-ink-faint">{rarity}</span>

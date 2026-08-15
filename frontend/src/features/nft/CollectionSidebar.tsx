@@ -86,12 +86,14 @@ export function CollectionSidebar({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Collection name"
+            aria-label="Collection name"
             className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm placeholder:text-ink-faint"
           />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description"
+            aria-label="Description"
             rows={2}
             className="w-full resize-none rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm placeholder:text-ink-faint"
           />

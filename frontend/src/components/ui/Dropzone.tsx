@@ -40,6 +40,14 @@ export function Dropzone({
   return (
     <div
       onClick={() => inputRef.current?.click()}
+      onKeyDown={(event) => {
+        // role="button" + tabIndex don't get native Enter/Space activation
+        // the way a real <button> does — that has to be wired up by hand.
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          inputRef.current?.click()
+        }
+      }}
       onDragOver={(event) => {
         event.preventDefault()
         setIsDragging(true)
@@ -48,6 +56,7 @@ export function Dropzone({
       onDrop={handleDrop}
       role="button"
       tabIndex={0}
+      aria-label={iconOnly ? 'Click or drag an image here' : undefined}
       title={iconOnly ? 'Click or drag an image here' : undefined}
       className={`group flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-center transition-colors duration-150 ${
         iconOnly ? 'p-1.5' : compact ? 'p-4' : 'p-8'
