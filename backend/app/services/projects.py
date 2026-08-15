@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 
 from ..extensions import db
+from ..models.candy_machine import CandyMachineDeployment
 from ..models.deployment import ContractDeployment
 from ..models.nft import NFTCollection
 from ..models.project import Project, ProjectStatus, ProjectType
@@ -102,6 +103,15 @@ def link_nft_collection(project: Project, collection: NFTCollection) -> Project:
     if project.nft_collection_id and project.nft_collection_id != collection.id:
         return project
     project.nft_collection_id = collection.id
+    project.status = ProjectStatus.ACTIVE
+    db.session.commit()
+    return project
+
+
+def link_candy_machine(project: Project, deployment: CandyMachineDeployment) -> Project:
+    if project.candy_machine_deployment_id and project.candy_machine_deployment_id != deployment.id:
+        return project
+    project.candy_machine_deployment_id = deployment.id
     project.status = ProjectStatus.ACTIVE
     db.session.commit()
     return project

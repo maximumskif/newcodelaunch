@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -227,6 +228,17 @@ export function GenerateStep({ token, collection }: Props) {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {items.some((item) => item.ipfs_image_hash) && (
+          <div className="mt-5 flex items-center justify-between rounded-md border border-border bg-canvas p-3">
+            <p className="text-sm text-ink-muted">Ready to sell this collection as a real Solana mint?</p>
+            <Link to={`/mint?collection=${collection.id}`}>
+              <Button variant="secondary" size="sm">
+                Launch Mint Site
+              </Button>
+            </Link>
           </div>
         )}
       </div>

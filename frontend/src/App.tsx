@@ -8,16 +8,11 @@ import { HomePage } from './features/marketing/HomePage'
 import { DefiScannerPage } from './features/market/DefiScannerPage'
 import { MarketIntelligencePage } from './features/market/MarketIntelligencePage'
 import { TemplateMarketplacePage } from './features/marketplace/TemplateMarketplacePage'
+import { MintLaunchPage } from './features/mint/MintLaunchPage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
 import { NewProjectWizard } from './features/projects/NewProjectWizard'
 import { ProjectsDashboard } from './features/projects/ProjectsDashboard'
 import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
-
-// Not-yet-built features get an honest placeholder route rather than a 404
-// or a link that goes nowhere. Nothing in the nav or sidebar links to these
-// anymore (both show a "Soon" badge instead) — these routes only matter if
-// someone hits the URL directly.
-const COMING_SOON_ROUTES = [{ path: '/mint', label: 'Candy Machine' }]
 
 // react-router's BrowserRouter doesn't scroll to `#hash` targets on its own —
 // this is what makes the nav's "How It Works" / "Start Building" links land
@@ -32,15 +27,6 @@ function ScrollToHash() {
   return null
 }
 
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-semibold text-ink">{title}</h1>
-      <p className="mt-2 text-ink-muted">Not built yet — see docs/REBUILD_PROGRESS.md for real status.</p>
-    </div>
-  )
-}
-
 export default function App() {
   return (
     <>
@@ -48,9 +34,6 @@ export default function App() {
       <Routes>
         <Route element={<MarketingLayout />}>
           <Route path="/" element={<HomePage />} />
-          {COMING_SOON_ROUTES.map((item) => (
-            <Route key={item.path} path={item.path} element={<ComingSoon title={item.label} />} />
-          ))}
         </Route>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<ProjectsDashboard />} />
@@ -61,6 +44,7 @@ export default function App() {
           <Route path="/market" element={<MarketIntelligencePage />} />
           <Route path="/defi" element={<DefiScannerPage />} />
           <Route path="/marketplace" element={<TemplateMarketplacePage />} />
+          <Route path="/mint" element={<MintLaunchPage />} />
         </Route>
       </Routes>
     </>

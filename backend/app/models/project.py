@@ -16,8 +16,9 @@ class ProjectType:
     TOKEN = "token"
     NFT_COLLECTION = "nft_collection"
     CONTRACT = "contract"
+    CANDY_MACHINE = "candy_machine"
 
-    ALL = (TOKEN, NFT_COLLECTION, CONTRACT)
+    ALL = (TOKEN, NFT_COLLECTION, CONTRACT, CANDY_MACHINE)
 
 
 class ProjectStatus:
@@ -50,12 +51,16 @@ class Project(db.Model):
         db.String(36), db.ForeignKey("contract_deployments.id"), nullable=True
     )
     nft_collection_id = db.Column(db.String(36), db.ForeignKey("nft_collections.id"), nullable=True)
+    candy_machine_deployment_id = db.Column(
+        db.String(36), db.ForeignKey("candy_machine_deployments.id"), nullable=True
+    )
 
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 
     contract_deployment = db.relationship("ContractDeployment")
     nft_collection = db.relationship("NFTCollection")
+    candy_machine_deployment = db.relationship("CandyMachineDeployment")
 
     def to_dict(self) -> dict:
         return {
@@ -68,6 +73,7 @@ class Project(db.Model):
             "draft_data": self.draft_data,
             "contract_deployment": self.contract_deployment.to_dict() if self.contract_deployment else None,
             "nft_collection": self.nft_collection.to_dict() if self.nft_collection else None,
+            "candy_machine_deployment": self.candy_machine_deployment.to_dict() if self.candy_machine_deployment else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

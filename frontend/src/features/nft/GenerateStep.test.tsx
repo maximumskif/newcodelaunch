@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NFTCollection, NFTGeneratedItem } from '../../lib/nftApi'
@@ -52,7 +53,11 @@ describe('GenerateStep metadata preview', () => {
       metadata: { name: 'Test Collection #1', description: 'A test collection', image: null, attributes: draftItem.attributes },
     })
 
-    render(<GenerateStep token="tok" collection={collection} />)
+    render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collection} />
+      </MemoryRouter>,
+    )
 
     await screen.findByText('#1')
 

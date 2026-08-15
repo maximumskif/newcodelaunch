@@ -170,6 +170,15 @@ export function IconTemplate({ className = base }: IconProps) {
   )
 }
 
+export function IconCandy({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <path d="M9 9a3 3 0 1 1 6 0c0 2-1.5 2.5-1.5 5s1.5 3 1.5 5a3 3 0 1 1-6 0c0-2 1.5-2.5 1.5-5S9 11 9 9Z" strokeLinejoin="round" />
+      <path d="m4 7-2.5 2 2.5 2M20 7l2.5 2-2.5 2M4 15l-2.5 2 2.5 2M20 15l2.5 2-2.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function IconChevronDown({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>

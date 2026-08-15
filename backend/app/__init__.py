@@ -48,4 +48,8 @@ def create_app(config_object=Config):
 
     app.register_blueprint(defi_bp, url_prefix="/api/defi")
 
+    from .blueprints.mint import mint_bp
+
+    app.register_blueprint(mint_bp, url_prefix="/api/mint")
+
     return app

@@ -1,10 +1,14 @@
 import { Router } from "express";
 
-// Real Metaplex Umi / mpl-candy-machine routes (create collection, create candy
-// machine, config lines, guards, build mint transactions) land here in Phase 6.
-// For now this just proves the backend <-> service shared-secret contract works.
+import { candyMachineRouter } from "./candyMachine.js";
+
 export const internalRouter = Router();
 
 internalRouter.get("/ping", (_req, res) => {
   res.json({ status: "ok", authenticated: true });
 });
+
+// Real Metaplex Umi / mpl-candy-machine transaction building. Mint-time
+// routes (build a buyer's mint transaction) aren't built yet — this is the
+// creator-side "launch a drop" flow only, see docs/REBUILD_PROGRESS.md.
+internalRouter.use("/candy-machine", candyMachineRouter);

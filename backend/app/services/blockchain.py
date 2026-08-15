@@ -85,10 +85,21 @@ EVM_NETWORKS = {
 }
 
 SOLANA_NETWORKS = {
+    # Testnet first, same convention as EVM_NETWORKS above — added for the
+    # Candy Machine creator flow (Phase 6), which is testnet-first too.
+    "solana_devnet": {
+        "name": "Solana Devnet",
+        # Base URL only, like every other network here — candy_machine.py
+        # appends /address/<pubkey> and the ?cluster=devnet suffix itself.
+        "explorer_url": "https://explorer.solana.com",
+        "native_token": "SOL",
+        "is_testnet": True,
+    },
     "solana": {
         "name": "Solana Mainnet",
         "explorer_url": "https://explorer.solana.com",
         "native_token": "SOL",
+        "is_testnet": False,
     },
 }
 
@@ -99,6 +110,7 @@ _RPC_CONFIG_KEYS = {
     "polygon": "POLYGON_RPC_URL",
     "bsc_testnet": "BSC_TESTNET_RPC_URL",
     "bsc": "BSC_RPC_URL",
+    "solana_devnet": "SOLANA_DEVNET_RPC_URL",
     "solana": "SOLANA_RPC_URL",
 }
 
@@ -131,8 +143,8 @@ def get_web3(network: str) -> Web3:
     return _get_web3(network)
 
 
-def _get_solana_client() -> SolanaClient:
-    return SolanaClient(_rpc_url("solana"), timeout=10)
+def _get_solana_client(network: str) -> SolanaClient:
+    return SolanaClient(_rpc_url(network), timeout=10)
 
 
 def get_supported_networks() -> list[dict]:
@@ -146,7 +158,7 @@ def get_network_status(network: str) -> dict:
     if network in EVM_NETWORKS:
         return _get_evm_status(network)
     if network in SOLANA_NETWORKS:
-        return _get_solana_status()
+        return _get_solana_status(network)
     raise UnknownNetworkError(f"Unknown network: {network}")
 
 
@@ -169,15 +181,15 @@ def _get_evm_status(network: str) -> dict:
         return {"connected": False, "error": str(exc)}
 
 
-def _get_solana_status() -> dict:
-    client = _get_solana_client()
+def _get_solana_status(network: str) -> dict:
+    client = _get_solana_client(network)
     try:
         slot = client.get_slot().value
         version = client.get_version().value
         blockhash_resp = client.get_latest_blockhash().value
         return {
             "connected": True,
-            "network": SOLANA_NETWORKS["solana"]["name"],
+            "network": SOLANA_NETWORKS[network]["name"],
             "slot": slot,
             "solana_core_version": getattr(version, "solana_core", str(version)),
             "latest_blockhash": str(blockhash_resp.blockhash),
@@ -197,7 +209,7 @@ def get_transaction_status(network: str, tx_hash: str) -> dict:
     if network in EVM_NETWORKS:
         return _get_evm_transaction_status(network, tx_hash)
     if network in SOLANA_NETWORKS:
-        return _get_solana_transaction_status(tx_hash)
+        return _get_solana_transaction_status(network, tx_hash)
     raise UnknownNetworkError(f"Unknown network: {network}")
 
 
@@ -225,8 +237,8 @@ def _get_evm_transaction_status(network: str, tx_hash: str) -> dict:
     }
 
 
-def _get_solana_transaction_status(tx_hash: str) -> dict:
-    client = _get_solana_client()
+def _get_solana_transaction_status(network: str, tx_hash: str) -> dict:
+    client = _get_solana_client(network)
     try:
         signature = Signature.from_string(tx_hash)
     except Exception as exc:  # noqa: BLE001

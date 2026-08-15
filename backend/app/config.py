@@ -52,6 +52,7 @@ class Config:
     POLYGON_RPC_URL = os.environ.get("POLYGON_RPC_URL", "https://polygon-rpc.com")
     BSC_TESTNET_RPC_URL = os.environ.get("BSC_TESTNET_RPC_URL", "https://bsc-testnet-rpc.publicnode.com")
     BSC_RPC_URL = os.environ.get("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
+    SOLANA_DEVNET_RPC_URL = os.environ.get("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com")
     SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
