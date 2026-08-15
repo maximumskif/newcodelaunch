@@ -19,12 +19,13 @@ interface Props {
   description: string
   templateType?: 'erc20' | 'erc721'
   projectId?: string | null
+  preselectedTemplateId?: string | null
 }
 
 // Shared by the Smart Contracts Hub (all templates) and Token Launchpad
 // (templateType='erc20') pages — same compile/estimate/deploy/history flow,
 // just a different template subset and page chrome around it.
-export function DeployPanel({ title, description, templateType, projectId }: Props) {
+export function DeployPanel({ title, description, templateType, projectId, preselectedTemplateId }: Props) {
   const { address } = useAccount()
   const { accessToken } = useAuth()
   const { network, setNetwork } = useNetwork()
@@ -56,8 +57,10 @@ export function DeployPanel({ title, description, templateType, projectId }: Pro
   useEffect(() => {
     contractsApi.listTemplates(templateType).then(({ templates: fetched }) => {
       setTemplates(fetched)
-      setSelectedId((current) => current ?? fetched[0]?.id ?? null)
+      const preselected = preselectedTemplateId && fetched.some((t) => t.id === preselectedTemplateId) ? preselectedTemplateId : null
+      setSelectedId((current) => current ?? preselected ?? fetched[0]?.id ?? null)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preselectedTemplateId only matters on first load, before any selection is made
   }, [templateType])
 
   useEffect(() => {

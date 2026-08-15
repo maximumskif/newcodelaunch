@@ -7,6 +7,7 @@ import { ContractsPage } from './features/contracts/ContractsPage'
 import { HomePage } from './features/marketing/HomePage'
 import { DefiScannerPage } from './features/market/DefiScannerPage'
 import { MarketIntelligencePage } from './features/market/MarketIntelligencePage'
+import { TemplateMarketplacePage } from './features/marketplace/TemplateMarketplacePage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
 import { NewProjectWizard } from './features/projects/NewProjectWizard'
 import { ProjectsDashboard } from './features/projects/ProjectsDashboard'
@@ -16,10 +17,7 @@ import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 // or a link that goes nowhere. Nothing in the nav or sidebar links to these
 // anymore (both show a "Soon" badge instead) — these routes only matter if
 // someone hits the URL directly.
-const COMING_SOON_ROUTES = [
-  { path: '/marketplace', label: 'Template Marketplace' },
-  { path: '/mint', label: 'Candy Machine' },
-]
+const COMING_SOON_ROUTES = [{ path: '/mint', label: 'Candy Machine' }]
 
 // react-router's BrowserRouter doesn't scroll to `#hash` targets on its own —
 // this is what makes the nav's "How It Works" / "Start Building" links land
@@ -62,6 +60,7 @@ export default function App() {
           <Route path="/nft" element={<NFTGeneratorPage />} />
           <Route path="/market" element={<MarketIntelligencePage />} />
           <Route path="/defi" element={<DefiScannerPage />} />
+          <Route path="/marketplace" element={<TemplateMarketplacePage />} />
         </Route>
       </Routes>
     </>

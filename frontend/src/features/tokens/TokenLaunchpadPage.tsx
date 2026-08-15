@@ -5,6 +5,7 @@ import { DeployPanel } from '../contracts/DeployPanel'
 export function TokenLaunchpadPage() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('project')
+  const templateId = searchParams.get('template')
 
   return (
     <div className="p-8">
@@ -17,6 +18,7 @@ export function TokenLaunchpadPage() {
           description="Pick a template, fill in the parameters, and deploy with your connected wallet — no private key ever leaves your browser."
           templateType="erc20"
           projectId={projectId}
+          preselectedTemplateId={templateId}
         />
       </div>
     </div>

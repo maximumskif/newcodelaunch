@@ -6,6 +6,7 @@ import { NetworkStatusGrid } from './NetworkStatusGrid'
 export function ContractsPage() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('project')
+  const templateId = searchParams.get('template')
 
   return (
     <div className="space-y-10 p-8">
@@ -22,6 +23,7 @@ export function ContractsPage() {
         title="Deploy a Contract"
         description="Your connected wallet signs the deployment transaction — the backend only compiles the contract and records the result afterward."
         projectId={projectId}
+        preselectedTemplateId={templateId}
       />
     </div>
   )

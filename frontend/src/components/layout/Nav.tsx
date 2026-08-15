@@ -39,10 +39,6 @@ export function Nav() {
               <ProductRow key={item.label} {...item} />
             ))}
           </Dropdown>
-          <div className="flex items-center gap-1.5 text-ink-faint">
-            <span>Templates</span>
-            <Badge tone="neutral">Soon</Badge>
-          </div>
           <Link to="/#how-it-works" className="hover:text-ink">
             How It Works
           </Link>
