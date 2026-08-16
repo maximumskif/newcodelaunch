@@ -80,6 +80,8 @@ Living checklist. Update this as work lands — keep entries terse, one line of 
 - **Documented, not code-fixed**: every transaction's blockhash is fixed at `/prepare` time (baked into the ephemeral signers' signatures, can't be refreshed without invalidating them) while the frontend then prompts for 2-3 sequential wallet approvals — if a creator takes roughly a minute or more across those approvals, a later transaction's blockhash can expire, and since the ephemeral signing keys only exist in the sidecar's memory for that one request, recovery means starting over (potentially orphaning whatever was already created on-chain from the failed attempt). Real fix requires a bigger change (e.g. Solana durable nonces instead of a recent blockhash); for now `MintLaunchPage.tsx` just tells the user to approve promptly.
 - `docs/FEATURE_REGISTRY.md` was stale within the same commit range that shipped the working Candy Machine feature — still listed it as "Unavailable"/"Soon" (caught by one of the `max`-effort attempt's sub-agents before it failed). Fixed: Candy Machine creator flow now has its own Real/Real (capped) section; "Not yet built" now correctly lists only the public mint storefront.
 
+Added 5 regression tests for these fixes (27 backend tests total). Confirmed green on GitHub after pushing (`gh run watch`), all three CI jobs.
+
 One finding was investigated and not code-fixed: the mainnet confirmation checkbox is frontend-only by architecture (see the scope note under Phase 4's testnet-first entry above) — documented rather than "fixed" since there's no backend spending authority to gate.
 
 ## Phase 7 — Hardening
