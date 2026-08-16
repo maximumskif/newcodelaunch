@@ -1,4 +1,5 @@
 import { request } from './http'
+import { isMainnetAmong } from './networks'
 
 export type SolanaNetworkId = 'solana_devnet' | 'solana'
 
@@ -17,6 +18,10 @@ export const SOLANA_NETWORKS: SolanaNetworkInfo[] = [
   { id: 'solana_devnet', label: 'Solana Devnet', rpcUrl: 'https://api.devnet.solana.com', isTestnet: true },
   { id: 'solana', label: 'Solana Mainnet', rpcUrl: 'https://api.mainnet-beta.solana.com', isTestnet: false },
 ]
+
+export function isSolanaMainnet(networkId: string): boolean {
+  return isMainnetAmong(SOLANA_NETWORKS, networkId)
+}
 
 export interface PrepareCandyMachineResult {
   collection_mint: string

@@ -1,5 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 
+import { isMainnetAmong } from '../../lib/networks'
+
 export interface EvmNetwork {
   id: string
   label: string
@@ -21,9 +23,10 @@ export const EVM_NETWORKS: EvmNetwork[] = [
 // Fails closed on an unrecognized network id (bad data, future rename) —
 // treats it as mainnet so a confirmation gate built on this stays showing
 // rather than silently disappearing. Extracted as a pure function so it's
-// unit-testable without rendering DeployPanel.
+// unit-testable without rendering DeployPanel. The Solana side (MintLaunchPage)
+// has the exact same need — see lib/networks.ts's isMainnetAmong.
 export function isMainnetNetwork(networkId: string): boolean {
-  return !(EVM_NETWORKS.find((item) => item.id === networkId)?.isTestnet ?? false)
+  return isMainnetAmong(EVM_NETWORKS, networkId)
 }
 
 interface NetworkContextValue {

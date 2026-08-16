@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
-import { candyMachineApi, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
+import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { useAuth } from '../auth/AuthContext'
 
@@ -41,10 +41,7 @@ export function MintLaunchPage() {
   const [result, setResult] = useState<CandyMachineDeployment | null>(null)
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
 
-  // Fails closed on an unrecognized network id, same as isMainnetNetwork in
-  // NetworkContext.tsx (EVM side) — unknown network is treated as mainnet
-  // rather than silently skipping the confirmation gate.
-  const isMainnet = !(SOLANA_NETWORKS.find((item) => item.id === network)?.isTestnet ?? false)
+  const isMainnet = isSolanaMainnet(network)
 
   useEffect(() => {
     setMainnetConfirmed(false)
@@ -91,7 +88,17 @@ export function MintLaunchPage() {
         const transaction = VersionedTransaction.deserialize(base64ToBytes(prepared.transactions[i]))
         const signature = await sendTransaction(transaction, connection)
         setProgressLabel(`Confirming transaction ${i + 1} of ${prepared.transactions.length}…`)
-        await connection.confirmTransaction(signature, 'confirmed')
+        const confirmation = await connection.confirmTransaction(signature, 'confirmed')
+        // confirmTransaction only rejects on an RPC/timeout error — an
+        // on-chain program failure (bad guard config, insufficient funds,
+        // account already in use) resolves normally with `.value.err` set.
+        // Without this check a failed transaction would silently continue
+        // into the next step (or get recorded as a successful deployment).
+        if (confirmation.value.err) {
+          throw new Error(
+            `Transaction ${i + 1} of ${prepared.transactions.length} failed on-chain: ${JSON.stringify(confirmation.value.err)}`,
+          )
+        }
         signatures.push(signature)
       }
 
@@ -238,6 +245,14 @@ export function MintLaunchPage() {
                     your wallet — not reversible. I understand and want to continue.
                   </span>
                 </label>
+              )}
+
+              {!result && (
+                <p className="text-xs text-ink-faint">
+                  You'll be prompted to approve {publishedItems.length > 1 ? 'a few transactions' : 'a transaction'} in
+                  your wallet — approve them promptly (within about a minute of each other). If you wait too long
+                  between approvals, a later transaction can expire and you'll need to start over.
+                </p>
               )}
 
               {error && <p className="text-sm text-danger">{error}</p>}

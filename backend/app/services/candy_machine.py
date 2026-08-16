@@ -35,7 +35,15 @@ class ValidationError(ValueError):
 
 
 class CandyMachineServiceError(RuntimeError):
-    pass
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+# Mirrors services/candy-machine/src/routes/candyMachine.ts's own MAX_ITEMS —
+# checked here too so a too-large collection fails fast with a clean 422
+# before ever calling the sidecar, instead of surfacing as an opaque 502.
+MAX_ITEMS = 20
 
 
 def _sidecar_headers() -> dict[str, str]:
@@ -75,6 +83,8 @@ def prepare_candy_machine(
     published_items = [item for item in collection.items if item.ipfs_metadata_hash]
     if not published_items:
         raise ValidationError("Publish at least one item to IPFS before launching a Candy Machine")
+    if len(published_items) > MAX_ITEMS:
+        raise ValidationError(f"At most {MAX_ITEMS} published items are supported per candy machine right now")
 
     collection_metadata = ipfs.upload_json(
         {
@@ -112,7 +122,10 @@ def prepare_candy_machine(
         raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
 
     if response.status_code != 200:
-        raise CandyMachineServiceError(f"Candy Machine service returned {response.status_code}: {response.text}")
+        raise CandyMachineServiceError(
+            f"Candy Machine service returned {response.status_code}: {response.text}",
+            status_code=response.status_code,
+        )
 
     return response.json()
 
@@ -142,6 +155,18 @@ def record_candy_machine(
         raise ValidationError(
             f"Transaction is not a confirmed success on-chain (status: {tx_status.get('status')})"
         )
+
+    # A successful signature alone isn't enough — confirm it's actually a
+    # transaction that touched the claimed `candy_machine` account, not an
+    # unrelated successful signature paired with an arbitrary address. Only
+    # candy_machine is checked (not collection_mint): the last transaction
+    # in the sequence is always one that references the candy machine
+    # (create, or a later config-lines-insert if split into its own tx), but
+    # collection_mint only appears in the earlier collection-creation
+    # transaction, which may not be the last one signed.
+    account_keys = tx_status.get("account_keys") or []
+    if candy_machine not in account_keys:
+        raise ValidationError("The confirmed transaction does not reference the given candy_machine address")
 
     deployment = CandyMachineDeployment(
         user_id=collection.user_id,

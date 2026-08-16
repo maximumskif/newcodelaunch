@@ -249,11 +249,17 @@ def _get_solana_transaction_status(network: str, tx_hash: str) -> dict:
         if resp.value is None:
             return {"status": "not_found"}
         meta = resp.value.transaction.meta
+        # Account keys touched by this transaction — used by candy_machine.py
+        # to independently confirm a claimed collection_mint/candy_machine
+        # address was actually involved in the verified transaction, not
+        # just that *some* successful signature was supplied.
+        account_keys = [str(key) for key in resp.value.transaction.transaction.message.account_keys]
         return {
             "status": "success" if meta.err is None else "failed",
             "slot": resp.value.slot,
             "fee": meta.fee,
             "error": str(meta.err) if meta.err else None,
+            "account_keys": account_keys,
         }
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "error": str(exc)}

@@ -21,18 +21,31 @@ def prepare():
         return jsonify(error=str(exc)), 404
 
     try:
+        price_sol = float(data["price_sol"])
+        # `or 500` would silently replace an intentional 0 (no royalty) with
+        # the default, since 0 is falsy — only fall back when the field is
+        # actually absent.
+        seller_fee_bps = 500 if data.get("seller_fee_bps") is None else int(data["seller_fee_bps"])
+    except (TypeError, ValueError):
+        return jsonify(error="price_sol and seller_fee_bps must be numbers"), 400
+
+    try:
         result = candy_machine.prepare_candy_machine(
             collection=collection,
             network=data["network"],
             creator_wallet=data["creator_wallet"],
-            price_sol=float(data["price_sol"]),
+            price_sol=price_sol,
             go_live_date=data["go_live_date"],
-            seller_fee_bps=int(data.get("seller_fee_bps") or 500),
+            seller_fee_bps=seller_fee_bps,
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
     except candy_machine.CandyMachineServiceError as exc:
-        return jsonify(error=str(exc)), 502
+        # A 4xx from the sidecar (e.g. "too many items") is the caller's
+        # input problem, not a service outage — pass that status through
+        # instead of always reporting 502.
+        status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+        return jsonify(error=str(exc)), status
 
     return jsonify(result)
 
@@ -62,14 +75,20 @@ def create_candy_machine():
         return jsonify(error=str(exc)), 404
 
     try:
+        price_sol = float(data["price_sol"])
+        items_available = int(data["items_available"])
+    except (TypeError, ValueError):
+        return jsonify(error="price_sol and items_available must be numbers"), 400
+
+    try:
         deployment = candy_machine.record_candy_machine(
             collection=collection,
             network=data["network"],
             collection_mint=data["collection_mint"],
             candy_machine=data["candy_machine"],
             transaction_signatures=data["transaction_signatures"],
-            price_sol=float(data["price_sol"]),
-            items_available=int(data["items_available"]),
+            price_sol=price_sol,
+            items_available=items_available,
             go_live_date=data["go_live_date"],
             creator_wallet=data["creator_wallet"],
         )

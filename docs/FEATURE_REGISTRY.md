@@ -11,7 +11,7 @@ claiming something works when it doesn't.
 - **Real (optional config)** — real when its API key/credential is set; fails with a clear error instead of faking a result when it isn't.
 - **Unavailable** — not built. Shown with a "Soon" badge or a disabled tile, never a dead link or a button that does nothing.
 
-Last updated 2026-08-15, alongside the Phase 7 accessibility pass. See `docs/REBUILD_PROGRESS.md` for the living build checklist this doc summarizes the user-facing side of.
+Last updated 2026-08-16, alongside the Candy Machine creator flow. See `docs/REBUILD_PROGRESS.md` for the living build checklist this doc summarizes the user-facing side of.
 
 ## Marketing site (`/`)
 
@@ -22,7 +22,7 @@ Last updated 2026-08-15, alongside the Phase 7 accessibility pass. See `docs/REB
 | "Start here" tile: Mint Site | Unavailable | Disabled, non-clickable tile — not a dead link. |
 | "How it works" steps | Real | Describes only what's actually implemented (no testnet-gate/dashboard step invented). |
 | Security & transparency claims | Real | All 4 points independently true today (no server-side key custody, client-side signing only, real inspectable contract source, live network status). |
-| Nav "Products" dropdown | Real | Auto-derived from `lib/products.ts` — every entry with a `path` is a real page; entries without one show a "Soon" badge (currently just Candy Machine). |
+| Nav "Products" dropdown | Real | Auto-derived from `lib/products.ts` — every entry with a `path` is a real page; entries without one would show a "Soon" badge instead (none currently — every listed product is real as of the Candy Machine creator flow). |
 | Wallet connect (EVM) | Real | wagmi + MetaMask/injected connector, nonce + signature → JWT. |
 | Wallet connect (Solana) | Real | `@solana/wallet-adapter` (Phantom), nonce + signature → JWT. |
 
@@ -76,8 +76,16 @@ Last updated 2026-08-15, alongside the Phase 7 accessibility pass. See `docs/REB
 | Browse templates | Real | Same 3 real templates the Token Launchpad/Contracts Hub deploy from — real name/description/features/gas estimate, no fabricated authors/ratings/download counts. |
 | "Use this template" | Real | Routes into Token Launchpad or Contracts Hub with that template pre-selected. |
 
+## Candy Machine (`/mint`) — creator flow only
+
+| Action | Status | Notes |
+|---|---|---|
+| Launch a Candy Machine from a published NFT collection | Real (capped) | Real `@metaplex-foundation/umi` + `mpl-candy-machine` on-chain creation (Collection NFT + guarded Candy Machine + config lines) via `services/candy-machine`. Your connected Solana wallet signs and pays for everything — the sidecar generates only single-use, in-memory ephemeral signers for the two brand-new accounts, never a platform authority key. Capped at 20 items per drop (documented limit, same spirit as the NFT generator's own cap). |
+| Mainnet confirmation checkbox | Real | Same pattern as the EVM mainnet gate — required before launching on Solana Mainnet, defaults to Solana Devnet. |
+| Reachable via "Launch Mint Site" in the NFT Generator | Real | Only appears once at least one item is published to IPFS. |
+
 ## Not yet built
 
 | Feature | Status | Notes |
 |---|---|---|
-| Candy Machine / mint-site (Solana) | Unavailable | `services/candy-machine/` sidecar scaffold + internal-auth contract exist, but no real Metaplex Umi minting is wired up yet. Shown as "Soon" in nav/sidebar, `/mint` is an honest placeholder route, not a dead link. |
+| Public mint storefront (Solana) | Unavailable | The buyer-facing "hosted mint page" (see the homepage's "Mint Site" tile) — a page where any visitor connects their own wallet and buys from a live Candy Machine. Distinct from the creator flow above (different visitor, different wallet, a "buy" transaction instead of "create"); not started. |

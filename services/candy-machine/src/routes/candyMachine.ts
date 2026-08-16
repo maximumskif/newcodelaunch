@@ -8,7 +8,7 @@ import {
 import { createNft, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { addConfigLines, create } from "@metaplex-foundation/mpl-candy-machine";
 
-import { createUmiForCreator, isSolanaNetwork, toPublicKey } from "../lib/umi.js";
+import { createUmiForCreator, isSolanaNetwork } from "../lib/umi.js";
 
 export const candyMachineRouter = Router();
 
