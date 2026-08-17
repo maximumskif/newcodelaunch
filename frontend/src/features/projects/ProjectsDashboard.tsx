@@ -26,6 +26,7 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 function linkedRecordLabel(project: Project): string | null {
   if (project.contract_deployment) return `${project.contract_deployment.contract_address.slice(0, 10)}…`
   if (project.nft_collection) return project.nft_collection.name
+  if (project.candy_machine_deployment) return `${project.candy_machine_deployment.candy_machine.slice(0, 10)}…`
   return null
 }
 

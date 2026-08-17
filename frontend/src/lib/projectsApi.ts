@@ -1,8 +1,9 @@
+import type { CandyMachineDeployment } from './candyMachineApi'
 import type { ContractDeployment } from './contractsApi'
 import type { NFTCollection } from './nftApi'
 import { request } from './http'
 
-export type ProjectType = 'token' | 'nft_collection' | 'contract'
+export type ProjectType = 'token' | 'nft_collection' | 'contract' | 'candy_machine'
 export type ProjectStatus = 'draft' | 'active' | 'archived'
 
 export interface Project {
@@ -15,6 +16,7 @@ export interface Project {
   draft_data: Record<string, unknown>
   contract_deployment: ContractDeployment | null
   nft_collection: NFTCollection | null
+  candy_machine_deployment: CandyMachineDeployment | null
   created_at: string
   updated_at: string
 }
