@@ -43,8 +43,9 @@ const CREATION_PATHS: CreationPath[] = [
   {
     icon: <IconLayers />,
     title: 'Mint Site',
-    description: 'A hosted mint page wired to your collection and a connected wallet.',
-    badge: 'soon',
+    description: 'Launch a real Solana Candy Machine from a published collection, with a shareable public mint page.',
+    href: '/mint',
+    badge: 'live',
   },
 ]
 
@@ -107,7 +108,7 @@ export function HomePage() {
       <section id="start-here" className="scroll-mt-20 px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-xl font-semibold text-ink">Start here</h2>
-          <p className="mt-1 text-sm text-ink-muted">Three of these are real, working flows. One isn't built yet — it says so.</p>
+          <p className="mt-1 text-sm text-ink-muted">All four of these are real, working flows.</p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {CREATION_PATHS.map((path) => {
               const content = (

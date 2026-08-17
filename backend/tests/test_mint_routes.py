@@ -66,3 +66,49 @@ def test_prepare_rejects_non_numeric_price(app, client):
         )
 
         assert response.status_code == 400
+
+
+def test_get_public_candy_machine_needs_no_auth(client, monkeypatch):
+    # No Authorization header at all — a buyer visiting a shared link has
+    # no account with this app.
+    monkeypatch.setattr(candy_machine, "get_public_candy_machine_status", lambda addr: {"candy_machine": addr})
+
+    response = client.get("/api/mint/public/some-address")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"candy_machine": "some-address"}
+
+
+def test_get_public_candy_machine_404s_on_unknown_address(client, monkeypatch):
+    def fake_status(addr):
+        raise candy_machine.NotFoundError(f"No candy machine found for address: {addr}")
+
+    monkeypatch.setattr(candy_machine, "get_public_candy_machine_status", fake_status)
+
+    response = client.get("/api/mint/public/nonexistent")
+
+    assert response.status_code == 404
+
+
+def test_prepare_public_mint_needs_no_auth(client, monkeypatch):
+    captured = {}
+
+    def fake_prepare_mint(addr, minter_wallet):
+        captured["addr"] = addr
+        captured["minter_wallet"] = minter_wallet
+        return {"transaction": "base64tx", "nft_mint": "some-mint"}
+
+    monkeypatch.setattr(candy_machine, "prepare_mint", fake_prepare_mint)
+
+    response = client.post(
+        "/api/mint/public/some-address/mint",
+        json={"minter_wallet": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {"addr": "some-address", "minter_wallet": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"}
+
+
+def test_prepare_public_mint_requires_minter_wallet(client):
+    response = client.post("/api/mint/public/some-address/mint", json={})
+    assert response.status_code == 400

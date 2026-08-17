@@ -8,6 +8,7 @@ import { HomePage } from './features/marketing/HomePage'
 import { DefiScannerPage } from './features/market/DefiScannerPage'
 import { MarketIntelligencePage } from './features/market/MarketIntelligencePage'
 import { TemplateMarketplacePage } from './features/marketplace/TemplateMarketplacePage'
+import { MintBuyPage } from './features/mint/MintBuyPage'
 import { MintLaunchPage } from './features/mint/MintLaunchPage'
 import { NFTGeneratorPage } from './features/nft/NFTGeneratorPage'
 import { NewProjectWizard } from './features/projects/NewProjectWizard'
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/defi" element={<DefiScannerPage />} />
           <Route path="/marketplace" element={<TemplateMarketplacePage />} />
           <Route path="/mint" element={<MintLaunchPage />} />
+          <Route path="/mint/buy/:candyMachineId" element={<MintBuyPage />} />
         </Route>
       </Routes>
     </>

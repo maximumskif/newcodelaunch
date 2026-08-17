@@ -21,20 +21,24 @@ export function isSolanaNetwork(value: string): value is SolanaNetwork {
 
 /**
  * Builds a Umi instance whose identity/payer is a *noop* signer for the
- * creator's own wallet — it can be used to construct transactions naming
- * the creator as authority/payer, but it can never actually sign anything.
- * That's the whole point: this service never holds the creator's key, it
- * only builds transactions for the creator's own connected wallet to sign
+ * given wallet — it can be used to construct transactions naming that
+ * wallet as authority/payer, but it can never actually sign anything.
+ * That's the whole point: this service never holds anyone's key (creator
+ * or buyer), it only builds transactions for that wallet to sign
  * client-side (see services/candy-machine's auth middleware doc comment,
  * and docs/REBUILD_PROGRESS.md's Candy Machine signer-model decision).
  */
-export function createUmiForCreator(network: SolanaNetwork, creatorPublicKey: string): Umi {
+export function createUmiForWallet(network: SolanaNetwork, walletPublicKey: string): Umi {
   const umi = createUmi(SOLANA_NETWORKS[network]).use(mplCandyMachine()).use(mplTokenMetadata());
-  const creator = createNoopSigner(publicKey(creatorPublicKey));
-  umi.identity = creator;
-  umi.payer = creator;
+  const wallet = createNoopSigner(publicKey(walletPublicKey));
+  umi.identity = wallet;
+  umi.payer = wallet;
   return umi;
 }
+
+// Kept as a distinct name at call sites (candyMachine.ts's /prepare route)
+// purely for readability — same generic noop-signer wallet umi underneath.
+export const createUmiForCreator = createUmiForWallet;
 
 export function toPublicKey(value: string): PublicKey {
   return publicKey(value);

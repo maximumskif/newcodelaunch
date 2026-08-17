@@ -8,15 +8,15 @@ creator's own connected wallet completes the missing signature and sends
 each transaction client-side; this backend and the sidecar never hold the
 creator's key or gain ongoing authority over the collection/candy machine.
 
-This module intentionally only covers the creator side (launching a drop
-from an already-published NFT collection) — building a buyer's mint
-transaction is a distinct, not-yet-built flow (the public mint-site
-storefront), see docs/REBUILD_PROGRESS.md.
+This module covers both sides of the flow now: the creator launching a
+drop from an already-published NFT collection, and the public storefront
+(any visitor, no account needed) reading live status and building a mint
+transaction for their own wallet. See docs/REBUILD_PROGRESS.md.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -31,6 +31,10 @@ SOLANA_NETWORKS = ("solana_devnet", "solana")
 
 
 class ValidationError(ValueError):
+    pass
+
+
+class NotFoundError(ValueError):
     pass
 
 
@@ -61,6 +65,22 @@ def _derive_symbol(name: str) -> str:
 def _explorer_url(network: str, candy_machine: str) -> str:
     base = f"{blockchain.SOLANA_NETWORKS[network]['explorer_url']}/address/{candy_machine}"
     return f"{base}?cluster=devnet" if network == "solana_devnet" else base
+
+
+# This backend/DB's network ids (solana_devnet/solana, matching the EVM
+# side's naming convention) aren't the sidecar's own network ids
+# (devnet/mainnet-beta — Solana CLI/RPC cluster names). Found while adding
+# the public mint storefront: prepare_candy_machine was sending the
+# backend's own id straight through unmapped, which the sidecar's
+# isSolanaNetwork() would reject outright — every /prepare call against a
+# real sidecar would have 400'd. Centralized the mapping here so it can't
+# drift between the two calls that need it (prepare + the new status/mint
+# calls added for the storefront).
+_SIDECAR_NETWORK_IDS = {"solana_devnet": "devnet", "solana": "mainnet-beta"}
+
+
+def _sidecar_network(network: str) -> str:
+    return _SIDECAR_NETWORK_IDS[network]
 
 
 def prepare_candy_machine(
@@ -96,7 +116,7 @@ def prepare_candy_machine(
     )
 
     payload = {
-        "network": network,
+        "network": _sidecar_network(network),
         "creatorPublicKey": creator_wallet,
         "collectionName": collection.name,
         "collectionSymbol": _derive_symbol(collection.name),
@@ -192,3 +212,108 @@ def get_user_candy_machines(user_id: str) -> list[CandyMachineDeployment]:
         .order_by(CandyMachineDeployment.created_at.desc())
         .all()
     )
+
+
+def _get_deployment_by_address(candy_machine_address: str) -> CandyMachineDeployment:
+    deployment = CandyMachineDeployment.query.filter_by(candy_machine=candy_machine_address).first()
+    if deployment is None:
+        raise NotFoundError(f"No candy machine found for address: {candy_machine_address}")
+    return deployment
+
+
+def get_public_candy_machine_status(candy_machine_address: str) -> dict[str, Any]:
+    """Public (unauthenticated) storefront data for an already-launched
+    candy machine. Combines what the creator's own launch already recorded
+    — price, go-live date, collection name/description/preview — with a
+    fresh on-chain read of items_redeemed, which only exists on-chain and
+    changes with every mint, unlike everything else here (there's no
+    update-guard feature, so price/go-live/creator can't have drifted)."""
+    deployment = _get_deployment_by_address(candy_machine_address)
+    collection = NFTCollection.query.get(deployment.nft_collection_id)
+
+    service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
+    try:
+        response = requests.get(
+            f"{service_url}/internal/candy-machine/{candy_machine_address}/status",
+            params={"network": _sidecar_network(deployment.network)},
+            headers=_sidecar_headers(),
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
+
+    if response.status_code != 200:
+        raise CandyMachineServiceError(
+            f"Candy Machine service returned {response.status_code}: {response.text}",
+            status_code=response.status_code,
+        )
+    on_chain = response.json()
+
+    preview_image = None
+    if collection is not None:
+        published = next((item for item in collection.items if item.ipfs_image_hash), None)
+        if published is not None:
+            preview_image = f"{ipfs.PINATA_GATEWAY}{published.ipfs_image_hash}"
+
+    # SQLite (this test suite's DB) returns a naive datetime.datetime from a
+    # `DateTime(timezone=True)` column even though it was written aware —
+    # SQLite has no native tz-aware storage, so SQLAlchemy's sqlite dialect
+    # silently drops tzinfo on the way back out (Postgres, this app's real
+    # target, doesn't have this problem). A naive value here was always
+    # written as UTC (see models/candy_machine.py's `_utcnow` and
+    # `record_candy_machine`'s `datetime.fromisoformat`), so it's safe to
+    # assume UTC rather than let a naive/aware comparison raise TypeError.
+    go_live_date = deployment.go_live_date
+    if go_live_date.tzinfo is None:
+        go_live_date = go_live_date.replace(tzinfo=timezone.utc)
+
+    return {
+        "candy_machine": deployment.candy_machine,
+        "collection_mint": deployment.collection_mint,
+        "network": deployment.network,
+        "collection_name": collection.name if collection else None,
+        "collection_description": collection.description if collection else None,
+        "preview_image": preview_image,
+        "price_sol": deployment.price_sol,
+        "go_live_date": go_live_date.isoformat(),
+        "is_live": datetime.now(timezone.utc) >= go_live_date,
+        "explorer_url": deployment.explorer_url,
+        "items_available": on_chain["items_available"],
+        "items_redeemed": on_chain["items_redeemed"],
+        "items_remaining": on_chain["items_remaining"],
+    }
+
+
+def prepare_mint(candy_machine_address: str, minter_wallet: str) -> dict[str, Any]:
+    """Builds a buyer's (unsigned/partially-signed) mint transaction. Like
+    prepare_candy_machine, this doesn't persist anything — the buyer's own
+    connected wallet signs and sends it directly; there's no backend
+    record of individual mints, the candy machine's own on-chain
+    items_redeemed count is the source of truth (see get_public_candy_machine_status)."""
+    deployment = _get_deployment_by_address(candy_machine_address)
+
+    payload = {
+        "network": _sidecar_network(deployment.network),
+        "minterPublicKey": minter_wallet,
+        "collectionMint": deployment.collection_mint,
+        "creatorPublicKey": deployment.creator_wallet,
+    }
+
+    service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
+    try:
+        response = requests.post(
+            f"{service_url}/internal/candy-machine/{candy_machine_address}/mint",
+            json=payload,
+            headers=_sidecar_headers(),
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
+
+    if response.status_code != 200:
+        raise CandyMachineServiceError(
+            f"Candy Machine service returned {response.status_code}: {response.text}",
+            status_code=response.status_code,
+        )
+
+    return response.json()

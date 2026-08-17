@@ -2,13 +2,15 @@ import { Router } from "express";
 import {
   generateSigner,
   percentAmount,
+  publicKey,
   sol,
   type TransactionBuilder,
 } from "@metaplex-foundation/umi";
 import { createNft, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
-import { addConfigLines, create } from "@metaplex-foundation/mpl-candy-machine";
+import { addConfigLines, create, fetchCandyMachine, mintV2, mplCandyMachine } from "@metaplex-foundation/mpl-candy-machine";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
-import { createUmiForCreator, isSolanaNetwork } from "../lib/umi.js";
+import { createUmiForCreator, createUmiForWallet, isSolanaNetwork, SOLANA_NETWORKS } from "../lib/umi.js";
 
 export const candyMachineRouter = Router();
 
@@ -171,5 +173,89 @@ candyMachineRouter.post("/prepare", async (req, res) => {
     });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build candy machine transactions" });
+  }
+});
+
+// Live on-chain state for the public mint storefront (backend also stores
+// price/go-live/creator data from launch time — that never changes, since
+// there's no update-guard feature — but items_redeemed only exists
+// on-chain and changes with every mint, so it's read fresh here rather than
+// trusted from the backend's own DB). Read-only: no identity/payer needed,
+// no noop-signer wallet involved.
+candyMachineRouter.get("/:candyMachineId/status", async (req, res) => {
+  const network = req.query.network;
+  if (typeof network !== "string" || !isSolanaNetwork(network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+
+  try {
+    const umi = createUmi(SOLANA_NETWORKS[network]).use(mplCandyMachine());
+    const account = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId));
+    const itemsAvailable = Number(account.data.itemsAvailable);
+    const itemsRedeemed = Number(account.itemsRedeemed);
+    res.json({
+      items_available: itemsAvailable,
+      items_redeemed: itemsRedeemed,
+      items_remaining: Math.max(itemsAvailable - itemsRedeemed, 0),
+    });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Candy machine not found on-chain" });
+  }
+});
+
+interface MintBody {
+  network?: string;
+  minterPublicKey?: string;
+  collectionMint?: string;
+  creatorPublicKey?: string;
+}
+
+// Builds a buyer's mint transaction — the distinct "buy" flow deferred when
+// /prepare above first shipped (see docs/REBUILD_PROGRESS.md). Same signer
+// pattern as /prepare: a fresh, single-use, in-memory-only ephemeral
+// signer for the brand-new NFT mint account, plus a noop signer for the
+// buyer's own wallet (this service never holds the buyer's key either).
+// No on-chain fetch is needed to build this: the guard's stored SOL amount
+// is applied automatically by the on-chain program from what was set at
+// creation, and the guard PDA is deterministically derived from
+// `candyMachine` — the only two accounts this instruction actually needs
+// telling about (collectionMint, creatorPublicKey-as-collectionUpdateAuthority)
+// are exactly what the backend already has on file from the creator's own
+// launch, so they're passed in rather than re-derived or re-fetched.
+candyMachineRouter.post("/:candyMachineId/mint", async (req, res) => {
+  const body = req.body as MintBody;
+
+  if (!body.network || !isSolanaNetwork(body.network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+  if (!body.minterPublicKey) {
+    res.status(400).json({ error: "minterPublicKey is required" });
+    return;
+  }
+  if (!body.collectionMint || !body.creatorPublicKey) {
+    res.status(400).json({ error: "collectionMint and creatorPublicKey are required" });
+    return;
+  }
+
+  try {
+    const umi = createUmiForWallet(body.network, body.minterPublicKey);
+    const nftMint = generateSigner(umi);
+
+    const builder = mintV2(umi, {
+      candyMachine: publicKey(req.params.candyMachineId),
+      nftMint,
+      collectionMint: publicKey(body.collectionMint),
+      collectionUpdateAuthority: publicKey(body.creatorPublicKey),
+      mintArgs: {
+        solPayment: { destination: publicKey(body.creatorPublicKey) },
+      },
+    });
+
+    const transaction = await serializeSigned(umi, builder);
+    res.json({ transaction, nft_mint: nftMint.publicKey });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build mint transaction" });
   }
 });

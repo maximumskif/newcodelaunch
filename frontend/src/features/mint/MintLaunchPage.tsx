@@ -9,16 +9,10 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
+import { base64ToBytes } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
 
 export function MintLaunchPage() {
   const [searchParams] = useSearchParams()
@@ -267,6 +261,15 @@ export function MintLaunchPage() {
                       View on explorer
                     </a>
                   )}
+                  <p className="mt-3 text-ink-muted">
+                    Share this link so anyone can mint from the drop — no account needed, just a Solana wallet:
+                  </p>
+                  <Link
+                    to={`/mint/buy/${result.candy_machine}`}
+                    className="mt-1 block break-all font-mono text-xs text-accent-400 underline"
+                  >
+                    {`${window.location.origin}/mint/buy/${result.candy_machine}`}
+                  </Link>
                 </div>
               ) : (
                 <Button

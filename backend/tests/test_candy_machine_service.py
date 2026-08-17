@@ -1,12 +1,44 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.extensions import db as _db
+from app.models.candy_machine import CandyMachineDeployment
 from app.models.nft import NFTCollection, NFTGeneratedItem
 from app.models.user import Chain, User
 from app.services import blockchain, candy_machine
 
 VALID_ADDRESS = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 OTHER_ADDRESS = "2xNweLHLqrxsFCTd7oPHruTxSD5siVBt7XSQP2Vth2mB"
+
+
+class _FakeResponse:
+    def __init__(self, status_code, json_data):
+        self.status_code = status_code
+        self._json_data = json_data
+        self.text = str(json_data)
+
+    def json(self):
+        return self._json_data
+
+
+def _make_deployment(collection, *, go_live_delta=timedelta(hours=-1)):
+    deployment = CandyMachineDeployment(
+        user_id=collection.user_id,
+        nft_collection_id=collection.id,
+        network="solana_devnet",
+        collection_mint=OTHER_ADDRESS,
+        candy_machine=VALID_ADDRESS,
+        price_sol=0.25,
+        items_available=1,
+        go_live_date=datetime.now(timezone.utc) + go_live_delta,
+        creator_wallet=VALID_ADDRESS,
+        transaction_signatures=["5" * 88],
+        explorer_url="https://explorer.solana.com/address/x?cluster=devnet",
+    )
+    _db.session.add(deployment)
+    _db.session.commit()
+    return deployment
 
 
 def _make_user():
@@ -183,3 +215,115 @@ def test_record_accepts_a_confirmed_transaction_that_references_the_candy_machin
             creator_wallet=VALID_ADDRESS,
         )
         assert deployment.candy_machine == VALID_ADDRESS
+
+
+def test_prepare_sends_the_sidecars_own_network_ids(app, monkeypatch):
+    # Regression test: the backend's own network ids (solana_devnet/solana)
+    # were being sent to the sidecar unmapped, which only recognizes its
+    # own cluster ids (devnet/mainnet-beta) — every real /prepare call
+    # would have 400'd. Found while building the public mint storefront.
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        _add_published_items(collection, 1)
+
+        monkeypatch.setattr(candy_machine.ipfs, "upload_json", lambda *a, **k: {"url": "ipfs://collection"})
+
+        captured = {}
+
+        def fake_post(url, json, headers, timeout):
+            captured.update(json)
+            return _FakeResponse(200, {"collection_mint": "x", "candy_machine": "y", "transactions": []})
+
+        monkeypatch.setattr(candy_machine.requests, "post", fake_post)
+
+        candy_machine.prepare_candy_machine(
+            collection=collection,
+            network="solana_devnet",
+            creator_wallet=VALID_ADDRESS,
+            price_sol=0.1,
+            go_live_date="2026-09-01T00:00:00Z",
+        )
+
+        assert captured["network"] == "devnet"
+
+
+def test_get_public_status_rejects_an_unknown_address(app):
+    with app.app_context():
+        with pytest.raises(candy_machine.NotFoundError):
+            candy_machine.get_public_candy_machine_status("nonexistent-address")
+
+
+def test_get_public_status_merges_stored_and_on_chain_data(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        item = NFTGeneratedItem(
+            collection_id=collection.id,
+            token_index=1,
+            attributes=[],
+            image_path="generated/x/1.png",
+            ipfs_image_hash="QmImage0",
+            ipfs_metadata_hash="QmMeta0",
+        )
+        _db.session.add(item)
+        _db.session.commit()
+        deployment = _make_deployment(collection, go_live_delta=timedelta(hours=-1))
+
+        def fake_get(url, params, headers, timeout):
+            assert params == {"network": "devnet"}
+            return _FakeResponse(200, {"items_available": 1, "items_redeemed": 0, "items_remaining": 1})
+
+        monkeypatch.setattr(candy_machine.requests, "get", fake_get)
+
+        status = candy_machine.get_public_candy_machine_status(deployment.candy_machine)
+
+        assert status["candy_machine"] == VALID_ADDRESS
+        assert status["is_live"] is True
+        assert status["items_remaining"] == 1
+        assert status["preview_image"] == f"{candy_machine.ipfs.PINATA_GATEWAY}QmImage0"
+
+
+def test_get_public_status_not_live_before_go_live_date(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        deployment = _make_deployment(collection, go_live_delta=timedelta(hours=1))
+
+        monkeypatch.setattr(
+            candy_machine.requests,
+            "get",
+            lambda *a, **k: _FakeResponse(200, {"items_available": 1, "items_redeemed": 0, "items_remaining": 1}),
+        )
+
+        status = candy_machine.get_public_candy_machine_status(deployment.candy_machine)
+        assert status["is_live"] is False
+
+
+def test_prepare_mint_rejects_an_unknown_address(app):
+    with app.app_context():
+        with pytest.raises(candy_machine.NotFoundError):
+            candy_machine.prepare_mint("nonexistent-address", VALID_ADDRESS)
+
+
+def test_prepare_mint_sends_the_creator_wallet_as_sol_payment_destination(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        deployment = _make_deployment(collection)
+
+        captured = {}
+
+        def fake_post(url, json, headers, timeout):
+            captured.update(json)
+            return _FakeResponse(200, {"transaction": "base64tx", "nft_mint": OTHER_ADDRESS})
+
+        monkeypatch.setattr(candy_machine.requests, "post", fake_post)
+
+        result = candy_machine.prepare_mint(deployment.candy_machine, OTHER_ADDRESS)
+
+        assert captured["network"] == "devnet"
+        assert captured["minterPublicKey"] == OTHER_ADDRESS
+        assert captured["creatorPublicKey"] == VALID_ADDRESS
+        assert captured["collectionMint"] == deployment.collection_mint
+        assert result["nft_mint"] == OTHER_ADDRESS

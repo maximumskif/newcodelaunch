@@ -8,7 +8,7 @@ internalRouter.get("/ping", (_req, res) => {
   res.json({ status: "ok", authenticated: true });
 });
 
-// Real Metaplex Umi / mpl-candy-machine transaction building. Mint-time
-// routes (build a buyer's mint transaction) aren't built yet — this is the
-// creator-side "launch a drop" flow only, see docs/REBUILD_PROGRESS.md.
+// Real Metaplex Umi / mpl-candy-machine transaction building — both the
+// creator-side "launch a drop" flow and the buyer-side "mint from a live
+// drop" flow, see docs/REBUILD_PROGRESS.md.
 internalRouter.use("/candy-machine", candyMachineRouter);

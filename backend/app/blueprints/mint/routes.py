@@ -109,3 +109,41 @@ def create_candy_machine():
 def list_candy_machines():
     deployments = candy_machine.get_user_candy_machines(get_jwt_identity())
     return jsonify(candy_machines=[d.to_dict() for d in deployments])
+
+
+# Public storefront routes below — deliberately no @jwt_required(). A buyer
+# visiting a shared drop link has no account with this app; the candy
+# machine address itself is already public on Solana, and everything
+# returned here (collection name/description, price, live on-chain
+# item counts) is exactly what a wallet explorer would already show.
+
+
+@mint_bp.get("/public/<candy_machine_address>")
+def get_public_candy_machine(candy_machine_address: str):
+    try:
+        status = candy_machine.get_public_candy_machine_status(candy_machine_address)
+    except candy_machine.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except candy_machine.CandyMachineServiceError as exc:
+        status_code = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+        return jsonify(error=str(exc)), status_code
+
+    return jsonify(status)
+
+
+@mint_bp.post("/public/<candy_machine_address>/mint")
+def prepare_public_mint(candy_machine_address: str):
+    data = request.get_json(silent=True) or {}
+    minter_wallet = data.get("minter_wallet")
+    if not minter_wallet:
+        return jsonify(error="minter_wallet is required"), 400
+
+    try:
+        result = candy_machine.prepare_mint(candy_machine_address, minter_wallet)
+    except candy_machine.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except candy_machine.CandyMachineServiceError as exc:
+        status_code = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+        return jsonify(error=str(exc)), status_code
+
+    return jsonify(result)
