@@ -88,3 +88,9 @@ class Config:
 class TestConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
+    # Base Config defaults this to "" (no secret set) since it's normally an
+    # env var — tests that exercise candy_machine.py past its own validation
+    # (real requests.post/get calls are mocked, but _sidecar_headers() itself
+    # isn't) need a non-empty value or every such call 500s before the mock
+    # is ever reached.
+    CANDY_MACHINE_SHARED_SECRET = "test-shared-secret"
