@@ -9,6 +9,12 @@ interface ProjectTypeMeta {
   path: string
   icon: ComponentType<{ className?: string }>
   needsNetwork: boolean
+  // False for a type that can only ever come from linking an existing
+  // record (see candy_machine below) — NewProjectWizard.tsx's type picker
+  // filters to just the creatable ones via WIZARD_PROJECT_TYPES, so a type
+  // added here for the dashboard's sake doesn't also silently become
+  // something the wizard offers to start from a bare draft.
+  creatableViaWizard: boolean
 }
 
 // Single source of truth for what a project "is" — used by the new-project
@@ -19,11 +25,12 @@ interface ProjectTypeMeta {
 // backend has included a candy_machine_deployment link since Phase 6, and
 // PROJECT_TYPES[project.project_type] must resolve for every type a Project
 // row can actually have, or ProjectsDashboard.tsx crashes rendering that
-// card) even though nothing creates one today: the wizard's type picker
-// intentionally excludes it (a candy machine's entry point is always an
-// already-published NFT collection, never a bare draft), and
-// MintLaunchPage.tsx doesn't yet pass a project_id when recording one either
-// — wiring that end-to-end is a separate, not-yet-scoped follow-up.
+// card) even though nothing creates one today: a candy machine's entry
+// point is always an already-published NFT collection, never a bare draft
+// (hence creatableViaWizard: false — chain:'evm'/an EVM network would make
+// no sense for it), and MintLaunchPage.tsx doesn't yet pass a project_id
+// when recording one either — wiring that end-to-end is a separate,
+// not-yet-scoped follow-up.
 export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   token: {
     label: 'Token',
@@ -31,6 +38,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
     path: '/tokens',
     icon: IconCoin,
     needsNetwork: true,
+    creatableViaWizard: true,
   },
   nft_collection: {
     label: 'NFT Collection',
@@ -38,6 +46,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
     path: '/nft',
     icon: IconLayers,
     needsNetwork: false,
+    creatableViaWizard: true,
   },
   contract: {
     label: 'Custom Contract',
@@ -45,6 +54,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
     path: '/contracts',
     icon: IconCode,
     needsNetwork: true,
+    creatableViaWizard: true,
   },
   candy_machine: {
     label: 'Candy Machine',
@@ -52,5 +62,10 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
     path: '/mint',
     icon: IconCandy,
     needsNetwork: true,
+    creatableViaWizard: false,
   },
 }
+
+export const WIZARD_PROJECT_TYPES = Object.fromEntries(
+  Object.entries(PROJECT_TYPES).filter(([, meta]) => meta.creatableViaWizard),
+) as Partial<Record<ProjectType, ProjectTypeMeta>>

@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card'
 import { PageHero } from '../../components/ui/PageHero'
 import { Stepper } from '../../components/ui/Stepper'
 import { EVM_NETWORKS } from '../network/NetworkContext'
-import { PROJECT_TYPES } from '../../lib/projectTypes'
+import { PROJECT_TYPES, WIZARD_PROJECT_TYPES } from '../../lib/projectTypes'
 import { projectsApi, type ProjectType } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 
@@ -72,7 +72,7 @@ export function NewProjectWizard() {
 
       {!projectType ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          {(Object.entries(PROJECT_TYPES) as [ProjectType, (typeof PROJECT_TYPES)[ProjectType]][]).map(
+          {(Object.entries(WIZARD_PROJECT_TYPES) as [ProjectType, (typeof PROJECT_TYPES)[ProjectType]][]).map(
             ([type, info]) => {
               const Icon = info.icon
               return (
