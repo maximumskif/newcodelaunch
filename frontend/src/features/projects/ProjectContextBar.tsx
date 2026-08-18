@@ -21,7 +21,7 @@ interface Props {
 // action itself (deploy / generate+publish) is step 3, reflected here once
 // the project links to a real ContractDeployment/NFTCollection.
 export function ProjectContextBar({ project, currentStepLabel }: Props) {
-  const isLinked = Boolean(project.contract_deployment || project.nft_collection)
+  const isLinked = Boolean(project.contract_deployment || project.nft_collection || project.candy_machine_deployment)
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent-500/30 bg-accent-500/5 px-4 py-2.5">

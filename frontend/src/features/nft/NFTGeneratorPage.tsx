@@ -140,7 +140,7 @@ export function NFTGeneratorPage() {
                   onChange={() => void refreshCollection(accessToken, collection.id)}
                 />
 
-                <GenerateStep token={accessToken} collection={collection} />
+                <GenerateStep token={accessToken} collection={collection} projectId={projectId} />
               </>
             )}
           </div>

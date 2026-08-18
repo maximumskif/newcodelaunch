@@ -10,6 +10,7 @@ import { ipfsGatewayUrl, maxPossibleCombinations, nftApi, uploadUrl, type NFTCol
 interface Props {
   token: string
   collection: NFTCollection
+  projectId?: string | null
 }
 
 interface MetadataPreview {
@@ -30,7 +31,7 @@ function downloadJson(filename: string, data: unknown) {
   URL.revokeObjectURL(url)
 }
 
-export function GenerateStep({ token, collection }: Props) {
+export function GenerateStep({ token, collection, projectId }: Props) {
   const layers = collection.layers ?? []
   const ready = layers.length > 0 && layers.every((layer) => layer.traits.length > 0)
   const maxCombinations = maxPossibleCombinations(layers)
@@ -234,7 +235,7 @@ export function GenerateStep({ token, collection }: Props) {
         {items.some((item) => item.ipfs_image_hash) && (
           <div className="mt-5 flex items-center justify-between rounded-md border border-border bg-canvas p-3">
             <p className="text-sm text-ink-muted">Ready to sell this collection as a real Solana mint?</p>
-            <Link to={`/mint?collection=${collection.id}`}>
+            <Link to={`/mint?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
               <Button variant="secondary" size="sm">
                 Launch Mint Site
               </Button>

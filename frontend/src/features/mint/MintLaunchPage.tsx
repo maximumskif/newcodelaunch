@@ -9,20 +9,24 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
+import { projectsApi, type Project } from '../../lib/projectsApi'
 import { base64ToBytes } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
+import { ProjectContextBar } from '../projects/ProjectContextBar'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
 export function MintLaunchPage() {
   const [searchParams] = useSearchParams()
   const collectionId = searchParams.get('collection')
+  const projectId = searchParams.get('project')
   const { accessToken } = useAuth()
   const { publicKey, sendTransaction } = useWallet()
 
   const [collection, setCollection] = useState<NFTCollection | null>(null)
   const [items, setItems] = useState<NFTGeneratedItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [project, setProject] = useState<Project | null>(null)
 
   const [network, setNetwork] = useState<SolanaNetworkId>('solana_devnet')
   const [priceSol, setPriceSol] = useState('0.1')
@@ -51,6 +55,31 @@ export function MintLaunchPage() {
       })
       .finally(() => setIsLoading(false))
   }, [accessToken, collectionId])
+
+  // Resume: show the project context bar when arriving via ?project=<id> —
+  // same pattern as DeployPanel/NFTGeneratorPage. Unlike those, this page
+  // never restores any draft form state from the project (there's no
+  // Candy Machine draft_data shape to resume into, launching is a single
+  // step), it's purely for the "Project: <name>" header + dashboard link.
+  useEffect(() => {
+    if (!accessToken || !projectId) return
+    let cancelled = false
+    projectsApi.get(accessToken, projectId).then(({ project: fetched }) => {
+      if (!cancelled) setProject(fetched)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, projectId])
+
+  // Once the candy machine actually lands and gets recorded (and
+  // best-effort linked server-side), re-fetch so the context bar's badge
+  // flips from "Launching mint site" to "Deployed" instead of staying
+  // stale after the fact — same pattern as DeployPanel's post-deploy refresh.
+  useEffect(() => {
+    if (!accessToken || !projectId || !result) return
+    projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
+  }, [accessToken, projectId, result])
 
   const publishedItems = items.filter((item) => item.ipfs_image_hash && item.ipfs_metadata_hash)
   const isBusy = step === 'preparing' || step === 'signing' || step === 'recording'
@@ -108,6 +137,7 @@ export function MintLaunchPage() {
         items_available: publishedItems.length,
         go_live_date: new Date(goLiveDate).toISOString(),
         creator_wallet: publicKey.toBase58(),
+        project_id: projectId ?? undefined,
       })
 
       setResult(recorded)
@@ -148,6 +178,8 @@ export function MintLaunchPage() {
         title="Candy Machine"
         description="Your connected Solana wallet signs every transaction — this app never holds the keys to your collection or its mint proceeds."
       />
+
+      {project && <ProjectContextBar project={project} currentStepLabel="Launching mint site" />}
 
       {isLoading && <p className="text-ink-muted">Loading collection…</p>}
 

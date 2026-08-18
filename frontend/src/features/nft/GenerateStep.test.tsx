@@ -88,3 +88,41 @@ describe('GenerateStep metadata preview', () => {
     expect(await screen.findByText('Real content pinned to IPFS.')).toBeInTheDocument()
   })
 })
+
+describe('GenerateStep "Launch Mint Site" link', () => {
+  const publishedItem: NFTGeneratedItem = {
+    ...draftItem,
+    ipfs_image_hash: 'QmImageHash',
+    ipfs_metadata_hash: 'QmMetaHash',
+  }
+
+  beforeEach(() => {
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
+  })
+
+  it('carries the project id through to MintLaunchPage when arrived at via a project', async () => {
+    // Regression test: launching a Candy Machine from a project-linked NFT
+    // collection is the only real way a Project ever gets a candy_machine
+    // link (see projectTypes.ts) — if this link drops ?project=, that
+    // linking can never happen no matter what MintLaunchPage.tsx itself does.
+    render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collection} projectId="proj-1" />
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByText('Launch Mint Site')
+    expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}&project=proj-1`)
+  })
+
+  it('omits the project param when there is no project in context', async () => {
+    render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collection} />
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByText('Launch Mint Site')
+    expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}`)
+  })
+})

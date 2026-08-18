@@ -25,12 +25,12 @@ interface ProjectTypeMeta {
 // backend has included a candy_machine_deployment link since Phase 6, and
 // PROJECT_TYPES[project.project_type] must resolve for every type a Project
 // row can actually have, or ProjectsDashboard.tsx crashes rendering that
-// card) even though nothing creates one today: a candy machine's entry
-// point is always an already-published NFT collection, never a bare draft
-// (hence creatableViaWizard: false — chain:'evm'/an EVM network would make
-// no sense for it), and MintLaunchPage.tsx doesn't yet pass a project_id
-// when recording one either — wiring that end-to-end is a separate,
-// not-yet-scoped follow-up.
+// card) — but note creatableViaWizard: false below: a candy machine's entry
+// point is always an already-published NFT collection, never a bare draft,
+// so chain:'evm'/an EVM network would make no sense for one. The real entry
+// point is GenerateStep.tsx's "Launch Mint Site" link, which carries
+// ?project=<id> through to MintLaunchPage.tsx when arrived at via an
+// NFT-collection project — see that page for the actual linking.
 export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   token: {
     label: 'Token',
