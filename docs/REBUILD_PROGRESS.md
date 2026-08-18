@@ -144,6 +144,16 @@ Also verified for real, no code changes needed: Market Intelligence (real CoinGe
 
 **Not yet verified**: anything requiring an actual browser wallet extension click-through (Token/Contract deploy signing, Candy Machine launch/mint) — this sandbox has a cached headless Chromium but it can't launch (`libnspr4.so` missing, no sudo to install it), so those flows are backend-contract-verified only, not click-through-verified.
 
+## Full endpoint sweep — 2026-08-18, same day
+
+Went through every one of the 37 backend routes with real requests against the live local backend — not just the "does this product work" pass above, but every route including auth edge cases (nonce replay, cross-user ownership checks, bad/missing tokens), every validation-rejection path (fake tx hashes/signatures that `record_deployment`/`record_candy_machine` must independently reject via real on-chain re-verification, bad networks, missing fields), and both Solana and EVM auth. 67 of 68 assertions passed on the first pass. Findings:
+
+- **Real bug, fixed**: `GET /api/blockchain/<network>/gas-price` had no error handling around its RPC call — unlike `/status` in the same file, which already degrades gracefully. Public free RPC endpoints do go down; hit two live failures for real (`eth.llamarpc.com` returning 521, `polygon-rpc.com` an SSL error) that crashed this route with an unhandled 500, leaking a full Werkzeug debug traceback (internal paths, RPC URLs) instead of a clean JSON error. Fixed with the same try/except → clean-JSON-error pattern every other route here already uses; new `tests/test_blockchain_routes.py` (3 tests, this blueprint had zero test coverage before).
+- **Not a bug**: one `GET /api/nft/items/<id>/metadata` call for a just-published item hit a real `gateway.pinata.cloud` read timeout (IPFS propagation lag) — the app already handles this correctly (a clean 502 with a clear message, not a crash or fabricated fallback), just flaky external infrastructure at that moment.
+- Confirmed real ownership/security guarantees hold under actual multi-user conditions, not just single-user happy paths: a second real user (fresh wallet, fresh JWT) gets a 404 (not 403 — doesn't leak existence) trying to read another user's project or NFT collection; reusing a consumed nonce is rejected; `record_deployment`/`record_candy_machine` both correctly reject a fabricated tx hash/signature that doesn't verify on-chain.
+
+Cleaned up every Pinata pin this created afterward (both the sweep's own collection/item and the earlier product-verification pass's) — nothing test-related left in the account.
+
 ## Known security items to close before mainnet is ever enabled
 - [x] Testnet-default + explicit mainnet-confirmation gate (see Phase 4).
 - [x] Legacy server-side private-key signing routes (confirmed live in `nocodelaunchyeet`'s `app.py`, `smart_contract_deployer.py`, `blockchain_manager.py`) — resolved by not carrying that code into this repo at all.
