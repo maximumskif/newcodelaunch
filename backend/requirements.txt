@@ -49,8 +49,16 @@ Pillow==10.4.0
 numpy==2.0.1
 requests==2.32.3
 openai==1.42.0
+# openai==1.42.0 declares `httpx<1,>=0.23.0` — permissive enough to let a
+# fresh install resolve httpx 0.28+, which removed the `proxies` kwarg from
+# `httpx.Client.__init__`. openai 1.42.0's own internal client construction
+# still passes it, so every real AI-vision call crashed with "Client.__init__()
+# got an unexpected keyword argument 'proxies'" — not an auth/quota problem,
+# a version mismatch that'd hit any fresh install of this exact pin. Pinned
+# httpx below the breaking change rather than bumping openai (a 1.x -> 3.x
+# jump has real API-shape changes ai_traits.py isn't written against).
+httpx==0.27.2
 
 # Testing (Phase 7). `pytest` from backend/ picks these up via pytest.ini
-# (testpaths = tests) + tests/conftest.py. Written but NOT execution-verified
-# in this sandbox — same no-pip/venv limitation as everything else here.
+# (testpaths = tests) + tests/conftest.py.
 pytest==8.3.2
