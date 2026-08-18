@@ -4,9 +4,11 @@
 # Flask-WTF/CSRF (CSRF protection is a cookie-session concern; auth here is JWT bearer
 # tokens issued to a separate-origin frontend, so it doesn't apply the same way).
 #
-# NOT execution-verified in this environment — this sandbox has no pip/venv available
-# (python3 -m pip / python3 -m venv both fail). Install into a real environment and run
-# the Phase 1 verification steps in the plan before trusting version pins blindly.
+# Execution-verified 2026-08-18 against a real local backend (Python 3.11 via
+# `uv python install 3.11` — the system's stock Python was too new for several
+# of these exact pins to have prebuilt wheels for, and there's no compiler in
+# that sandbox to build from source; a real deployment target won't have that
+# problem, but if you ever need to reproduce this locally, `uv` sidesteps it).
 
 Flask==3.0.3
 Flask-CORS==4.0.1
@@ -32,7 +34,15 @@ base58==2.1.1
 # requirements.txt — a preexisting gap, fixed here. On first use this
 # downloads a solc binary (see app/services/solidity.py for why that's lazy
 # now instead of happening at import time).
-py-solc-x==2.0.3
+#
+# Pinned to 2.0.5, not the original 2.0.3: found while getting a real local
+# backend running — 2.0.3 hardcodes solc-bin.ethereum.org as the binary
+# download host, a domain the Ethereum Foundation retired years ago (it has
+# no DNS record at all anymore) in favor of binaries.soliditylang.org. Every
+# compile call on 2.0.3 fails outright, regardless of environment — this
+# isn't a sandbox-specific issue, it'd fail identically in production. 2.0.5
+# points at the correct current host.
+py-solc-x==2.0.5
 
 # NFT Collection Generator + AI Trait Identifier (Phase 3)
 Pillow==10.4.0

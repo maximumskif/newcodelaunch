@@ -229,7 +229,7 @@ def get_public_candy_machine_status(candy_machine_address: str) -> dict[str, Any
     changes with every mint, unlike everything else here (there's no
     update-guard feature, so price/go-live/creator can't have drifted)."""
     deployment = _get_deployment_by_address(candy_machine_address)
-    collection = NFTCollection.query.get(deployment.nft_collection_id)
+    collection = db.session.get(NFTCollection, deployment.nft_collection_id)
 
     service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
     try:
