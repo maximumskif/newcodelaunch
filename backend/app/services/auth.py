@@ -19,7 +19,7 @@ def generate_nonce() -> str:
 
 def build_sign_message(nonce: str) -> str:
     return (
-        "Sign this message to authenticate with NoCode Launchpad.\n\n"
+        "Sign this message to authenticate with NewCodeLaunch.\n\n"
         "This request will not trigger a blockchain transaction or cost any gas.\n\n"
         f"Nonce: {nonce}"
     )
