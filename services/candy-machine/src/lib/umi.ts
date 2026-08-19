@@ -1,7 +1,15 @@
 import { createNoopSigner, publicKey, type PublicKey, type Umi } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
-import { mplCandyMachine } from "@metaplex-foundation/mpl-candy-machine";
-import { mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
+// Core Candy Machine — the actively maintained replacement for the legacy
+// Token-Metadata-based Candy Machine this service originally shipped with.
+// The legacy Guard<->Core CPI was found broken on both devnet AND
+// mainnet-beta (confirmed while fixing the same bug for the separate
+// pepe-university-collection project, which uses the same underlying
+// Metaplex stack) — see docs/REBUILD_PROGRESS.md for the writeup. Core
+// Candy Machine mints Metaplex Core Assets via its own dedicated,
+// self-consistent program pair, not the old Cndy/Guard1 ones.
+import { mplCandyMachine } from "@metaplex-foundation/mpl-core-candy-machine";
+import { mplCore } from "@metaplex-foundation/mpl-core";
 
 // Testnet-first, same policy as the EVM side (see backend/app/services/blockchain.py) —
 // devnet is the default network id; mainnet-beta requires the caller to say so explicitly.
@@ -29,7 +37,7 @@ export function isSolanaNetwork(value: string): value is SolanaNetwork {
  * and docs/REBUILD_PROGRESS.md's Candy Machine signer-model decision).
  */
 export function createUmiForWallet(network: SolanaNetwork, walletPublicKey: string): Umi {
-  const umi = createUmi(SOLANA_NETWORKS[network]).use(mplCandyMachine()).use(mplTokenMetadata());
+  const umi = createUmi(SOLANA_NETWORKS[network]).use(mplCandyMachine()).use(mplCore());
   const wallet = createNoopSigner(publicKey(walletPublicKey));
   umi.identity = wallet;
   umi.payer = wallet;

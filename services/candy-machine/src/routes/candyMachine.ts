@@ -1,13 +1,12 @@
 import { Router } from "express";
 import {
   generateSigner,
-  percentAmount,
   publicKey,
   sol,
   type TransactionBuilder,
 } from "@metaplex-foundation/umi";
-import { createNft, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
-import { addConfigLines, create, fetchCandyMachine, mintV2, mplCandyMachine } from "@metaplex-foundation/mpl-candy-machine";
+import { createCollection, ruleSet } from "@metaplex-foundation/mpl-core";
+import { addConfigLines, create, fetchCandyMachine, mintV1, mplCandyMachine } from "@metaplex-foundation/mpl-core-candy-machine";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
 import { createUmiForCreator, createUmiForWallet, isSolanaNetwork, SOLANA_NETWORKS } from "../lib/umi.js";
@@ -98,20 +97,26 @@ candyMachineRouter.post("/prepare", async (req, res) => {
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
     const creator = umi.identity;
-    const sellerFee = percentAmount((body.sellerFeeBasisPoints ?? 500) / 100, 2);
+    const sellerFeeBasisPoints = body.sellerFeeBasisPoints ?? 500;
 
+    // Core Assets don't carry per-item symbol/royalties/creators/edition
+    // settings the way Token Metadata NFTs did (that's why `symbol`,
+    // `sellerFeeBasisPoints`, `maxEditionSupply`, `isMutable`, and `creators`
+    // are gone from the candy machine call below) — royalties+creators now
+    // live once on the Collection itself via the Royalties plugin.
     const collectionMint = generateSigner(umi);
-    const collectionBuilder = createNft(umi, {
-      mint: collectionMint,
-      authority: creator,
-      payer: creator,
-      updateAuthority: creator,
-      tokenOwner: creator.publicKey,
+    const collectionBuilder = createCollection(umi, {
+      collection: collectionMint,
       name: body.collectionName,
-      symbol: body.collectionSymbol,
       uri: body.collectionMetadataUri,
-      sellerFeeBasisPoints: sellerFee,
-      isCollection: true,
+      plugins: [
+        {
+          type: "Royalties",
+          basisPoints: sellerFeeBasisPoints,
+          creators: [{ address: creator.publicKey, percentage: 100 }],
+          ruleSet: ruleSet("None"),
+        },
+      ],
     });
     const collectionTx = await serializeSigned(umi, collectionBuilder);
 
@@ -121,14 +126,9 @@ candyMachineRouter.post("/prepare", async (req, res) => {
 
     const candyMachineBuilder = await create(umi, {
       candyMachine,
-      collectionMint: collectionMint.publicKey,
+      collection: collectionMint.publicKey,
       collectionUpdateAuthority: creator,
       itemsAvailable: body.items.length,
-      symbol: body.collectionSymbol,
-      sellerFeeBasisPoints: sellerFee,
-      maxEditionSupply: 0,
-      isMutable: true,
-      creators: [{ address: creator.publicKey, verified: false, percentageShare: 100 }],
       configLineSettings: {
         prefixName: "",
         nameLength: maxNameLength,
@@ -136,7 +136,6 @@ candyMachineRouter.post("/prepare", async (req, res) => {
         uriLength: maxUriLength,
         isSequential: false,
       },
-      tokenStandard: TokenStandard.NonFungible,
       guards: {
         solPayment: { lamports: sol(body.priceSol), destination: creator.publicKey },
         startDate: { date: body.goLiveDate },
@@ -219,10 +218,12 @@ interface MintBody {
 // No on-chain fetch is needed to build this: the guard's stored SOL amount
 // is applied automatically by the on-chain program from what was set at
 // creation, and the guard PDA is deterministically derived from
-// `candyMachine` — the only two accounts this instruction actually needs
-// telling about (collectionMint, creatorPublicKey-as-collectionUpdateAuthority)
-// are exactly what the backend already has on file from the creator's own
-// launch, so they're passed in rather than re-derived or re-fetched.
+// `candyMachine` — `collectionMint` is the only account this instruction
+// actually needs telling about beyond that, and it's exactly what the
+// backend already has on file from the creator's own launch, so it's
+// passed in rather than re-derived or re-fetched. `creatorPublicKey` is
+// still required in the request body — it's where the guard's solPayment
+// guard sends the mint price.
 candyMachineRouter.post("/:candyMachineId/mint", async (req, res) => {
   const body = req.body as MintBody;
 
@@ -241,20 +242,19 @@ candyMachineRouter.post("/:candyMachineId/mint", async (req, res) => {
 
   try {
     const umi = createUmiForWallet(body.network, body.minterPublicKey);
-    const nftMint = generateSigner(umi);
+    const asset = generateSigner(umi);
 
-    const builder = mintV2(umi, {
+    const builder = mintV1(umi, {
       candyMachine: publicKey(req.params.candyMachineId),
-      nftMint,
-      collectionMint: publicKey(body.collectionMint),
-      collectionUpdateAuthority: publicKey(body.creatorPublicKey),
+      asset,
+      collection: publicKey(body.collectionMint),
       mintArgs: {
         solPayment: { destination: publicKey(body.creatorPublicKey) },
       },
     });
 
     const transaction = await serializeSigned(umi, builder);
-    res.json({ transaction, nft_mint: nftMint.publicKey });
+    res.json({ transaction, nft_mint: asset.publicKey });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build mint transaction" });
   }
