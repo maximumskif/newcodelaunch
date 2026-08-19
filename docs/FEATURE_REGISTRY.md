@@ -19,7 +19,7 @@ Last updated 2026-08-17, alongside the public mint storefront. See `docs/REBUILD
 |---|---|---|
 | Hero CTAs → Token Launchpad / Contracts Hub | Real | Real routes, not anchors to nowhere. |
 | "Start here" tiles: Token, NFT, Contracts Hub | Real | Link out to the real pages. |
-| "Start here" tile: Mint Site | Unavailable | Disabled, non-clickable tile — not a dead link. |
+| "Start here" tile: Mint Site | Real | Links to `/mint`, real end to end since the Candy Machine creator flow + public storefront both shipped (2026-08-15/17). |
 | "How it works" steps | Real | Describes only what's actually implemented (no testnet-gate/dashboard step invented). |
 | Security & transparency claims | Real | All 4 points independently true today (no server-side key custody, client-side signing only, real inspectable contract source, live network status). |
 | Nav "Products" dropdown | Real | Auto-derived from `lib/products.ts` — every entry with a `path` is a real page; entries without one would show a "Soon" badge instead (none currently — every listed product is real as of the Candy Machine creator flow). |

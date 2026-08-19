@@ -9,7 +9,11 @@ def create_app(config_object=Config):
     app.config.from_object(config_object)
 
     db.init_app(app)
-    migrate.init_app(app, db)
+    # Batch mode is required for SQLite (no native ALTER TABLE support —
+    # Alembic falls back to copy-and-swap); harmless but unnecessary on
+    # Postgres, the real deploy target, so only turn it on for SQLite.
+    is_sqlite = app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite")
+    migrate.init_app(app, db, render_as_batch=is_sqlite)
     cors.init_app(app, origins=app.config["CORS_ORIGINS"], supports_credentials=True)
     jwt.init_app(app)
     limiter.init_app(app)
