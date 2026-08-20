@@ -80,7 +80,7 @@ Last updated 2026-08-17, alongside the public mint storefront. See `docs/REBUILD
 
 | Action | Status | Notes |
 |---|---|---|
-| Launch a Candy Machine from a published NFT collection | Real (capped) | Real `@metaplex-foundation/umi` + `mpl-candy-machine` on-chain creation (Collection NFT + guarded Candy Machine + config lines) via `services/candy-machine`. Your connected Solana wallet signs and pays for everything — the sidecar generates only single-use, in-memory ephemeral signers for the two brand-new accounts, never a platform authority key. Capped at 20 items per drop (documented limit, same spirit as the NFT generator's own cap). |
+| Launch a Candy Machine from a published NFT collection | Real (capped) | Real `@metaplex-foundation/umi` + `mpl-core-candy-machine`/`mpl-core` on-chain creation (Core Collection + guarded Core Candy Machine + config lines) via `services/candy-machine` — migrated 2026-08-19 from the legacy `mpl-candy-machine` stack after its Guard↔Core CPI was found broken everywhere (Metaplex deprecated it); verified end to end against real devnet transactions, not just typechecked. Your connected Solana wallet signs and pays for everything — the sidecar generates only single-use, in-memory ephemeral signers for the two brand-new accounts, never a platform authority key. Capped at 20 items per drop (documented limit, same spirit as the NFT generator's own cap). |
 | Mainnet confirmation checkbox | Real | Same pattern as the EVM mainnet gate — required before launching on Solana Mainnet, defaults to Solana Devnet. |
 | Reachable via "Launch Mint Site" in the NFT Generator | Real | Only appears once at least one item is published to IPFS. |
 | Shareable public mint link after launch | Real | Links straight to the public storefront below for the just-created candy machine. |
@@ -90,6 +90,6 @@ Last updated 2026-08-17, alongside the public mint storefront. See `docs/REBUILD
 | Action | Status | Notes |
 |---|---|---|
 | View a live drop (no account needed) | Real | `GET /api/mint/public/<candy_machine_address>` — unauthenticated. Collection name/description/preview image come from what the creator's own launch already recorded; `items_redeemed`/`items_remaining` are read fresh from the on-chain Candy Machine account on every load, since that's the one thing that changes with every mint. |
-| Mint from a live drop | Real | Any visitor connects their own Solana wallet and mints directly — a real `mintV2` (guard-gated) transaction via `services/candy-machine`, partially signed the same way as the creator flow (fresh ephemeral signer for the new NFT mint, noop signer for the buyer's wallet). This app never holds the buyer's funds or key. |
+| Mint from a live drop | Real | Any visitor connects their own Solana wallet and mints directly — a real `mintV1` (guard-gated, Core Candy Machine) transaction via `services/candy-machine`, partially signed the same way as the creator flow (fresh ephemeral signer for the new Core Asset, noop signer for the buyer's wallet). This app never holds the buyer's funds or key. |
 | Sold-out / not-live-yet states | Real | Mint button is replaced with an explanatory empty state once `items_remaining` hits 0 or before the drop's recorded go-live date. |
 | Mainnet confirmation checkbox | Real | Same pattern as the creator flow's — required before minting on Solana Mainnet. |
