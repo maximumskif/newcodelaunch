@@ -57,6 +57,41 @@ def _sidecar_headers() -> dict[str, str]:
     return {"x-internal-secret": secret}
 
 
+def _sidecar_request(
+    method: str,
+    path: str,
+    *,
+    json: dict[str, Any] | None = None,
+    params: dict[str, str] | None = None,
+    timeout: int,
+) -> dict[str, Any]:
+    """Shared request/error-handling for every call into services/candy-machine
+    — used to be duplicated identically across prepare_candy_machine,
+    get_public_candy_machine_status, and prepare_mint. Dispatches to
+    requests.get/requests.post specifically (not requests.request) so tests
+    can keep monkeypatching candy_machine.requests.get/.post directly."""
+    service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
+    url = f"{service_url}{path}"
+    headers = _sidecar_headers()
+    try:
+        if method == "GET":
+            response = requests.get(url, params=params, headers=headers, timeout=timeout)
+        elif method == "POST":
+            response = requests.post(url, json=json, headers=headers, timeout=timeout)
+        else:
+            raise ValueError(f"Unsupported sidecar request method: {method}")
+    except requests.RequestException as exc:
+        raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
+
+    if response.status_code != 200:
+        raise CandyMachineServiceError(
+            f"Candy Machine service returned {response.status_code}: {response.text}",
+            status_code=response.status_code,
+        )
+
+    return response.json()
+
+
 def _derive_symbol(name: str) -> str:
     alnum = "".join(ch for ch in name.upper() if ch.isalnum())
     return (alnum or "NFT")[:10]
@@ -80,7 +115,18 @@ _SIDECAR_NETWORK_IDS = {"solana_devnet": "devnet", "solana": "mainnet-beta"}
 
 
 def _sidecar_network(network: str) -> str:
-    return _SIDECAR_NETWORK_IDS[network]
+    try:
+        return _SIDECAR_NETWORK_IDS[network]
+    except KeyError:
+        # Every caller today validates `network` against SOLANA_NETWORKS before
+        # it reaches here (prepare_candy_machine, record_candy_machine) or reads
+        # it back from a row that was already validated at write time — so this
+        # is currently unreachable. Kept as a clean CandyMachineServiceError
+        # (502, matches every other sidecar-facing failure in this module)
+        # rather than an uncaught KeyError, in case a future network is ever
+        # added to one list and not the other, or a row is written by a path
+        # that bypasses validation.
+        raise CandyMachineServiceError(f"No sidecar network mapping for '{network}'") from None
 
 
 def prepare_candy_machine(
@@ -130,24 +176,7 @@ def prepare_candy_machine(
         "goLiveDate": go_live_date,
     }
 
-    service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
-    try:
-        response = requests.post(
-            f"{service_url}/internal/candy-machine/prepare",
-            json=payload,
-            headers=_sidecar_headers(),
-            timeout=30,
-        )
-    except requests.RequestException as exc:
-        raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
-
-    if response.status_code != 200:
-        raise CandyMachineServiceError(
-            f"Candy Machine service returned {response.status_code}: {response.text}",
-            status_code=response.status_code,
-        )
-
-    return response.json()
+    return _sidecar_request("POST", "/internal/candy-machine/prepare", json=payload, timeout=30)
 
 
 def record_candy_machine(
@@ -187,6 +216,14 @@ def record_candy_machine(
     account_keys = tx_status.get("account_keys") or []
     if candy_machine not in account_keys:
         raise ValidationError("The confirmed transaction does not reference the given candy_machine address")
+
+    # Idempotent: a client retry after a slow/dropped response to a request that
+    # actually succeeded server-side must not create a second row for the same
+    # on-chain candy_machine — return the existing record rather than relying on
+    # the DB's unique constraint to reject it as an unhandled 500.
+    existing = CandyMachineDeployment.query.filter_by(candy_machine=candy_machine).first()
+    if existing is not None:
+        return existing
 
     deployment = CandyMachineDeployment(
         user_id=collection.user_id,
@@ -231,23 +268,17 @@ def get_public_candy_machine_status(candy_machine_address: str) -> dict[str, Any
     deployment = _get_deployment_by_address(candy_machine_address)
     collection = db.session.get(NFTCollection, deployment.nft_collection_id)
 
-    service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
-    try:
-        response = requests.get(
-            f"{service_url}/internal/candy-machine/{candy_machine_address}/status",
-            params={"network": _sidecar_network(deployment.network)},
-            headers=_sidecar_headers(),
-            timeout=15,
-        )
-    except requests.RequestException as exc:
-        raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
-
-    if response.status_code != 200:
+    on_chain = _sidecar_request(
+        "GET",
+        f"/internal/candy-machine/{candy_machine_address}/status",
+        params={"network": _sidecar_network(deployment.network)},
+        timeout=15,
+    )
+    missing_keys = {"items_available", "items_redeemed", "items_remaining"} - on_chain.keys()
+    if missing_keys:
         raise CandyMachineServiceError(
-            f"Candy Machine service returned {response.status_code}: {response.text}",
-            status_code=response.status_code,
+            f"Candy Machine service /status response is missing expected field(s): {', '.join(sorted(missing_keys))}"
         )
-    on_chain = response.json()
 
     preview_image = None
     if collection is not None:
@@ -299,21 +330,6 @@ def prepare_mint(candy_machine_address: str, minter_wallet: str) -> dict[str, An
         "creatorPublicKey": deployment.creator_wallet,
     }
 
-    service_url = current_app.config["CANDY_MACHINE_SERVICE_URL"]
-    try:
-        response = requests.post(
-            f"{service_url}/internal/candy-machine/{candy_machine_address}/mint",
-            json=payload,
-            headers=_sidecar_headers(),
-            timeout=30,
-        )
-    except requests.RequestException as exc:
-        raise CandyMachineServiceError(f"Candy Machine service request failed: {exc}") from exc
-
-    if response.status_code != 200:
-        raise CandyMachineServiceError(
-            f"Candy Machine service returned {response.status_code}: {response.text}",
-            status_code=response.status_code,
-        )
-
-    return response.json()
+    return _sidecar_request(
+        "POST", f"/internal/candy-machine/{candy_machine_address}/mint", json=payload, timeout=30
+    )

@@ -6,6 +6,7 @@ import { Connection, VersionedTransaction } from '@solana/web3.js'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
@@ -179,7 +180,13 @@ export function MintLaunchPage() {
         description="Your connected Solana wallet signs every transaction — this app never holds the keys to your collection or its mint proceeds."
       />
 
-      {project && <ProjectContextBar project={project} currentStepLabel="Launching mint site" />}
+      {project && (
+        <ProjectContextBar
+          project={project}
+          currentStepLabel="Launching mint site"
+          isLinked={Boolean(project.candy_machine_deployment)}
+        />
+      )}
 
       {isLoading && <p className="text-ink-muted">Loading collection…</p>}
 
@@ -258,19 +265,13 @@ export function MintLaunchPage() {
               </label>
 
               {isMainnet && (
-                <label className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-ink-muted">
-                  <input
-                    type="checkbox"
-                    checked={mainnetConfirmed}
-                    disabled={isBusy}
-                    onChange={(e) => setMainnetConfirmed(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    This launches on <span className="font-medium text-ink">Solana Mainnet</span> using real SOL from
-                    your wallet — not reversible. I understand and want to continue.
-                  </span>
-                </label>
+                <MainnetConfirmCheckbox
+                  checked={mainnetConfirmed}
+                  onChange={setMainnetConfirmed}
+                  disabled={isBusy}
+                  verb="launches on"
+                  networkLabel="Solana Mainnet"
+                />
               )}
 
               {!result && (

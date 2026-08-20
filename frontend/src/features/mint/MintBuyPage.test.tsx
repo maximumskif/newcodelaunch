@@ -1,19 +1,30 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { candyMachineApi, type PublicCandyMachineStatus } from '../../lib/candyMachineApi'
 import { MintBuyPage } from './MintBuyPage'
 
 vi.mock('@solana/wallet-adapter-react', () => ({
-  useWallet: () => ({ publicKey: null, sendTransaction: vi.fn() }),
+  useWallet: vi.fn(() => ({ publicKey: null, sendTransaction: vi.fn() })),
+}))
+
+vi.mock('@solana/web3.js', () => ({
+  // See MintLaunchPage.test.tsx — a vi.fn() mock invoked with `new` forwards
+  // via Reflect.construct, which needs a real constructible function.
+  Connection: vi.fn().mockImplementation(function MockConnection() {
+    return { confirmTransaction: vi.fn().mockResolvedValue({ value: { err: null } }) }
+  }),
+  VersionedTransaction: { deserialize: vi.fn().mockReturnValue({}) },
 }))
 
 vi.mock('../../lib/candyMachineApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/candyMachineApi')>()
   return {
     ...actual,
-    candyMachineApi: { ...actual.candyMachineApi, getPublicStatus: vi.fn() },
+    candyMachineApi: { ...actual.candyMachineApi, getPublicStatus: vi.fn(), prepareMint: vi.fn() },
   }
 })
 
@@ -65,5 +76,36 @@ describe('MintBuyPage', () => {
 
     expect(await screen.findByText("Minting hasn't opened yet")).toBeInTheDocument()
     expect(screen.queryByText(/Mint for/)).not.toBeInTheDocument()
+  })
+
+  it('keeps showing the "Minted!" confirmation after minting the last item, instead of flipping to "Sold out"', async () => {
+    // Regression test: handleMint() calls loadStatus() right after a
+    // successful mint to refresh the remaining count. If that was the last
+    // item, items_remaining becomes 0 and the sold-out branch used to be
+    // checked before the mintedNft branch, instantly hiding the buyer's own
+    // confirmation + mint address.
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: { toBase58: () => 'BuyerPublicKey111111111111111111111111111' },
+      sendTransaction: vi.fn().mockResolvedValue('sig-1'),
+    } as unknown as ReturnType<typeof useWallet>)
+
+    const oneRemaining: PublicCandyMachineStatus = { ...baseStatus, items_redeemed: 9, items_remaining: 1 }
+    const soldOut: PublicCandyMachineStatus = { ...baseStatus, items_redeemed: 10, items_remaining: 0 }
+    vi.mocked(candyMachineApi.getPublicStatus)
+      .mockResolvedValueOnce(oneRemaining)
+      .mockResolvedValueOnce(soldOut)
+    vi.mocked(candyMachineApi.prepareMint).mockResolvedValue({
+      transaction: 'eA==',
+      nft_mint: 'MintedAsset1111111111111111111111111111111',
+    })
+
+    const user = userEvent.setup()
+    renderAt(baseStatus.candy_machine)
+
+    await user.click(await screen.findByRole('button', { name: /Mint for/ }))
+
+    expect(await screen.findByText('Minted!')).toBeInTheDocument()
+    expect(screen.getByText('MintedAsset1111111111111111111111111111111')).toBeInTheDocument()
+    expect(screen.queryByText('Sold out')).not.toBeInTheDocument()
   })
 })

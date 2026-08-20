@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
 import { ApiError } from '../../lib/http'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type PublicCandyMachineStatus } from '../../lib/candyMachineApi'
@@ -114,7 +115,19 @@ export function MintBuyPage() {
             <p>Opens: {new Date(status.go_live_date).toLocaleString()}</p>
           </div>
 
-          {status.items_remaining === 0 ? (
+          {mintedNft ? (
+            // Checked before sold-out/not-live below on purpose: loadStatus() re-fetches
+            // items_remaining right after a successful mint, so minting the last item
+            // would otherwise flip straight to the "Sold out" empty state and hide the
+            // buyer's own confirmation + mint address before they ever see it.
+            <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
+              <p className="text-success">Minted!</p>
+              <p className="mt-1 font-mono text-xs text-ink-muted">{mintedNft}</p>
+              <Button variant="secondary" size="sm" className="mt-3" onClick={() => setMintedNft(null)}>
+                Mint another
+              </Button>
+            </div>
+          ) : status.items_remaining === 0 ? (
             <EmptyState title="Sold out" description="Every item in this drop has already been minted." />
           ) : !status.is_live ? (
             <EmptyState title="Minting hasn't opened yet" description="Check back after the opening time above." />
@@ -123,42 +136,26 @@ export function MintBuyPage() {
               {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to mint.</p>}
 
               {isMainnet && (
-                <label className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-ink-muted">
-                  <input
-                    type="checkbox"
-                    checked={mainnetConfirmed}
-                    disabled={isBusy}
-                    onChange={(e) => setMainnetConfirmed(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    This mints on <span className="font-medium text-ink">Solana Mainnet</span> using real SOL from your
-                    wallet — not reversible. I understand and want to continue.
-                  </span>
-                </label>
+                <MainnetConfirmCheckbox
+                  checked={mainnetConfirmed}
+                  onChange={setMainnetConfirmed}
+                  disabled={isBusy}
+                  verb="mints on"
+                  networkLabel="Solana Mainnet"
+                />
               )}
 
               {mintError && <p className="text-sm text-danger">{mintError}</p>}
 
-              {mintedNft ? (
-                <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
-                  <p className="text-success">Minted!</p>
-                  <p className="mt-1 font-mono text-xs text-ink-muted">{mintedNft}</p>
-                  <Button variant="secondary" size="sm" className="mt-3" onClick={() => setMintedNft(null)}>
-                    Mint another
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  disabled={!publicKey || isBusy || (isMainnet && !mainnetConfirmed)}
-                  isLoading={isBusy}
-                  onClick={() => void handleMint()}
-                >
-                  {isBusy ? 'Minting…' : `Mint for ${status.price_sol} SOL`}
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                className="w-full"
+                disabled={!publicKey || isBusy || (isMainnet && !mainnetConfirmed)}
+                isLoading={isBusy}
+                onClick={() => void handleMint()}
+              >
+                {isBusy ? 'Minting…' : `Mint for ${status.price_sol} SOL`}
+              </Button>
             </>
           )}
         </Card>

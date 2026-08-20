@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from ...extensions import limiter
 from ...services import candy_machine, nft_collections, projects
 
 mint_bp = Blueprint("mint", __name__)
@@ -118,20 +119,34 @@ def list_candy_machines():
 # item counts) is exactly what a wallet explorer would already show.
 
 
+def _public_service_error_response(exc: candy_machine.CandyMachineServiceError):
+    # Unlike the authenticated routes above (where str(exc) reaching the
+    # caller is fine — it's the creator debugging their own deploy), these
+    # two routes are reachable by anyone with a candy_machine_address, so the
+    # raw exception text — which can include the sidecar's own response body,
+    # or an internal-config message like "CANDY_MACHINE_SHARED_SECRET is not
+    # configured" — must not go out verbatim. Log the real detail, return a
+    # generic message.
+    current_app.logger.error("Candy Machine service error on a public route: %s", exc)
+    status_code = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+    return jsonify(error="This drop's mint service is temporarily unavailable. Try again shortly."), status_code
+
+
 @mint_bp.get("/public/<candy_machine_address>")
+@limiter.limit("60/minute")
 def get_public_candy_machine(candy_machine_address: str):
     try:
         status = candy_machine.get_public_candy_machine_status(candy_machine_address)
     except candy_machine.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
     except candy_machine.CandyMachineServiceError as exc:
-        status_code = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
-        return jsonify(error=str(exc)), status_code
+        return _public_service_error_response(exc)
 
     return jsonify(status)
 
 
 @mint_bp.post("/public/<candy_machine_address>/mint")
+@limiter.limit("20/minute")
 def prepare_public_mint(candy_machine_address: str):
     data = request.get_json(silent=True) or {}
     minter_wallet = data.get("minter_wallet")
@@ -143,7 +158,6 @@ def prepare_public_mint(candy_machine_address: str):
     except candy_machine.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
     except candy_machine.CandyMachineServiceError as exc:
-        status_code = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
-        return jsonify(error=str(exc)), status_code
+        return _public_service_error_response(exc)
 
     return jsonify(result)

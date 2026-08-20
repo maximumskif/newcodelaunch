@@ -21,7 +21,11 @@ class CandyMachineDeployment(db.Model):
 
     network = db.Column(db.String(32), nullable=False)
     collection_mint = db.Column(db.String(64), nullable=False, index=True)
-    candy_machine = db.Column(db.String(64), nullable=False, index=True)
+    # unique, not just indexed — record_candy_machine() relies on this to make a
+    # client retry after a slow/dropped response idempotent instead of creating a
+    # second row for the same on-chain address that _get_deployment_by_address()'s
+    # .first() would then pick between non-deterministically.
+    candy_machine = db.Column(db.String(64), nullable=False, unique=True, index=True)
 
     price_sol = db.Column(db.Float, nullable=False)
     items_available = db.Column(db.Integer, nullable=False)

@@ -83,7 +83,13 @@ export function NFTGeneratorPage() {
         description="Build a layered trait system with AI-assisted rarity suggestions, composite real artwork with rarity-weighted generation, and publish straight to IPFS — no fake URLs, no round-robin trait picking."
       />
 
-      {project && <ProjectContextBar project={project} currentStepLabel="Building collection" />}
+      {project && (
+        <ProjectContextBar
+          project={project}
+          currentStepLabel="Building collection"
+          isLinked={Boolean(project.nft_collection)}
+        />
+      )}
 
       {!accessToken ? (
         <Card padding="lg" className="text-center">

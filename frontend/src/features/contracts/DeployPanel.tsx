@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 
 import { Button } from '../../components/ui/Button'
+import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
@@ -152,6 +153,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
         <ProjectContextBar
           project={project}
           currentStepLabel={templateType === 'erc20' ? 'Configuring token' : 'Configuring contract'}
+          isLinked={Boolean(project.contract_deployment)}
         />
       )}
 
@@ -191,18 +193,13 @@ export function DeployPanel({ title, description, templateType, projectId, prese
             <TemplateForm params={selectedTemplate.deployment_params} values={values} onChange={handleChange} />
 
             {isMainnet && (
-              <label className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-ink-muted">
-                <input
-                  type="checkbox"
-                  checked={mainnetConfirmed}
-                  onChange={(e) => setMainnetConfirmed(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  This deploys to <span className="font-medium text-ink">mainnet</span> using real funds from your
-                  wallet — not reversible. I understand and want to continue.
-                </span>
-              </label>
+              <MainnetConfirmCheckbox
+                checked={mainnetConfirmed}
+                onChange={setMainnetConfirmed}
+                disabled={isBusy}
+                verb="deploys to"
+                networkLabel="mainnet"
+              />
             )}
 
             <div className="flex flex-wrap items-center gap-3">

@@ -217,6 +217,42 @@ def test_record_accepts_a_confirmed_transaction_that_references_the_candy_machin
         assert deployment.candy_machine == VALID_ADDRESS
 
 
+def test_record_is_idempotent_for_the_same_candy_machine_address(app, monkeypatch):
+    # Regression test: a client retry after a slow/dropped response to a
+    # request that actually succeeded server-side used to insert a second
+    # row for the same on-chain candy_machine address, which
+    # _get_deployment_by_address()'s .first() would then pick between
+    # non-deterministically. Now the DB column is unique and the service
+    # returns the existing row instead of inserting a duplicate.
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+
+        monkeypatch.setattr(
+            blockchain,
+            "get_transaction_status",
+            lambda network, tx_hash: {"status": "success", "account_keys": [VALID_ADDRESS, OTHER_ADDRESS]},
+        )
+
+        kwargs = dict(
+            collection=collection,
+            network="solana_devnet",
+            collection_mint=OTHER_ADDRESS,
+            candy_machine=VALID_ADDRESS,
+            transaction_signatures=["5" * 88],
+            price_sol=0.1,
+            items_available=1,
+            go_live_date="2026-09-01T00:00:00Z",
+            creator_wallet=VALID_ADDRESS,
+        )
+
+        first = candy_machine.record_candy_machine(**kwargs)
+        second = candy_machine.record_candy_machine(**kwargs)
+
+        assert first.id == second.id
+        assert CandyMachineDeployment.query.filter_by(candy_machine=VALID_ADDRESS).count() == 1
+
+
 def test_prepare_sends_the_sidecars_own_network_ids(app, monkeypatch):
     # Regression test: the backend's own network ids (solana_devnet/solana)
     # were being sent to the sidecar unmapped, which only recognizes its

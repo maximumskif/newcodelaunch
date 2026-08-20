@@ -112,3 +112,39 @@ def test_prepare_public_mint_needs_no_auth(client, monkeypatch):
 def test_prepare_public_mint_requires_minter_wallet(client):
     response = client.post("/api/mint/public/some-address/mint", json={})
     assert response.status_code == 400
+
+
+def test_get_public_candy_machine_sanitizes_service_errors(client, monkeypatch):
+    # Regression test: a CandyMachineServiceError's message can include the
+    # sidecar's raw response body, or an internal-config message like
+    # "CANDY_MACHINE_SHARED_SECRET is not configured" — that must never
+    # reach an anonymous caller verbatim on these two public routes (unlike
+    # the authenticated /prepare route above, where it's fine).
+    def fake_status(addr):
+        raise candy_machine.CandyMachineServiceError(
+            "Candy Machine service returned 500: <secret internal sidecar traceback>", status_code=500
+        )
+
+    monkeypatch.setattr(candy_machine, "get_public_candy_machine_status", fake_status)
+
+    response = client.get("/api/mint/public/some-address")
+
+    assert response.status_code == 502
+    body = response.get_json()
+    assert "secret internal sidecar traceback" not in body["error"]
+
+
+def test_prepare_public_mint_sanitizes_service_errors(client, monkeypatch):
+    def fake_prepare_mint(addr, minter_wallet):
+        raise candy_machine.CandyMachineServiceError("CANDY_MACHINE_SHARED_SECRET is not configured")
+
+    monkeypatch.setattr(candy_machine, "prepare_mint", fake_prepare_mint)
+
+    response = client.post(
+        "/api/mint/public/some-address/mint",
+        json={"minter_wallet": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"},
+    )
+
+    assert response.status_code == 502
+    body = response.get_json()
+    assert "CANDY_MACHINE_SHARED_SECRET" not in body["error"]
