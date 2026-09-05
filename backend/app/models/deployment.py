@@ -24,7 +24,10 @@ class ContractDeployment(db.Model):
 
     network = db.Column(db.String(32), nullable=False)
     contract_address = db.Column(db.String(128), nullable=False, index=True)
-    transaction_hash = db.Column(db.String(128), nullable=False)
+    # unique so record_deployment()'s idempotency check has a real DB-level
+    # guarantee behind it, not just an application-level lookup — same
+    # pattern as candy_machine_deployments.candy_machine.
+    transaction_hash = db.Column(db.String(128), nullable=False, unique=True, index=True)
     deployer_address = db.Column(db.String(128), nullable=False)
 
     parameters = db.Column(db.JSON, nullable=False, default=dict)

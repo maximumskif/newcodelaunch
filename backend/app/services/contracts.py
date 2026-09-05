@@ -82,6 +82,14 @@ def record_deployment(
     if template is None:
         raise contract_templates.UnknownTemplateError(f"Unknown template: {template_id}")
 
+    # Idempotent: a client retry after a slow/dropped response to a request
+    # that actually succeeded server-side must not create a second row for
+    # the same on-chain deployment — same pattern (and same bug class,
+    # fixed there first) as candy_machine.record_candy_machine.
+    existing = ContractDeployment.query.filter_by(transaction_hash=transaction_hash).first()
+    if existing is not None:
+        return existing
+
     tx_status = blockchain.get_transaction_status(network, transaction_hash)
     if tx_status.get("status") != "success":
         raise ValueError(f"Transaction is not a confirmed success on-chain (status: {tx_status.get('status')})")
