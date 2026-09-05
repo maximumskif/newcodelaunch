@@ -1,9 +1,10 @@
 import os
 
-# Config._require("SECRET_KEY") runs at class-definition time (see
-# app/config.py) — it must be set before `app.config`/`app` is ever
-# imported, not just before create_app() is called.
+# Config._require("SECRET_KEY"/"JWT_SECRET_KEY") runs at class-definition
+# time (see app/config.py) — both must be set before `app.config`/`app` is
+# ever imported, not just before create_app() is called.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-real-use")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-not-for-real-use")
 
 import pytest
 

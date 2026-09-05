@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
+from flask_limiter.util import get_remote_address
 
 from ...extensions import db, limiter
 from ...models.user import Chain, User, WalletNonce
@@ -16,8 +17,25 @@ from ...services.auth import (
 auth_bp = Blueprint("auth", __name__)
 
 
+def _nonce_request_key() -> str:
+    """Per-wallet rate-limit key, stacked alongside the blanket per-IP limit
+    below. Without this, a requester spread across many IPs could still
+    flood a single wallet's row count in wallet_nonces (only bounded by
+    prune-nonces' TTL cleanup, not by request volume)."""
+    data = request.get_json(silent=True) or {}
+    wallet_address = (data.get("wallet_address") or "").strip().lower()
+    chain = (data.get("chain") or "").strip().lower()
+    if wallet_address and chain:
+        return f"{chain}:{wallet_address}"
+    # Malformed request with no wallet_address/chain to key on — fall back
+    # to the per-IP limit below rather than pooling every malformed request
+    # into one shared bucket.
+    return get_remote_address()
+
+
 @auth_bp.post("/nonce")
 @limiter.limit("20/minute")
+@limiter.limit("10/minute", key_func=_nonce_request_key)
 def request_nonce():
     data = request.get_json(silent=True) or {}
     wallet_address = (data.get("wallet_address") or "").strip()

@@ -179,3 +179,13 @@ Migrated `services/candy-machine/src/lib/umi.ts` and `src/routes/candyMachine.ts
 `docs/FEATURE_REGISTRY.md`'s Candy Machine creator-flow and public-storefront rows updated to reference the new SDK/instruction names (`mpl-core-candy-machine`/`mintV1` instead of the legacy `mpl-candy-machine`/`mintV2`).
 
 **Lesson worth repeating**: after restarting a long-running dev service, a stale old process can keep answering `/health` on the same port while a fresh replacement silently fails to bind (`EADDRINUSE`) — check `ss -tlnp` for the actual PID bound to the port before trusting a 200 response as proof the new code is what's running. This exact thing happened mid-verification here and could have produced a false "fix confirmed" if not caught.
+
+## Post-rebuild hardening pass — 2026-09-05
+
+Started working through a fresh external review's component-by-component findings, beginning with Auth (the smallest, most self-contained surface). All three closed and execution-verified (`uv python install 3.11`, same approach as the "First real local execution" entry above — 48 backend tests passing, up from 43):
+
+- **`JWT_SECRET_KEY` no longer falls back to `SECRET_KEY`.** It previously defaulted to `SECRET_KEY` when unset (`config.py`), meaning a leak of one secret compromised both Flask's own signing and every issued JWT. Now required independently via the same `_require()` used for `SECRET_KEY` — fails loud on boot if missing, same as its sibling. `.env.example`, `tests/conftest.py`, and `.github/workflows/ci.yml` updated to set a distinct value.
+- **`wallet_nonces` had no pruning — fixed with `flask prune-nonces`.** `/api/auth/verify` only ever filtered expired/consumed rows out of its query; nothing deleted them, so the table grew forever under normal use. New `app/commands.py` registers a `prune-nonces` CLI command (deletes consumed-or-expired rows, intended to run on a schedule — e.g. a daily cron) — 2 new tests (`tests/test_commands.py`).
+- **`/api/auth/nonce` gained a per-wallet rate limit alongside its existing per-IP one.** The only limit before this was 20/minute per IP — a requester spread across many IPs could still flood a single wallet's row count. Added a second `@limiter.limit("10/minute", key_func=...)` keyed on `chain:wallet_address`, falling back to the IP key on a malformed request with no wallet to key on — 3 new tests (`tests/test_auth_routes.py`), including one confirming the fallback doesn't pool every malformed request into one shared bucket.
+
+Not yet started: Token Launchpad's `record_deployment` idempotency gap, NFT generation's synchronous batching, Candy Machine's blockhash-expiry risk, or the infra-level rate-limiter storage/`ProxyFix` gaps — next up, same review's component list.

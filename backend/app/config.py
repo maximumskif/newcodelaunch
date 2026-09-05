@@ -25,7 +25,10 @@ class Config:
     # Security — no fallback defaults. A missing SECRET_KEY must fail startup,
     # not silently run with a well-known dev value (that's how the old app.py leaked).
     SECRET_KEY = _require("SECRET_KEY")
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+    # Previously fell back to SECRET_KEY when unset, so a leak of one secret
+    # compromised both Flask's own signing and every issued JWT. Required
+    # independently now, same as SECRET_KEY — set a different value.
+    JWT_SECRET_KEY = _require("JWT_SECRET_KEY")
     JWT_ACCESS_TOKEN_EXPIRES_SECONDS = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", "3600"))
     WALLET_NONCE_TTL_SECONDS = int(os.environ.get("WALLET_NONCE_TTL_SECONDS", "300"))
 

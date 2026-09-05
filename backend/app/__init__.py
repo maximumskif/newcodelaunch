@@ -56,4 +56,8 @@ def create_app(config_object=Config):
 
     app.register_blueprint(mint_bp, url_prefix="/api/mint")
 
+    from .commands import register_cli
+
+    register_cli(app)
+
     return app

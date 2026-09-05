@@ -43,6 +43,7 @@ jobs:
       - name: Run tests
         env:
           SECRET_KEY: ci-test-secret-key-not-for-real-use
+          JWT_SECRET_KEY: ci-test-jwt-secret-key-not-for-real-use
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: pytest
 
