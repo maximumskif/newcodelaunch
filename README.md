@@ -22,7 +22,7 @@ The paragraphs below describe what's actually implemented and verified, not a ro
 - No true end-to-end browser test exists for any wallet-signing flow (see the verification-status note above).
 - Candy Machine's multi-step launch flow has a real, specced-but-unfixed blockhash-expiry risk if a creator takes roughly a minute or more across wallet approvals — see `docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md`.
 - NFT generation is synchronous and capped at 200 items/call; a background job queue is the natural next step if that cap needs to rise.
-- No production Dockerfile for the backend or frontend yet (only Postgres and the Candy Machine sidecar are containerized in `docker-compose.yml`); rate limiting uses in-memory storage, which needs to move to Redis before running more than one backend worker.
+- `backend/Dockerfile` and `frontend/Dockerfile` exist but aren't build-verified (no Docker in the sandbox that wrote them) and aren't wired into `docker-compose.yml` yet. Rate limiting defaults to in-memory storage — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker (the `redis` client is already a dependency).
 - No project switcher in the app shell yet (deliberately deferred pending real multi-project usage).
 
 ## Architecture

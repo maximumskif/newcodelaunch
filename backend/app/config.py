@@ -43,7 +43,25 @@ class Config:
         if origin.strip()
     ]
 
+    # In-memory by default — fine for one dev process, silently wrong the
+    # moment this runs behind gunicorn with more than one worker (this
+    # app's documented production entry point): each worker keeps its own
+    # counter, so the real allowed rate becomes (configured limit) x
+    # (worker count). Point this at a Redis instance in production instead
+    # (e.g. "redis://localhost:6379") — the `redis` package is already a
+    # dependency (see requirements.txt) specifically so this works with no
+    # further code change, just an env var.
     RATE_LIMIT_STORAGE_URI = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
+
+    # Number of trusted reverse-proxy hops in front of this app (a load
+    # balancer, a CDN, etc). 0 by default — meaning ProxyFix does nothing
+    # and request.remote_addr (what the rate limiter keys on) is trusted as
+    # given, correct only when nothing sits in front of this app. Set this
+    # to the actual hop count once one exists, or every request will look
+    # like it comes from the proxy's own address, and per-user rate
+    # limiting stops working correctly (either every user is treated as
+    # one, or the proxy's address gets allow-listed and no one is limited).
+    TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0"))
 
     # Chain RPCs are not secrets — public endpoints are a fine default, same as the old config.
     # Testnets are listed first and are what the frontend network picker

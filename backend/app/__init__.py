@@ -1,4 +1,5 @@
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
 from .extensions import cors, db, jwt, limiter, migrate
@@ -7,6 +8,15 @@ from .extensions import cors, db, jwt, limiter, migrate
 def create_app(config_object=Config):
     app = Flask(__name__)
     app.config.from_object(config_object)
+
+    # No-op when TRUSTED_PROXY_COUNT is 0 (the default) — only takes effect
+    # once a deployment actually sits behind that many reverse-proxy hops.
+    # Without this, the rate limiter's IP-based key (get_remote_address)
+    # would see every request as coming from the proxy itself. See the
+    # TRUSTED_PROXY_COUNT comment in config.py.
+    proxy_count = app.config.get("TRUSTED_PROXY_COUNT", 0)
+    if proxy_count:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxy_count, x_proto=proxy_count, x_host=proxy_count)
 
     db.init_app(app)
     # Batch mode is required for SQLite (no native ALTER TABLE support —

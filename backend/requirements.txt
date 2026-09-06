@@ -21,6 +21,13 @@ python-dotenv==1.0.1
 psycopg2-binary==2.9.9
 gunicorn==22.0.0
 
+# Flask-Limiter's storage backend for RATE_LIMIT_STORAGE_URI (see
+# app/config.py). Not used at all while that stays "memory://" (the dev
+# default) — installed unconditionally so switching to a real redis:// URL
+# in production is a one-line env var change, not a deploy that's missing
+# a dependency.
+redis==5.0.8
+
 # Chain SDKs
 web3==6.20.1
 eth-account==0.11.2
