@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { IconPlus, IconTrash } from '../../components/ui/icons'
 import { PageHero } from '../../components/ui/PageHero'
@@ -37,6 +38,8 @@ export function ProjectsDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const refresh = async (token: string) => {
     setIsLoading(true)
@@ -62,10 +65,18 @@ export function ProjectsDashboard() {
     setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
   }
 
-  const handleDelete = async (project: Project) => {
-    if (!accessToken) return
-    await projectsApi.remove(accessToken, project.id)
-    setProjects((prev) => prev.filter((p) => p.id !== project.id))
+  const handleConfirmDelete = async () => {
+    if (!accessToken || !pendingDelete) return
+    setIsDeleting(true)
+    try {
+      await projectsApi.remove(accessToken, pendingDelete.id)
+      setProjects((prev) => prev.filter((p) => p.id !== pendingDelete.id))
+      setPendingDelete(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete project')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -147,7 +158,7 @@ export function ProjectsDashboard() {
                           size="sm"
                           className="!p-1.5 text-danger hover:bg-danger/10"
                           aria-label="Delete project"
-                          onClick={() => void handleDelete(project)}
+                          onClick={() => setPendingDelete(project)}
                         >
                           <IconTrash className="h-3.5 w-3.5" />
                         </Button>
@@ -160,6 +171,16 @@ export function ProjectsDashboard() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.name}"?`}
+        description="This can't be undone. The project's own draft notes and organization are removed — any real on-chain deployment or NFT collection it links to isn't affected."
+        confirmLabel="Delete"
+        isConfirming={isDeleting}
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   )
 }

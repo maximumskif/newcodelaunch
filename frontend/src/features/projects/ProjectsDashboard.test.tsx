@@ -117,7 +117,44 @@ describe('ProjectsDashboard', () => {
     expect(await screen.findByText('Archived')).toBeInTheDocument()
   })
 
-  it('deletes a project and removes its card', async () => {
+  it('does not delete a project just from clicking the trash icon — asks for confirmation first', async () => {
+    // Regression coverage for the confirm-dialog gate added on top of what
+    // used to be an immediate, un-confirmed delete.
+    mockSignedIn()
+    const draftProject: Project = { ...baseProject, project_type: 'token', status: 'draft', candy_machine_deployment: null }
+    vi.mocked(projectsApi.list).mockResolvedValue({ projects: [draftProject] })
+
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await screen.findByText('My Drop')
+    await user.click(screen.getByLabelText('Delete project'))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Delete "My Drop"?')).toBeInTheDocument()
+    expect(projectsApi.remove).not.toHaveBeenCalled()
+    expect(screen.getByText('My Drop')).toBeInTheDocument()
+  })
+
+  it('cancelling the delete confirmation leaves the project untouched', async () => {
+    mockSignedIn()
+    const draftProject: Project = { ...baseProject, project_type: 'token', status: 'draft', candy_machine_deployment: null }
+    vi.mocked(projectsApi.list).mockResolvedValue({ projects: [draftProject] })
+
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await screen.findByText('My Drop')
+    await user.click(screen.getByLabelText('Delete project'))
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(projectsApi.remove).not.toHaveBeenCalled()
+    expect(screen.getByText('My Drop')).toBeInTheDocument()
+  })
+
+  it('confirming the dialog deletes the project and removes its card', async () => {
     mockSignedIn()
     const draftProject: Project = { ...baseProject, project_type: 'token', status: 'draft', candy_machine_deployment: null }
     vi.mocked(projectsApi.list).mockResolvedValue({ projects: [draftProject] })
@@ -128,8 +165,11 @@ describe('ProjectsDashboard', () => {
 
     await screen.findByText('My Drop')
     await user.click(screen.getByLabelText('Delete project'))
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(projectsApi.remove).toHaveBeenCalledWith('tok', 'proj-1'))
     await waitFor(() => expect(screen.queryByText('My Drop')).not.toBeInTheDocument())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
