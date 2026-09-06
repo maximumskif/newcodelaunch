@@ -13,11 +13,23 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 // (runs once per test run, not per-test) rather than a separate npm script
 // so `npx playwright test` alone is enough to run everything.
 export default async function globalSetup() {
-  await build({
-    entryPoints: [path.join(here, '..', 'fixtures', 'injectedEvmWallet.ts')],
-    bundle: true,
-    format: 'iife',
-    target: 'es2020',
-    outfile: path.join(here, '..', '.generated', 'injectedEvmWallet.bundle.js'),
-  })
+  const fixturesDir = path.join(here, '..', 'fixtures')
+  const outDir = path.join(here, '..', '.generated')
+
+  await Promise.all([
+    build({
+      entryPoints: [path.join(fixturesDir, 'injectedEvmWallet.ts')],
+      bundle: true,
+      format: 'iife',
+      target: 'es2020',
+      outfile: path.join(outDir, 'injectedEvmWallet.bundle.js'),
+    }),
+    build({
+      entryPoints: [path.join(fixturesDir, 'injectedSolanaWallet.ts')],
+      bundle: true,
+      format: 'iife',
+      target: 'es2020',
+      outfile: path.join(outDir, 'injectedSolanaWallet.bundle.js'),
+    }),
+  ])
 }

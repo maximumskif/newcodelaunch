@@ -1,10 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Real end-to-end coverage over the actual stack — a real Flask backend, a
-// real anvil chain, a real frontend build — not mocked at any layer except
-// the wallet extension itself (see e2e/fixtures/injectedEvmWallet.ts and
-// e2e/README.md for why that one substitution is a real key/signer, not a
-// stubbed response). See docs/REBUILD_PROGRESS.md's "Testing & CI" entry.
+// real anvil chain, a real local Solana validator (with the real Metaplex
+// Core/Core Candy Machine programs cloned onto it), a real frontend build —
+// not mocked at any layer except the wallet extensions themselves (see
+// e2e/fixtures/injected*Wallet.ts) and the third-party Pinata pinning call
+// (see e2e/setup/pinata_stub.py). Full rationale in e2e/README.md. See
+// docs/REBUILD_PROGRESS.md's "Testing & CI" entry.
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
@@ -28,6 +30,22 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
+    // Cloning the two Metaplex programs from devnet at startup (see the
+    // script's own comment) is the slowest thing in this whole webServer
+    // array — give it real headroom rather than a timeout matched to
+    // anvil's near-instant boot.
+    {
+      command: 'bash ./e2e/setup/run-solana-validator.sh',
+      port: 8899,
+      reuseExistingServer: !process.env.CI,
+      timeout: 90_000,
+    },
+    {
+      command: 'bash ./e2e/setup/run-pinata-stub.sh',
+      url: 'http://127.0.0.1:5555/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
     {
       command: 'bash ./e2e/setup/run-backend.sh',
       url: 'http://localhost:5000/api/health',
@@ -35,11 +53,20 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
+      command: 'bash ./e2e/setup/run-candy-machine-sidecar.sh',
+      url: 'http://localhost:4000/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
       command: 'npm run dev',
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
-      env: { VITE_SEPOLIA_RPC_URL: 'http://127.0.0.1:8545' },
+      env: {
+        VITE_SEPOLIA_RPC_URL: 'http://127.0.0.1:8545',
+        VITE_SOLANA_DEVNET_RPC_URL: 'http://127.0.0.1:8899',
+      },
     },
   ],
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

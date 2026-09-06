@@ -16,13 +16,20 @@ hedge. Verify against Pinata's current docs before relying on this.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import requests
 from flask import current_app
 
-PINATA_BASE_URL = "https://api.pinata.cloud"
+# Overridable so the e2e suite (frontend/e2e/) can point this at a tiny local
+# stub instead of a real Pinata account — real chain, real signing, real
+# backend logic; only the third-party pinning call itself is faked, since
+# there's no local-open-source equivalent of "pin something to global IPFS"
+# the way anvil/solana-test-validator are for a real chain. See
+# frontend/e2e/README.md.
+PINATA_BASE_URL = os.environ.get("PINATA_BASE_URL", "https://api.pinata.cloud")
 PINATA_GATEWAY = "https://gateway.pinata.cloud/ipfs/"
 
 

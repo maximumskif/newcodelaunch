@@ -88,6 +88,15 @@ jobs:
       # instead of a public testnet. See frontend/e2e/README.md.
       - uses: foundry-rs/foundry-toolchain@v1
 
+      # solana-test-validator — the equivalent local chain for the Solana
+      # (Candy Machine) e2e coverage. No maintained setup-solana action
+      # exists as of writing, so this installs the same way the local dev
+      # instructions do and adds it to PATH for the rest of the job.
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -104,10 +113,16 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            services/candy-machine/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: frontend
+        run: npm ci
+
+      - name: Install candy-machine sidecar dependencies
+        working-directory: services/candy-machine
         run: npm ci
 
       # GitHub's runners already have passwordless sudo, so --with-deps

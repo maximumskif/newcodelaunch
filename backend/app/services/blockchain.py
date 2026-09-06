@@ -27,6 +27,7 @@ from typing import Optional
 
 from flask import current_app
 from solana.rpc.api import Client as SolanaClient
+from solana.rpc.commitment import Confirmed
 from solders.signature import Signature
 from web3 import HTTPProvider, Web3
 from web3.middleware import geth_poa_middleware
@@ -144,7 +145,19 @@ def get_web3(network: str) -> Web3:
 
 
 def _get_solana_client(network: str) -> SolanaClient:
-    return SolanaClient(_rpc_url(network), timeout=10)
+    # Explicit "confirmed", not solana-py's own default ("finalized") — the
+    # frontend only waits for "confirmed" before ever calling this app's own
+    # record/verify endpoints (see MintLaunchPage.tsx's confirmTransaction
+    # calls), so requiring "finalized" here created a real, narrow window
+    # where record_candy_machine's independent re-verification could 404
+    # with "not_found" on a transaction that had already landed and been
+    # shown to the user as successful — found via real end-to-end testing
+    # against a local validator (see frontend/e2e/README.md), not observed
+    # in this app's one prior manual devnet pass, likely because that pass's
+    # timing happened not to land in the gap. "Confirmed" (supermajority
+    # vote) is what Solana's own docs recommend trusting for this kind of
+    # check; matching it here removes the gap instead of narrowing it.
+    return SolanaClient(_rpc_url(network), commitment=Confirmed, timeout=10)
 
 
 def get_supported_networks() -> list[dict]:
