@@ -109,6 +109,11 @@ def list_deployments():
 
 @contracts_bp.get("/deployments/<contract_address>")
 def get_deployment(contract_address):
+    """Intentionally unauthenticated, unlike list_deployments above: a
+    deployed contract's address is already public on-chain (visible on any
+    block explorer) regardless of what this app does, so there is no
+    per-user data to leak by looking it up here — same reasoning as the
+    Candy Machine public storefront's get_public_candy_machine_status."""
     deployment = contracts.get_deployment_by_address(contract_address)
     if deployment is None:
         return jsonify(error="Deployment not found"), 404
