@@ -61,4 +61,17 @@ def compile_contract(source: str, contract_name: str) -> CompilationResult:
     if contract_interface is None:
         return CompilationResult(success=False, error_message="No contract found in compilation output")
 
-    return CompilationResult(success=True, abi=contract_interface["abi"], bytecode=contract_interface["bin"])
+    # solcx's own "bin" field is bare hex, no "0x" prefix — every real EVM
+    # tool (web3.py tolerates either, but viem/ethers and the raw JSON-RPC
+    # eth_sendTransaction `data` field do not) expects "0x"-prefixed hex.
+    # Found via real end-to-end testing (see frontend/e2e/): the frontend's
+    # useDeployTemplate.ts cast this string to `0x${string}` with a bare
+    # TypeScript `as`, which changes nothing at runtime — every real
+    # deployment was sending malformed, unprefixed `data`, and reverted
+    # on-chain with a raw EVM `OpcodeNotFound` (misaligned bytecode) instead
+    # of ever compiling into anything. Never caught before because nothing
+    # had driven this flow through a real chain until this test existed.
+    bytecode = contract_interface["bin"]
+    if not bytecode.startswith("0x"):
+        bytecode = "0x" + bytecode
+    return CompilationResult(success=True, abi=contract_interface["abi"], bytecode=bytecode)

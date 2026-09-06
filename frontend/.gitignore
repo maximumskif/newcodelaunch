@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# e2e — build artifact (bundled by esbuild in playwright.config.ts's
+# globalSetup, not meant to be checked in) and Playwright's own report/trace output
+e2e/.generated
+playwright-report
+test-results
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

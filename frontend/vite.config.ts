@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 // vitest/config re-exports Vite's defineConfig with the `test` field typed —
 // this is still a plain Vite config as far as `vite build`/`vite dev` are concerned.
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -13,6 +13,12 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Vitest's default include glob (**/*.{test,spec}.*) otherwise also
+    // matches Playwright's e2e/*.spec.ts files — those use @playwright/test's
+    // own `test`/`expect` globals, not Vitest's, and need the real
+    // stack (backend, anvil) running via `npm run test:e2e`, not jsdom.
+    // Extends (not replaces) Vitest's own exclude defaults.
+    exclude: [...configDefaults.exclude, './e2e/**'],
   },
   build: {
     rollupOptions: {
