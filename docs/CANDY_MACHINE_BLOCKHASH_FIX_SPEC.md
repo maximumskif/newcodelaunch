@@ -1,14 +1,20 @@
 # Candy Machine blockhash-expiry fix — implementation spec
 
-Written 2026-09-05, not implemented. This is a precise, code-referenced spec
+**Status: implemented 2026-09-06 (Option B, staged re-prepare), per this
+spec — see `docs/REBUILD_PROGRESS.md`'s corresponding entry for exactly
+what changed across the sidecar/backend/frontend.** Written 2026-09-05,
+originally handed off unimplemented because this session had no funded
+devnet wallet or browser to meet this subsystem's own established
+verification bar. That access became available the next day; the code
+below describes the design that was then actually built. **Devnet
+click-through verification per the checklist at the bottom of this
+document is still the user's to run before trusting this in production** —
+implementing from this spec is not a substitute for it.
+
+This is a precise, code-referenced spec
 for the highest-value open fix on the Candy Machine surface (see
 `docs/REBUILD_PROGRESS.md`'s second correctness-review-pass entry, and
-`FEATURE_REGISTRY.md`'s Candy Machine rows). It's being handed off as a spec
-rather than code because every prior Candy Machine change in this repo was
-"verified for real against live devnet, not just typechecked" before being
-trusted — this session has no funded devnet wallet or browser to meet that
-same bar, and this is money-moving signing code. Implement this with that
-verification available, not from typecheck alone.
+`FEATURE_REGISTRY.md`'s Candy Machine rows).
 
 ## The problem, precisely
 

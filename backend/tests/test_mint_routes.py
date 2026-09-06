@@ -17,7 +17,7 @@ def _make_authenticated_collection(app):
     return collection, token
 
 
-def test_prepare_preserves_an_explicit_zero_seller_fee_bps(app, client, monkeypatch):
+def test_prepare_collection_preserves_an_explicit_zero_seller_fee_bps(app, client, monkeypatch):
     # Regression test: `int(data.get("seller_fee_bps") or 500)` treated an
     # explicit 0 (no royalty) as falsy and silently replaced it with the
     # 500 bps default.
@@ -26,14 +26,14 @@ def test_prepare_preserves_an_explicit_zero_seller_fee_bps(app, client, monkeypa
 
         captured = {}
 
-        def fake_prepare(**kwargs):
+        def fake_prepare_collection(**kwargs):
             captured.update(kwargs)
-            return {"collection_mint": "x", "candy_machine": "y", "transactions": []}
+            return {"collection_mint": "x", "transaction": "base64tx"}
 
-        monkeypatch.setattr(candy_machine, "prepare_candy_machine", fake_prepare)
+        monkeypatch.setattr(candy_machine, "prepare_collection", fake_prepare_collection)
 
         response = client.post(
-            "/api/mint/prepare",
+            "/api/mint/prepare-collection",
             json={
                 "collection_id": collection.id,
                 "network": "solana_devnet",
@@ -49,12 +49,12 @@ def test_prepare_preserves_an_explicit_zero_seller_fee_bps(app, client, monkeypa
         assert captured["seller_fee_bps"] == 0
 
 
-def test_prepare_rejects_non_numeric_price(app, client):
+def test_prepare_collection_rejects_non_numeric_price(app, client):
     with app.app_context():
         collection, token = _make_authenticated_collection(app)
 
         response = client.post(
-            "/api/mint/prepare",
+            "/api/mint/prepare-collection",
             json={
                 "collection_id": collection.id,
                 "network": "solana_devnet",
@@ -66,6 +66,54 @@ def test_prepare_rejects_non_numeric_price(app, client):
         )
 
         assert response.status_code == 400
+
+
+def test_prepare_candy_machine_step_requires_collection_mint(app, client):
+    with app.app_context():
+        collection, token = _make_authenticated_collection(app)
+
+        response = client.post(
+            "/api/mint/prepare-candy-machine",
+            json={
+                "collection_id": collection.id,
+                "network": "solana_devnet",
+                "creator_wallet": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
+                "price_sol": 0.1,
+                "go_live_date": "2026-09-01T00:00:00Z",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 400
+
+
+def test_prepare_candy_machine_step_forwards_collection_mint(app, client, monkeypatch):
+    with app.app_context():
+        collection, token = _make_authenticated_collection(app)
+
+        captured = {}
+
+        def fake_prepare_step(**kwargs):
+            captured.update(kwargs)
+            return {"candy_machine": "y", "transactions": ["base64tx"]}
+
+        monkeypatch.setattr(candy_machine, "prepare_candy_machine_step", fake_prepare_step)
+
+        response = client.post(
+            "/api/mint/prepare-candy-machine",
+            json={
+                "collection_id": collection.id,
+                "network": "solana_devnet",
+                "creator_wallet": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
+                "collection_mint": "CollMint1111111111111111111111111111111111",
+                "price_sol": 0.1,
+                "go_live_date": "2026-09-01T00:00:00Z",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert captured["collection_mint"] == "CollMint1111111111111111111111111111111111"
 
 
 def test_get_public_candy_machine_needs_no_auth(client, monkeypatch):

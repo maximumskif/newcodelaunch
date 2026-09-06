@@ -7,9 +7,22 @@ from ...services import candy_machine, nft_collections, projects
 mint_bp = Blueprint("mint", __name__)
 
 
-@mint_bp.post("/prepare")
+def _handle_candy_machine_service_error(exc: candy_machine.CandyMachineServiceError):
+    # A 4xx from the sidecar (e.g. "too many items") is the caller's input
+    # problem, not a service outage — pass that status through instead of
+    # always reporting 502.
+    status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+    return jsonify(error=str(exc)), status
+
+
+@mint_bp.post("/prepare-collection")
 @jwt_required()
-def prepare():
+def prepare_collection():
+    # Step 1 of 2 (see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md). The
+    # frontend calls this, gets the creator's wallet to sign+send+confirm
+    # the single returned transaction, THEN calls /prepare-candy-machine
+    # below with the collection_mint this returns — never both steps at
+    # once, which is what let a stale blockhash slip through before.
     data = request.get_json(silent=True) or {}
     required_fields = ["collection_id", "network", "creator_wallet", "price_sol", "go_live_date"]
     missing = [f for f in required_fields if not data.get(f)]
@@ -31,7 +44,7 @@ def prepare():
         return jsonify(error="price_sol and seller_fee_bps must be numbers"), 400
 
     try:
-        result = candy_machine.prepare_candy_machine(
+        result = candy_machine.prepare_collection(
             collection=collection,
             network=data["network"],
             creator_wallet=data["creator_wallet"],
@@ -42,11 +55,46 @@ def prepare():
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
     except candy_machine.CandyMachineServiceError as exc:
-        # A 4xx from the sidecar (e.g. "too many items") is the caller's
-        # input problem, not a service outage — pass that status through
-        # instead of always reporting 502.
-        status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
-        return jsonify(error=str(exc)), status
+        return _handle_candy_machine_service_error(exc)
+
+    return jsonify(result)
+
+
+@mint_bp.post("/prepare-candy-machine")
+@jwt_required()
+def prepare_candy_machine_step():
+    # Step 2 of 2 — only call this after step 1's transaction is confirmed
+    # on-chain. collection_mint here is that transaction's result, not a
+    # value this route derives itself.
+    data = request.get_json(silent=True) or {}
+    required_fields = ["collection_id", "network", "creator_wallet", "collection_mint", "price_sol", "go_live_date"]
+    missing = [f for f in required_fields if not data.get(f)]
+    if missing:
+        return jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400
+
+    try:
+        collection = nft_collections.get_owned_collection(data["collection_id"], get_jwt_identity())
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+
+    try:
+        price_sol = float(data["price_sol"])
+    except (TypeError, ValueError):
+        return jsonify(error="price_sol must be a number"), 400
+
+    try:
+        result = candy_machine.prepare_candy_machine_step(
+            collection=collection,
+            network=data["network"],
+            creator_wallet=data["creator_wallet"],
+            collection_mint=data["collection_mint"],
+            price_sol=price_sol,
+            go_live_date=data["go_live_date"],
+        )
+    except candy_machine.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        return _handle_candy_machine_service_error(exc)
 
     return jsonify(result)
 

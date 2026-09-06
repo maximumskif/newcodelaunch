@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallet, type WalletContextState } from '@solana/wallet-adapter-react'
 import { Connection, VersionedTransaction } from '@solana/web3.js'
 
 import { Button } from '../../components/ui/Button'
@@ -16,6 +16,29 @@ import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
+
+// Signs, sends, and confirms one transaction, throwing a clear error if the
+// on-chain program itself rejects it (confirmTransaction only rejects on an
+// RPC/timeout error — a failed transaction resolves normally with
+// `.value.err` set, so this check is what stops a failed step from
+// silently continuing into the next one or getting recorded as success).
+async function signSendAndConfirm(
+  base64Transaction: string,
+  connection: Connection,
+  sendTransaction: WalletContextState['sendTransaction'],
+  label: string,
+  setProgressLabel: (value: string) => void,
+): Promise<string> {
+  setProgressLabel(`Sign ${label} in your wallet…`)
+  const transaction = VersionedTransaction.deserialize(base64ToBytes(base64Transaction))
+  const signature = await sendTransaction(transaction, connection)
+  setProgressLabel(`Confirming ${label}…`)
+  const confirmation = await connection.confirmTransaction(signature, 'confirmed')
+  if (confirmation.value.err) {
+    throw new Error(`${label} failed on-chain: ${JSON.stringify(confirmation.value.err)}`)
+  }
+  return signature
+}
 
 export function MintLaunchPage() {
   const [searchParams] = useSearchParams()
@@ -91,39 +114,62 @@ export function MintLaunchPage() {
     setResult(null)
 
     try {
+      const networkInfo = SOLANA_NETWORKS.find((item) => item.id === network)!
+      const connection = new Connection(networkInfo.rpcUrl, 'confirmed')
+      const signatures: string[] = []
+      const isoGoLiveDate = new Date(goLiveDate).toISOString()
+
+      // Step 1: the collection transaction, signed+sent+confirmed on its
+      // own before step 2 is ever requested. Two-step by design, not an
+      // arbitrary split — see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md.
+      // Requesting both steps' transactions up front used to mean a slow
+      // approval here could expire step 2's blockhash before it was ever
+      // submitted; now step 2 isn't even built until this one is confirmed.
       setStep('preparing')
-      setProgressLabel('Building transactions…')
-      const prepared = await candyMachineApi.prepare(accessToken, {
+      setProgressLabel('Building the collection transaction…')
+      const collectionPrepared = await candyMachineApi.prepareCollection(accessToken, {
         collection_id: collectionId,
         network,
         creator_wallet: publicKey.toBase58(),
         price_sol: Number(priceSol),
-        go_live_date: new Date(goLiveDate).toISOString(),
+        go_live_date: isoGoLiveDate,
         seller_fee_bps: Number(sellerFeeBps),
       })
 
       setStep('signing')
-      const networkInfo = SOLANA_NETWORKS.find((item) => item.id === network)!
-      const connection = new Connection(networkInfo.rpcUrl, 'confirmed')
-      const signatures: string[] = []
+      signatures.push(
+        await signSendAndConfirm(
+          collectionPrepared.transaction,
+          connection,
+          sendTransaction,
+          'the collection transaction',
+          setProgressLabel,
+        ),
+      )
 
-      for (let i = 0; i < prepared.transactions.length; i++) {
-        setProgressLabel(`Sign transaction ${i + 1} of ${prepared.transactions.length} in your wallet…`)
-        const transaction = VersionedTransaction.deserialize(base64ToBytes(prepared.transactions[i]))
-        const signature = await sendTransaction(transaction, connection)
-        setProgressLabel(`Confirming transaction ${i + 1} of ${prepared.transactions.length}…`)
-        const confirmation = await connection.confirmTransaction(signature, 'confirmed')
-        // confirmTransaction only rejects on an RPC/timeout error — an
-        // on-chain program failure (bad guard config, insufficient funds,
-        // account already in use) resolves normally with `.value.err` set.
-        // Without this check a failed transaction would silently continue
-        // into the next step (or get recorded as a successful deployment).
-        if (confirmation.value.err) {
-          throw new Error(
-            `Transaction ${i + 1} of ${prepared.transactions.length} failed on-chain: ${JSON.stringify(confirmation.value.err)}`,
-          )
-        }
-        signatures.push(signature)
+      // Step 2: only built now, using the collection_mint step 1 just
+      // confirmed — its ephemeral signer and blockhash are fresh as of
+      // this moment, not held over from step 1's request.
+      setStep('preparing')
+      setProgressLabel('Building the Candy Machine transaction…')
+      const candyMachinePrepared = await candyMachineApi.prepareCandyMachine(accessToken, {
+        collection_id: collectionId,
+        network,
+        creator_wallet: publicKey.toBase58(),
+        collection_mint: collectionPrepared.collection_mint,
+        price_sol: Number(priceSol),
+        go_live_date: isoGoLiveDate,
+      })
+
+      setStep('signing')
+      for (let i = 0; i < candyMachinePrepared.transactions.length; i++) {
+        const label =
+          candyMachinePrepared.transactions.length > 1
+            ? `Candy Machine transaction ${i + 1} of ${candyMachinePrepared.transactions.length}`
+            : 'the Candy Machine transaction'
+        signatures.push(
+          await signSendAndConfirm(candyMachinePrepared.transactions[i], connection, sendTransaction, label, setProgressLabel),
+        )
       }
 
       setStep('recording')
@@ -131,12 +177,12 @@ export function MintLaunchPage() {
       const { candy_machine: recorded } = await candyMachineApi.create(accessToken, {
         collection_id: collectionId,
         network,
-        collection_mint: prepared.collection_mint,
-        candy_machine: prepared.candy_machine,
+        collection_mint: collectionPrepared.collection_mint,
+        candy_machine: candyMachinePrepared.candy_machine,
         transaction_signatures: signatures,
         price_sol: Number(priceSol),
         items_available: publishedItems.length,
-        go_live_date: new Date(goLiveDate).toISOString(),
+        go_live_date: isoGoLiveDate,
         creator_wallet: publicKey.toBase58(),
         project_id: projectId ?? undefined,
       })
@@ -276,9 +322,10 @@ export function MintLaunchPage() {
 
               {!result && (
                 <p className="text-xs text-ink-faint">
-                  You'll be prompted to approve {publishedItems.length > 1 ? 'a few transactions' : 'a transaction'} in
-                  your wallet — approve them promptly (within about a minute of each other). If you wait too long
-                  between approvals, a later transaction can expire and you'll need to start over.
+                  You'll be prompted to approve a couple of transactions in your wallet, one step at a time — each
+                  one is only built right before it's shown to you, so you don't need to rush between prompts.
+                  Within a single prompt, though, approve promptly (within about a minute); waiting too long on any
+                  one transaction can still expire it and mean starting that step over.
                 </p>
               )}
 

@@ -69,12 +69,12 @@ def _add_published_items(collection, count):
     _db.session.commit()
 
 
-def test_prepare_rejects_unknown_network(app):
+def test_prepare_collection_rejects_unknown_network(app):
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
         with pytest.raises(candy_machine.ValidationError):
-            candy_machine.prepare_candy_machine(
+            candy_machine.prepare_collection(
                 collection=collection,
                 network="ethereum",  # not a Solana network
                 creator_wallet="Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
@@ -83,12 +83,12 @@ def test_prepare_rejects_unknown_network(app):
             )
 
 
-def test_prepare_rejects_non_positive_price(app):
+def test_prepare_collection_rejects_non_positive_price(app):
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
         with pytest.raises(candy_machine.ValidationError):
-            candy_machine.prepare_candy_machine(
+            candy_machine.prepare_collection(
                 collection=collection,
                 network="solana_devnet",
                 creator_wallet="Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
@@ -97,16 +97,32 @@ def test_prepare_rejects_non_positive_price(app):
             )
 
 
-def test_prepare_rejects_collection_with_no_published_items(app):
+def test_prepare_collection_rejects_collection_with_no_published_items(app):
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
         # Real collection, real DB row — but zero generated/published items.
         with pytest.raises(candy_machine.ValidationError):
-            candy_machine.prepare_candy_machine(
+            candy_machine.prepare_collection(
                 collection=collection,
                 network="solana_devnet",
                 creator_wallet="Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
+                price_sol=0.1,
+                go_live_date="2026-09-01T00:00:00Z",
+            )
+
+
+def test_prepare_candy_machine_step_rejects_unknown_network(app):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        _add_published_items(collection, 1)
+        with pytest.raises(candy_machine.ValidationError):
+            candy_machine.prepare_candy_machine_step(
+                collection=collection,
+                network="ethereum",
+                creator_wallet=VALID_ADDRESS,
+                collection_mint=OTHER_ADDRESS,
                 price_sol=0.1,
                 go_live_date="2026-09-01T00:00:00Z",
             )
@@ -148,16 +164,35 @@ def test_record_rejects_empty_transaction_signatures(app):
             )
 
 
-def test_prepare_rejects_too_many_items(app):
+def test_prepare_collection_rejects_too_many_items(app):
+    # Pre-flight checked in prepare_collection even though this step's own
+    # transaction doesn't need the item list — so a creator who's about to
+    # fail step 2 finds out before paying gas for the collection tx.
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
         _add_published_items(collection, candy_machine.MAX_ITEMS + 1)
         with pytest.raises(candy_machine.ValidationError):
-            candy_machine.prepare_candy_machine(
+            candy_machine.prepare_collection(
                 collection=collection,
                 network="solana_devnet",
                 creator_wallet=VALID_ADDRESS,
+                price_sol=0.1,
+                go_live_date="2026-09-01T00:00:00Z",
+            )
+
+
+def test_prepare_candy_machine_step_rejects_too_many_items(app):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        _add_published_items(collection, candy_machine.MAX_ITEMS + 1)
+        with pytest.raises(candy_machine.ValidationError):
+            candy_machine.prepare_candy_machine_step(
+                collection=collection,
+                network="solana_devnet",
+                creator_wallet=VALID_ADDRESS,
+                collection_mint=OTHER_ADDRESS,
                 price_sol=0.1,
                 go_live_date="2026-09-01T00:00:00Z",
             )
@@ -253,7 +288,7 @@ def test_record_is_idempotent_for_the_same_candy_machine_address(app, monkeypatc
         assert CandyMachineDeployment.query.filter_by(candy_machine=VALID_ADDRESS).count() == 1
 
 
-def test_prepare_sends_the_sidecars_own_network_ids(app, monkeypatch):
+def test_prepare_collection_sends_the_sidecars_own_network_ids(app, monkeypatch):
     # Regression test: the backend's own network ids (solana_devnet/solana)
     # were being sent to the sidecar unmapped, which only recognizes its
     # own cluster ids (devnet/mainnet-beta) — every real /prepare call
@@ -269,11 +304,11 @@ def test_prepare_sends_the_sidecars_own_network_ids(app, monkeypatch):
 
         def fake_post(url, json, headers, timeout):
             captured.update(json)
-            return _FakeResponse(200, {"collection_mint": "x", "candy_machine": "y", "transactions": []})
+            return _FakeResponse(200, {"collection_mint": "x", "transaction": "base64tx"})
 
         monkeypatch.setattr(candy_machine.requests, "post", fake_post)
 
-        candy_machine.prepare_candy_machine(
+        candy_machine.prepare_collection(
             collection=collection,
             network="solana_devnet",
             creator_wallet=VALID_ADDRESS,
@@ -282,6 +317,33 @@ def test_prepare_sends_the_sidecars_own_network_ids(app, monkeypatch):
         )
 
         assert captured["network"] == "devnet"
+
+
+def test_prepare_candy_machine_step_sends_the_sidecars_own_network_ids(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        _add_published_items(collection, 1)
+
+        captured = {}
+
+        def fake_post(url, json, headers, timeout):
+            captured.update(json)
+            return _FakeResponse(200, {"candy_machine": "y", "transactions": []})
+
+        monkeypatch.setattr(candy_machine.requests, "post", fake_post)
+
+        candy_machine.prepare_candy_machine_step(
+            collection=collection,
+            network="solana_devnet",
+            creator_wallet=VALID_ADDRESS,
+            collection_mint=OTHER_ADDRESS,
+            price_sol=0.1,
+            go_live_date="2026-09-01T00:00:00Z",
+        )
+
+        assert captured["network"] == "devnet"
+        assert captured["collectionMint"] == OTHER_ADDRESS
 
 
 def test_get_public_status_rejects_an_unknown_address(app):

@@ -24,13 +24,19 @@ interface PrepareItem {
   uri: string;
 }
 
-interface PrepareBody {
+interface PrepareCollectionBody {
   network?: string;
   creatorPublicKey?: string;
   collectionName?: string;
   collectionSymbol?: string;
   collectionMetadataUri?: string;
   sellerFeeBasisPoints?: number;
+}
+
+interface PrepareCandyMachineBody {
+  network?: string;
+  creatorPublicKey?: string;
+  collectionMint?: string;
   items?: PrepareItem[];
   priceSol?: number;
   goLiveDate?: string;
@@ -44,26 +50,40 @@ async function serializeSigned(umi: Parameters<TransactionBuilder["buildAndSign"
   // Force v0 explicitly rather than relying on Umi's default — the frontend
   // deserializes with @solana/web3.js's VersionedTransaction, which needs a
   // consistent, known wire format rather than "whatever Umi defaults to".
+  //
+  // setLatestBlockhash(umi) fetches ONE blockhash right now, at the moment
+  // this function runs — and whatever ephemeral signer the caller attached
+  // to `builder` (see generateSigner() calls below) signs over that
+  // blockhash immediately in buildAndSign(). That signature can't be
+  // "refreshed" later: the ephemeral private key exists only in this
+  // process's memory for the duration of this one request and is discarded
+  // right after. This is exactly why /prepare-collection and
+  // /prepare-candy-machine below are two separate endpoints, called
+  // sequentially by the frontend with a real wallet confirmation in
+  // between, instead of one call building everything up front — see
+  // docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md for the full writeup of the
+  // bug this fixes and why a durable-nonce approach was rejected.
   const withBlockhash = await builder.useV0().setLatestBlockhash(umi);
   const transaction = await withBlockhash.buildAndSign(umi);
   return Buffer.from(umi.transactions.serialize(transaction)).toString("base64");
 }
 
-// Builds the (partially-signed) transactions needed to launch a real Candy
-// Machine: create the Collection NFT, create the Candy Machine with a
-// solPayment + startDate guard, and insert the config lines (one per item).
-// Every transaction here is signed by this service's own freshly-generated,
-// single-use, in-memory-only ephemeral account keypairs (collectionMint,
-// candyMachine — required because those are brand-new on-chain accounts,
-// same pattern every real Candy Machine tool uses) PLUS a *noop* signer for
-// the creator's wallet, which leaves that signature slot empty. This
-// service never holds the creator's key and never gains ongoing authority
-// over the collection/candy machine — the creator's own connected wallet
-// signs the missing slot client-side before anything gets sent. See
-// docs/REBUILD_PROGRESS.md for why this signer model was chosen over a
-// platform-held authority keypair.
-candyMachineRouter.post("/prepare", async (req, res) => {
-  const body = req.body as PrepareBody;
+// Two-step launch flow (see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md for the
+// full design rationale). Both steps sign with this service's own
+// freshly-generated, single-use, in-memory-only ephemeral account keypairs
+// (collectionMint here, candyMachine in the next route — required because
+// those are brand-new on-chain accounts, same pattern every real Candy
+// Machine tool uses) PLUS a *noop* signer for the creator's wallet, which
+// leaves that signature slot empty. This service never holds the creator's
+// key and never gains ongoing authority over the collection/candy machine —
+// the creator's own connected wallet signs the missing slot client-side
+// before anything gets sent. See docs/REBUILD_PROGRESS.md for why this
+// signer model was chosen over a platform-held authority keypair.
+//
+// Step 1: the Collection NFT only. Doesn't need items/priceSol/goLiveDate —
+// those only matter to the Candy Machine creation in step 2 below.
+candyMachineRouter.post("/prepare-collection", async (req, res) => {
+  const body = req.body as PrepareCollectionBody;
 
   if (!body.network || !isSolanaNetwork(body.network)) {
     res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
@@ -75,6 +95,63 @@ candyMachineRouter.post("/prepare", async (req, res) => {
   }
   if (!body.collectionName || !body.collectionSymbol || !body.collectionMetadataUri) {
     res.status(400).json({ error: "collectionName, collectionSymbol and collectionMetadataUri are required" });
+    return;
+  }
+
+  try {
+    const umi = createUmiForCreator(body.network, body.creatorPublicKey);
+    const creator = umi.identity;
+    const sellerFeeBasisPoints = body.sellerFeeBasisPoints ?? 500;
+
+    // Core Assets don't carry per-item symbol/royalties/creators/edition
+    // settings the way Token Metadata NFTs did (that's why `symbol`,
+    // `sellerFeeBasisPoints`, `maxEditionSupply`, `isMutable`, and `creators`
+    // are gone from the candy machine call in the next route) — royalties
+    // and creators now live once on the Collection itself via the
+    // Royalties plugin.
+    const collectionMint = generateSigner(umi);
+    const collectionBuilder = createCollection(umi, {
+      collection: collectionMint,
+      name: body.collectionName,
+      uri: body.collectionMetadataUri,
+      plugins: [
+        {
+          type: "Royalties",
+          basisPoints: sellerFeeBasisPoints,
+          creators: [{ address: creator.publicKey, percentage: 100 }],
+          ruleSet: ruleSet("None"),
+        },
+      ],
+    });
+    const transaction = await serializeSigned(umi, collectionBuilder);
+
+    res.json({ collection_mint: collectionMint.publicKey, transaction });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build collection transaction" });
+  }
+});
+
+// Step 2: Candy Machine creation + config lines, against an already-created
+// `collectionMint` from step 1 above. Called by the frontend only after the
+// step-1 transaction has been signed, sent, AND confirmed — so the
+// ephemeral signer and the blockhash below are generated right before this
+// step's own wallet prompt, not minutes earlier alongside step 1's. That
+// gap is the actual fix: previously both steps were built together in one
+// call, so a slow approval on step 1 could expire step 2's baked-in
+// blockhash before it was ever submitted.
+candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
+  const body = req.body as PrepareCandyMachineBody;
+
+  if (!body.network || !isSolanaNetwork(body.network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+  if (!body.creatorPublicKey) {
+    res.status(400).json({ error: "creatorPublicKey is required" });
+    return;
+  }
+  if (!body.collectionMint) {
+    res.status(400).json({ error: "collectionMint is required" });
     return;
   }
   if (!body.items || body.items.length === 0) {
@@ -97,28 +174,6 @@ candyMachineRouter.post("/prepare", async (req, res) => {
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
     const creator = umi.identity;
-    const sellerFeeBasisPoints = body.sellerFeeBasisPoints ?? 500;
-
-    // Core Assets don't carry per-item symbol/royalties/creators/edition
-    // settings the way Token Metadata NFTs did (that's why `symbol`,
-    // `sellerFeeBasisPoints`, `maxEditionSupply`, `isMutable`, and `creators`
-    // are gone from the candy machine call below) — royalties+creators now
-    // live once on the Collection itself via the Royalties plugin.
-    const collectionMint = generateSigner(umi);
-    const collectionBuilder = createCollection(umi, {
-      collection: collectionMint,
-      name: body.collectionName,
-      uri: body.collectionMetadataUri,
-      plugins: [
-        {
-          type: "Royalties",
-          basisPoints: sellerFeeBasisPoints,
-          creators: [{ address: creator.publicKey, percentage: 100 }],
-          ruleSet: ruleSet("None"),
-        },
-      ],
-    });
-    const collectionTx = await serializeSigned(umi, collectionBuilder);
 
     const candyMachine = generateSigner(umi);
     const maxNameLength = Math.max(...body.items.map((item) => utf8Length(item.name)));
@@ -126,7 +181,7 @@ candyMachineRouter.post("/prepare", async (req, res) => {
 
     const candyMachineBuilder = await create(umi, {
       candyMachine,
-      collection: collectionMint.publicKey,
+      collection: publicKey(body.collectionMint),
       collectionUpdateAuthority: creator,
       itemsAvailable: body.items.length,
       configLineSettings: {
@@ -155,21 +210,21 @@ candyMachineRouter.post("/prepare", async (req, res) => {
     // into a separate transaction otherwise rather than guessing. Each is
     // independently valid — inserting config lines is a distinct, retryable
     // action, not something that leaves a "half-created" account if it runs
-    // in its own transaction.
+    // in its own transaction. Both still share this one call's single fresh
+    // blockhash+ephemeral-signer pair, so a drop large enough to split still
+    // needs its 2 transactions approved reasonably close together — the fix
+    // here is eliminating the gap *between steps*, not within one step's
+    // own transaction(s).
     const combined = candyMachineBuilder.add(configLinesBuilder);
-    const candyMachineTransactions: string[] = [];
+    const transactions: string[] = [];
     if (combined.fitsInOneTransaction(umi)) {
-      candyMachineTransactions.push(await serializeSigned(umi, combined));
+      transactions.push(await serializeSigned(umi, combined));
     } else {
-      candyMachineTransactions.push(await serializeSigned(umi, candyMachineBuilder));
-      candyMachineTransactions.push(await serializeSigned(umi, configLinesBuilder));
+      transactions.push(await serializeSigned(umi, candyMachineBuilder));
+      transactions.push(await serializeSigned(umi, configLinesBuilder));
     }
 
-    res.json({
-      collection_mint: collectionMint.publicKey,
-      candy_machine: candyMachine.publicKey,
-      transactions: [collectionTx, ...candyMachineTransactions],
-    });
+    res.json({ candy_machine: candyMachine.publicKey, transactions });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build candy machine transactions" });
   }

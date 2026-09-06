@@ -23,8 +23,17 @@ export function isSolanaMainnet(networkId: string): boolean {
   return isMainnetAmong(SOLANA_NETWORKS, networkId)
 }
 
-export interface PrepareCandyMachineResult {
+// Two-step launch flow — see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md.
+// prepareCollection's transaction must be signed, sent, and confirmed
+// before ever calling prepareCandyMachine, so the second step's ephemeral
+// signer and blockhash are generated right before its own wallet prompt,
+// not minutes earlier alongside the first.
+export interface PrepareCollectionResult {
   collection_mint: string
+  transaction: string
+}
+
+export interface PrepareCandyMachineResult {
   candy_machine: string
   transactions: string[]
 }
@@ -66,7 +75,7 @@ export interface PreparedMint {
 }
 
 export const candyMachineApi = {
-  prepare: (
+  prepareCollection: (
     token: string,
     payload: {
       collection_id: string
@@ -75,9 +84,26 @@ export const candyMachineApi = {
       price_sol: number
       go_live_date: string
       seller_fee_bps?: number
-      project_id?: string
     },
-  ) => request<PrepareCandyMachineResult>('/mint/prepare', { method: 'POST', body: JSON.stringify(payload) }, token),
+  ) =>
+    request<PrepareCollectionResult>('/mint/prepare-collection', { method: 'POST', body: JSON.stringify(payload) }, token),
+
+  prepareCandyMachine: (
+    token: string,
+    payload: {
+      collection_id: string
+      network: SolanaNetworkId
+      creator_wallet: string
+      collection_mint: string
+      price_sol: number
+      go_live_date: string
+    },
+  ) =>
+    request<PrepareCandyMachineResult>(
+      '/mint/prepare-candy-machine',
+      { method: 'POST', body: JSON.stringify(payload) },
+      token,
+    ),
 
   create: (
     token: string,

@@ -129,18 +129,13 @@ def _sidecar_network(network: str) -> str:
         raise CandyMachineServiceError(f"No sidecar network mapping for '{network}'") from None
 
 
-def prepare_candy_machine(
-    collection: NFTCollection,
-    network: str,
-    creator_wallet: str,
-    price_sol: float,
-    go_live_date: str,
-    seller_fee_bps: int = 500,
-) -> dict[str, Any]:
-    """Builds the unsigned/partially-signed transactions for launching a
-    drop from `collection`. Doesn't persist anything — that only happens
-    once the creator's wallet has actually signed and sent them, via
-    `record_candy_machine`."""
+def _validate_launch_inputs(collection: NFTCollection, network: str, price_sol: float) -> list:
+    """Shared validation for both launch steps below. Both steps re-run this
+    even though only prepare_candy_machine_step's transaction actually needs
+    price_sol/the item list — prepare_collection validates it too so a
+    creator who's about to fail step 2 (too many items, non-positive price)
+    finds out before paying gas for the collection transaction, not after.
+    See docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md."""
     if network not in SOLANA_NETWORKS:
         raise ValidationError(f"network must be one of: {', '.join(SOLANA_NETWORKS)}")
     if price_sol <= 0:
@@ -151,6 +146,27 @@ def prepare_candy_machine(
         raise ValidationError("Publish at least one item to IPFS before launching a Candy Machine")
     if len(published_items) > MAX_ITEMS:
         raise ValidationError(f"At most {MAX_ITEMS} published items are supported per candy machine right now")
+    return published_items
+
+
+def prepare_collection(
+    collection: NFTCollection,
+    network: str,
+    creator_wallet: str,
+    price_sol: float,
+    go_live_date: str,
+    seller_fee_bps: int = 500,
+) -> dict[str, Any]:
+    """Step 1 of the two-step launch flow (see
+    docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md): builds only the
+    Collection-creation transaction, with its own fresh ephemeral signer and
+    blockhash. price_sol/go_live_date aren't used to build this specific
+    transaction — only prepare_candy_machine_step's Candy Machine creation
+    needs them — but are validated here anyway via _validate_launch_inputs
+    as a pre-flight check. Doesn't persist anything; that only happens once
+    the creator's wallet has signed and sent every transaction from both
+    steps, via `record_candy_machine`."""
+    _validate_launch_inputs(collection, network, price_sol)
 
     collection_metadata = ipfs.upload_json(
         {
@@ -168,6 +184,32 @@ def prepare_candy_machine(
         "collectionSymbol": _derive_symbol(collection.name),
         "collectionMetadataUri": collection_metadata["url"],
         "sellerFeeBasisPoints": seller_fee_bps,
+    }
+
+    return _sidecar_request("POST", "/internal/candy-machine/prepare-collection", json=payload, timeout=30)
+
+
+def prepare_candy_machine_step(
+    collection: NFTCollection,
+    network: str,
+    creator_wallet: str,
+    collection_mint: str,
+    price_sol: float,
+    go_live_date: str,
+) -> dict[str, Any]:
+    """Step 2: builds the Candy Machine creation (+ config lines)
+    transaction(s) against an already-created `collection_mint` (the result
+    of `prepare_collection` above, only after the creator's wallet has
+    signed, sent, and confirmed that transaction) — with their OWN fresh
+    ephemeral signer and blockhash, generated now rather than back when
+    `prepare_collection` ran. This gap is the actual fix for the
+    blockhash-expiry issue: see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md."""
+    published_items = _validate_launch_inputs(collection, network, price_sol)
+
+    payload = {
+        "network": _sidecar_network(network),
+        "creatorPublicKey": creator_wallet,
+        "collectionMint": collection_mint,
         "items": [
             {"name": f"{collection.name} #{item.token_index}", "uri": f"ipfs://{item.ipfs_metadata_hash}"}
             for item in published_items
@@ -176,7 +218,7 @@ def prepare_candy_machine(
         "goLiveDate": go_live_date,
     }
 
-    return _sidecar_request("POST", "/internal/candy-machine/prepare", json=payload, timeout=30)
+    return _sidecar_request("POST", "/internal/candy-machine/prepare-candy-machine", json=payload, timeout=30)
 
 
 def record_candy_machine(
@@ -317,7 +359,8 @@ def get_public_candy_machine_status(candy_machine_address: str) -> dict[str, Any
 
 def prepare_mint(candy_machine_address: str, minter_wallet: str) -> dict[str, Any]:
     """Builds a buyer's (unsigned/partially-signed) mint transaction. Like
-    prepare_candy_machine, this doesn't persist anything — the buyer's own
+    prepare_collection/prepare_candy_machine_step above, this doesn't
+    persist anything — the buyer's own
     connected wallet signs and sends it directly; there's no backend
     record of individual mints, the candy machine's own on-chain
     items_redeemed count is the source of truth (see get_public_candy_machine_status)."""

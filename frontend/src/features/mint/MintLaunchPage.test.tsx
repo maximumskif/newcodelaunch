@@ -28,7 +28,12 @@ vi.mock('../../lib/candyMachineApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/candyMachineApi')>()
   return {
     ...actual,
-    candyMachineApi: { ...actual.candyMachineApi, prepare: vi.fn(), create: vi.fn() },
+    candyMachineApi: {
+      ...actual.candyMachineApi,
+      prepareCollection: vi.fn(),
+      prepareCandyMachine: vi.fn(),
+      create: vi.fn(),
+    },
   }
 })
 
@@ -110,8 +115,11 @@ describe('MintLaunchPage project linking', () => {
     vi.mocked(nftApi.getCollection).mockResolvedValue({ collection })
     vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
     vi.mocked(projectsApi.get).mockResolvedValue({ project })
-    vi.mocked(candyMachineApi.prepare).mockResolvedValue({
+    vi.mocked(candyMachineApi.prepareCollection).mockResolvedValue({
       collection_mint: 'CollMint1111111111111111111111111111111111',
+      transaction: 'eA==',
+    })
+    vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({
       candy_machine: 'CandyMachine11111111111111111111111111111',
       transactions: ['eA=='],
     })
@@ -150,6 +158,68 @@ describe('MintLaunchPage project linking', () => {
     )
   })
 
+  it('does not build the Candy Machine transaction until the collection transaction is prepared, and passes the confirmed collection_mint through', async () => {
+    // Regression test for the two-step launch flow (see
+    // docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md): prepareCandyMachine's own
+    // ephemeral signer + blockhash must only be generated after the
+    // collection transaction is confirmed, not alongside it — asserting
+    // call order here is the actual behavior the fix depends on, not just
+    // that both calls eventually happen.
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: { toBase58: () => 'CreatorPublicKey11111111111111111111111111' },
+      sendTransaction: vi.fn().mockResolvedValue('sig-1'),
+    } as unknown as ReturnType<typeof useWallet>)
+    vi.mocked(nftApi.getCollection).mockResolvedValue({ collection })
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
+
+    const callOrder: string[] = []
+    vi.mocked(candyMachineApi.prepareCollection).mockImplementation(async () => {
+      callOrder.push('prepareCollection')
+      return { collection_mint: 'CollMint1111111111111111111111111111111111', transaction: 'eA==' }
+    })
+    vi.mocked(candyMachineApi.prepareCandyMachine).mockImplementation(async (_token, payload) => {
+      callOrder.push('prepareCandyMachine')
+      expect(payload.collection_mint).toBe('CollMint1111111111111111111111111111111111')
+      return { candy_machine: 'CandyMachine11111111111111111111111111111', transactions: ['eA=='] }
+    })
+    vi.mocked(candyMachineApi.create).mockResolvedValue({
+      candy_machine: {
+        id: 'cm-1',
+        nft_collection_id: 'col-1',
+        network: 'solana_devnet',
+        collection_mint: 'CollMint1111111111111111111111111111111111',
+        candy_machine: 'CandyMachine11111111111111111111111111111',
+        price_sol: 0.1,
+        items_available: 1,
+        go_live_date: '2026-09-01T00:00:00.000Z',
+        creator_wallet: 'CreatorPublicKey11111111111111111111111111',
+        transaction_signatures: ['sig-1', 'sig-1'],
+        explorer_url: null,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    const user = userEvent.setup()
+    renderAt('?collection=col-1')
+
+    expect(await screen.findByText('Test Collection')).toBeInTheDocument()
+    const goLiveInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    await user.type(goLiveInput, '2026-09-01T00:00')
+    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+
+    await waitFor(() => expect(candyMachineApi.create).toHaveBeenCalled())
+
+    expect(callOrder).toEqual(['prepareCollection', 'prepareCandyMachine'])
+    expect(candyMachineApi.create).toHaveBeenCalledWith(
+      'tok',
+      expect.objectContaining({
+        collection_mint: 'CollMint1111111111111111111111111111111111',
+        candy_machine: 'CandyMachine11111111111111111111111111111',
+        transaction_signatures: ['sig-1', 'sig-1'],
+      }),
+    )
+  })
+
   it('does not pass a project_id when launched without a project in context', async () => {
     vi.mocked(useWallet).mockReturnValue({
       publicKey: { toBase58: () => 'CreatorPublicKey11111111111111111111111111' },
@@ -157,8 +227,11 @@ describe('MintLaunchPage project linking', () => {
     } as unknown as ReturnType<typeof useWallet>)
     vi.mocked(nftApi.getCollection).mockResolvedValue({ collection })
     vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
-    vi.mocked(candyMachineApi.prepare).mockResolvedValue({
+    vi.mocked(candyMachineApi.prepareCollection).mockResolvedValue({
       collection_mint: 'CollMint1111111111111111111111111111111111',
+      transaction: 'eA==',
+    })
+    vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({
       candy_machine: 'CandyMachine11111111111111111111111111111',
       transactions: ['eA=='],
     })
