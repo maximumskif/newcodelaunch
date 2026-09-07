@@ -56,11 +56,19 @@ There's no local-open-source equivalent of "pin something to global IPFS"
 the way anvil/solana-test-validator are for a real chain. `PINATA_BASE_URL`
 (an override in `backend/app/services/ipfs.py`, mirroring the
 `SEPOLIA_RPC_URL`/`SOLANA_DEVNET_RPC_URL` pattern) points the real `ipfs.py`
-code path at `e2e/setup/pinata_stub.py` — a ~40-line Flask app returning a
-fake but stable `IpfsHash` — instead of a real Pinata account. Everything
-upstream of that one call (the request, the auth, the DB record) is real;
-only the "does this hash actually resolve on IPFS" question is left
-unanswered, which nothing in this app's own tests or UI ever checks anyway.
+code path at `e2e/setup/pinata_stub.py` instead of a real Pinata account for
+pinning; `PINATA_GATEWAY_URL` does the same for reading a pin back. The stub
+keeps pinned content in memory for the run and serves it back byte-for-byte
+at `/ipfs/<hash>`, so a real read-what-you-pinned round trip — like the NFT
+Generator's metadata-preview feature (`GenerateStep.tsx`'s "Preview
+metadata", backed by `get_item_metadata`'s real `requests.get` call) —
+actually completes, rather than 502ing on a hash nothing can resolve. This
+was found by writing `nft-generator.spec.ts`: the preview step failed with a
+real `MetadataFetchError` on the first run, because `PINATA_GATEWAY` had no
+override at all before this, unlike `PINATA_BASE_URL`. The one thing still
+faked is global IPFS availability itself — nothing outside this one process
+can resolve these hashes, which nothing in this app's own tests or UI checks
+for anyway.
 
 ## One-time setup
 
@@ -119,6 +127,14 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   unauthenticated visitor flow). This is the exact flow this project's own
   docs had only ever verified via `curl`-level checks or a single manual
   devnet pass before this.
+- `nft-generator.spec.ts` — sign in with EVM (auth only; nothing here is
+  chain-specific) → create a collection, add a layer, and upload a real
+  trait image, all through the actual multi-step upload UI (not seeded via
+  API — this is the one flow whose only prior coverage was component-level,
+  e.g. `LayerCard.test.tsx`, never a full click-through) → generate →
+  publish to IPFS (real Pinata-shaped pin through the local stub) → open the
+  metadata preview and confirm it shows the real pinned content read back
+  through the stub's gateway, not a stale pre-publish placeholder.
 
 ## What isn't covered yet
 
@@ -128,10 +144,5 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   blockhash-expiry fix specifically, not something a local validator run
   substitutes for (the fix needs to be proven against real network latency
   between wallet approvals, which a fast local validator can't reproduce).
-- The NFT Generator's own multi-step upload UI (layer/trait
-  creation, image upload) isn't driven through the browser here — it's
-  seeded via direct API calls instead, since none of it involves wallet
-  signing or on-chain activity and it already has component-level test
-  coverage (`LayerCard.test.tsx` etc.).
 - AI Trait Identifier (optional OpenAI-backed rarity suggestions) — hits a
   real paid third-party API this suite has no reason to depend on.

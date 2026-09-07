@@ -30,7 +30,12 @@ from flask import current_app
 # the way anvil/solana-test-validator are for a real chain. See
 # frontend/e2e/README.md.
 PINATA_BASE_URL = os.environ.get("PINATA_BASE_URL", "https://api.pinata.cloud")
-PINATA_GATEWAY = "https://gateway.pinata.cloud/ipfs/"
+# Also overridable, same reason: get_item_metadata() (nft_collections.py)
+# fetches a published item's real pinned JSON back from this URL — the e2e
+# stub serves what it was actually given at pin time, so this needs its own
+# seam distinct from PINATA_BASE_URL (a real Pinata deployment's API and
+# gateway are already different hosts).
+PINATA_GATEWAY = os.environ.get("PINATA_GATEWAY_URL", "https://gateway.pinata.cloud/ipfs/")
 
 
 class IPFSUploadError(RuntimeError):

@@ -35,6 +35,7 @@ export CANDY_MACHINE_SERVICE_URL="http://localhost:4000"
 # before the request ever reaches PINATA_BASE_URL.
 export PINATA_JWT="e2e-fake-jwt-not-for-real-use"
 export PINATA_BASE_URL="http://127.0.0.1:5555"
+export PINATA_GATEWAY_URL="http://127.0.0.1:5555/ipfs/"
 export FLASK_APP="wsgi.py"
 
 .venv/bin/flask db upgrade
