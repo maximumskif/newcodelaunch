@@ -22,7 +22,7 @@ The paragraphs below describe what's actually implemented and verified, not a ro
 - The AI Trait Identifier (real third-party OpenAI calls) doesn't have end-to-end browser coverage — see `frontend/e2e/README.md`'s "What isn't covered yet" for why.
 - Candy Machine's blockhash-expiry risk was fixed 2026-09-06 (staged two-step launch flow — see `docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md`), but not yet devnet-click-through-verified — that checklist is still open.
 - NFT generation is synchronous and capped at 200 items/call; a background job queue is the natural next step if that cap needs to rise.
-- `backend/Dockerfile` and `frontend/Dockerfile` exist but aren't build-verified (no Docker in the sandbox that wrote them) and aren't wired into `docker-compose.yml` yet. Rate limiting itself defaults to in-memory storage (fine for a single dev process) — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker; `docker compose up -d redis` starts one, and both the wiring and the cross-process sharing it exists for are covered by a real Redis instance in CI (`backend/tests/test_ratelimit_storage.py`), not mocked.
+- `backend/Dockerfile` and `frontend/Dockerfile` are now wired into `docker-compose.yml` (see "Running the whole stack in Docker instead" above) but still aren't build-verified — no Docker in the sandbox that wrote them. Rate limiting itself defaults to in-memory storage (fine for a single dev process) — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker; `docker compose up -d redis` starts one, and both the wiring and the cross-process sharing it exists for are covered by a real Redis instance in CI (`backend/tests/test_ratelimit_storage.py`), not mocked.
 - No project switcher in the app shell yet (deliberately deferred pending real multi-project usage).
 
 ## Architecture
@@ -71,3 +71,16 @@ npm run dev
 This has been execution-verified end-to-end against a real local backend, frontend, and Candy Machine sidecar (see `docs/REBUILD_PROGRESS.md`'s "First real local execution" entry, 2026-08-18) — but only in one sandboxed environment. If something in these steps doesn't work from a clean clone elsewhere, that's a real gap, not an assumption to paper over.
 
 To run the real end-to-end test suite (see `frontend/e2e/README.md`), also install [Foundry](https://getfoundry.sh) (`curl -L https://foundry.paradigm.xyz | bash && foundryup`) and Playwright's browser (`npx playwright install --with-deps chromium` — the `--with-deps` half needs `sudo`), then `npm run test:e2e` from `frontend/`.
+
+### Running the whole stack in Docker instead
+
+`docker-compose.yml` now wires up all four services (Postgres, the candy-machine sidecar, the backend, and the frontend behind nginx), not just the two without a Python/Node toolchain dependency:
+
+```bash
+cp backend/.env.example backend/.env   # fill in SECRET_KEY and JWT_SECRET_KEY at minimum
+cp services/candy-machine/.env.example services/candy-machine/.env
+docker compose up --build
+# then open http://localhost:8080
+```
+
+This wiring is **not build-verified** — the sandbox that wrote it has no Docker available at all (see the comments at the top of `docker-compose.yml` and in each `Dockerfile`). It's been reviewed carefully (backend's image needs no compiler or system packages at all, since `psycopg2-binary` bundles its own `libpq`; the frontend image accepts `VITE_API_BASE_URL` etc. as build args so a real deploy isn't silently stuck pointing at `localhost`), but a real `docker compose up --build` on a machine with Docker is the next thing to confirm before trusting it — running the backend/frontend directly on the host (the steps above) remains the execution-verified path.

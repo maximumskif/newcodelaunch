@@ -1,7 +1,11 @@
-# Only Postgres and the candy-machine sidecar run in Docker for now — the
-# Flask backend and Vite frontend run locally (`flask run` in backend/,
-# `npm run dev` in frontend/) since this dev environment has no pip/venv
-# available to verify a Python container build.
+# Full stack, all four services. Not build-verified in this sandbox — no
+# Docker available here (see backend/Dockerfile's and frontend/Dockerfile's
+# own comments) — build and smoke-test this for real (`docker compose up
+# --build`, then hit http://localhost:8080 and confirm sign-in/deploy still
+# work) before relying on it. For active development, running the backend
+# (`flask run`) and frontend (`npm run dev`) directly on the host is still
+# faster — hot reload vs. a full image rebuild per change — this is for
+# running (or smoke-testing) the whole stack as it'll actually be deployed.
 services:
   postgres:
     image: postgres:16-alpine
@@ -45,6 +49,54 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: launchpad-backend
+    ports:
+      - '5000:5000'
+    env_file:
+      # SECRET_KEY, JWT_SECRET_KEY, PINATA_JWT, etc — everything that isn't
+      # specific to running inside this compose network. Required (see
+      # config.py's _require) — `cp backend/.env.example backend/.env` and
+      # fill it in before `docker compose up backend`.
+      - ./backend/.env
+    environment:
+      # These override backend/.env's own host-oriented defaults (correct
+      # for `flask run` on the host, meaningless inside this network, where
+      # "localhost" would resolve to the backend container itself).
+      DATABASE_URL: postgresql://launchpad:launchpad@postgres:5432/launchpad
+      CANDY_MACHINE_SERVICE_URL: http://candy-machine:4000
+      # Must match wherever the frontend is actually served from (see the
+      # frontend service's port mapping below) — the browser sends this as
+      # its real Origin, not the container network.
+      CORS_ORIGINS: http://localhost:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      candy-machine:
+        condition: service_started
+    # The image itself doesn't run migrations (see Dockerfile) — do it here,
+    # once, before gunicorn starts, rather than requiring a separate manual
+    # step every time this stack comes up fresh.
+    command: sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 wsgi:app"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the static bundle at build time (see Dockerfile) — this
+        # is what the *browser* calls, so it has to be the backend's
+        # host-published port (5000 above), not the compose network's
+        # internal "backend" hostname, which the browser can't resolve.
+        VITE_API_BASE_URL: http://localhost:5000/api
+    container_name: launchpad-frontend
+    ports:
+      - '8080:80'
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:

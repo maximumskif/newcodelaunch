@@ -10,14 +10,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# gcc/build tools are NOT installed on purpose — every pin in
-# requirements.txt has a prebuilt wheel for this exact Python version (that
-# was the whole point of pinning to 3.11), so a working build here without
-# a compiler is itself a check that hasn't silently regressed.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+# No apt-get step, on purpose: every pin in requirements.txt has a prebuilt
+# wheel for this exact Python version (that was the whole point of pinning
+# to 3.11), including psycopg2-binary — which bundles its own libpq
+# statically and needs neither a compiler nor libpq-dev at build or run
+# time (that's the entire reason the "-binary" package exists; the plain
+# psycopg2 package would need both). A working build here with no system
+# packages installed at all is itself a check that hasn't silently regressed.
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -1,3 +1,6 @@
 node_modules
 dist
 .env
+e2e/.generated
+test-results
+playwright-report
