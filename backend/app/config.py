@@ -51,7 +51,16 @@ class Config:
     # (e.g. "redis://localhost:6379") — the `redis` package is already a
     # dependency (see requirements.txt) specifically so this works with no
     # further code change, just an env var.
-    RATE_LIMIT_STORAGE_URI = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
+    #
+    # The config key MUST be exactly RATELIMIT_STORAGE_URI (no underscore
+    # between RATE and LIMIT) — that's the literal string Flask-Limiter
+    # itself reads (see flask_limiter.constants.ConfigVars.STORAGE_URI).
+    # An earlier version of this file used RATE_LIMIT_STORAGE_URI, which
+    # Flask-Limiter silently ignored: it fell back to "memory://" no matter
+    # what the env var was set to, so pointing this at Redis in production
+    # would have done nothing. The env var name below still reads naturally;
+    # only the config attribute name has to match Flask-Limiter exactly.
+    RATELIMIT_STORAGE_URI = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
 
     # Number of trusted reverse-proxy hops in front of this app (a load
     # balancer, a CDN, etc). 0 by default — meaning ProxyFix does nothing

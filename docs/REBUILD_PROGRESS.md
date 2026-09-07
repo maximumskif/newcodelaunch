@@ -275,3 +275,20 @@ The one thing faked, deliberately, is the third-party Pinata pinning call: a new
 New CI: the `e2e` job now also installs the Solana CLI (no maintained GitHub Action for this exists as of writing, so it runs the same install script the local dev instructions use) and the candy-machine sidecar's dependencies. `test.setTimeout(120_000)` on the Candy Machine spec specifically — two real on-chain launch transactions plus the ~15s propagation wait well exceed Playwright's 30s default.
 
 2 e2e tests total (token deploy + candy machine), both passing repeatedly and consistently, not just once. Backend 82 tests, frontend 33 tests, sidecar `tsc`/`build` all still clean.
+
+## Reliability & CI, third pass: Redis-backed rate limiting was silently a no-op — 2026-09-07
+
+Working through the "known gaps" list, starting with the item that looked smallest: point `RATE_LIMIT_STORAGE_URI` at Redis before running more than one gunicorn worker. Checking it for real (rather than trusting the existing comment claiming this was "a one-line env var change, not a deploy silently missing a dependency") found that it was itself silently broken.
+
+**The bug**: Flask-Limiter reads one specific literal config key — `RATELIMIT_STORAGE_URI`, no underscore between RATE and LIMIT (see `flask_limiter.constants.ConfigVars.STORAGE_URI` in its own source). `config.py` defined `RATE_LIMIT_STORAGE_URI` instead — a name that reads naturally but isn't the one Flask-Limiter actually looks for. Flask-Limiter doesn't error on a missing/wrong key; it just falls back to `memory://` and prints a `UserWarning` easy to miss in normal logs. So the entire "point this at Redis for multi-worker deployments" feature this project's own docs described in the Security & Reliability pass never actually worked — every worker would still have kept its own separate in-memory counter no matter what the env var was set to, silently multiplying the real allowed rate by worker count exactly like the original problem this was meant to fix. Confirmed by writing a test against a real Redis instance, watching it fail with the old key name and pass with the fix — not inferred from reading Flask-Limiter's source alone.
+
+**Fixed** by renaming the `Config` attribute to `RATELIMIT_STORAGE_URI` (the env var itself, `RATE_LIMIT_STORAGE_URI`, is unchanged — only the internal attribute name Flask-Limiter reads had to match exactly).
+
+**New regression coverage** (`backend/tests/test_ratelimit_storage.py`), against a real Redis/Valkey server, not a mock (a config-key-name bug like this is invisible to anything that mocks Flask-Limiter's own storage selection):
+- Reloads `app.config` after setting the env var (the same env-var → class-attribute path production uses) and asserts `Limiter._storage` is actually a `limits.storage.RedisStorage`, not the in-memory fallback.
+- Hammers the real per-wallet nonce rate limit (10/minute) to exhaustion on one Flask app instance, then makes the same request against a **second, independently-constructed** app instance pointed at the same Redis URL and confirms it's still rejected — the actual point of Redis-backed storage (each gunicorn worker builds its own app/Limiter object; the limit is only real if the counter lives outside any one of them). Verified locally against a real server: built a portable Redis-protocol server from conda-forge's `valkey-server` package (no Docker or system package manager available in the sandbox that did this work, no sudo needed either way) to run these tests for real before trusting them.
+- Both tests skip cleanly (not fail) when no Redis is reachable (`TEST_REDIS_URL` unset), so local runs without Redis still pass; CI's `backend` job now runs a real `redis:7-alpine` service container and always exercises them.
+
+**Also added**: an optional `redis` service in `docker-compose.yml` (matches the `postgres`/`candy-machine` pattern already there) so `RATE_LIMIT_STORAGE_URI=redis://localhost:6379` has something to point at locally with no extra setup.
+
+Backend 84 tests (82 + 2 new), all passing, including the new Redis-backed ones in CI.

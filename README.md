@@ -15,14 +15,14 @@ The paragraphs below describe what's actually implemented and verified, not a ro
 - **Solana Candy Machine — creator flow & public mint storefront** — launch a real Core Candy Machine drop from a published NFT collection (capped at 20 items) via the `services/candy-machine` sidecar, then share a public link any visitor can mint from with their own wallet. Testnet-first (Solana Devnet default), same mainnet-confirmation pattern as the EVM side.
 - **Market Intelligence & DeFi Scanner** — real CoinGecko token prices and DeFiLlama protocol TVL, no API key required for either (an optional CoinGecko key raises its rate limit). No fabricated fallback data if either call fails.
 - **Template Marketplace** — a read-only gallery over the same real contract templates the Token Launchpad/Contracts Hub deploy from.
-- **Automated tests & CI** — pytest (backend, 80+ tests) and Vitest (frontend, 30+ tests), plus real Playwright end-to-end tests for both the EVM deploy flow (against a local `anvil` chain) and the Solana Candy Machine flow (against a local `solana-test-validator`, real Metaplex programs cloned onto it) — see `frontend/e2e/`. Four GitHub Actions jobs (backend, frontend, e2e, Candy Machine sidecar) on every push/PR to `main`.
+- **Automated tests & CI** — pytest (backend, 80+ tests, including a real Redis service container backing the rate-limit storage tests) and Vitest (frontend, 30+ tests), plus real Playwright end-to-end tests for both the EVM deploy flow (against a local `anvil` chain) and the Solana Candy Machine flow (against a local `solana-test-validator`, real Metaplex programs cloned onto it) — see `frontend/e2e/`. Four GitHub Actions jobs (backend, frontend, e2e, Candy Machine sidecar) on every push/PR to `main`.
 
 ## Known gaps
 
 - The NFT Generator's own multi-step upload UI, and the AI Trait Identifier (real third-party OpenAI calls), don't have end-to-end browser coverage yet — see `frontend/e2e/README.md`'s "What isn't covered yet" for the full list and why.
 - Candy Machine's blockhash-expiry risk was fixed 2026-09-06 (staged two-step launch flow — see `docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md`), but not yet devnet-click-through-verified — that checklist is still open.
 - NFT generation is synchronous and capped at 200 items/call; a background job queue is the natural next step if that cap needs to rise.
-- `backend/Dockerfile` and `frontend/Dockerfile` exist but aren't build-verified (no Docker in the sandbox that wrote them) and aren't wired into `docker-compose.yml` yet. Rate limiting defaults to in-memory storage — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker (the `redis` client is already a dependency).
+- `backend/Dockerfile` and `frontend/Dockerfile` exist but aren't build-verified (no Docker in the sandbox that wrote them) and aren't wired into `docker-compose.yml` yet. Rate limiting itself defaults to in-memory storage (fine for a single dev process) — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker; `docker compose up -d redis` starts one, and both the wiring and the cross-process sharing it exists for are covered by a real Redis instance in CI (`backend/tests/test_ratelimit_storage.py`), not mocked.
 - No project switcher in the app shell yet (deliberately deferred pending real multi-project usage).
 
 ## Architecture
@@ -43,10 +43,10 @@ No Jinja templates, no server-rendered pages — the backend is a pure JSON API.
 
 ## Setup
 
-Requires Python 3.11 (newer stock Pythons can lack prebuilt wheels for `numpy`/`Pillow`/`psycopg2-binary`; `uv python install 3.11` sidesteps this without needing sudo or a compiler), Node 24 (matching CI's pinned version), and Postgres (or use the provided `docker-compose.yml` for Postgres + the candy-machine sidecar).
+Requires Python 3.11 (newer stock Pythons can lack prebuilt wheels for `numpy`/`Pillow`/`psycopg2-binary`; `uv python install 3.11` sidesteps this without needing sudo or a compiler), Node 24 (matching CI's pinned version), and Postgres (or use the provided `docker-compose.yml` for Postgres + the candy-machine sidecar). Redis is optional in dev — only add it once you're running the backend with more than one worker.
 
 ```bash
-# Postgres + candy-machine sidecar
+# Postgres + candy-machine sidecar (add `redis` too if running >1 backend worker)
 docker compose up -d postgres candy-machine
 
 # Backend — pin to Python 3.11 specifically (see the note above); `uv` gets

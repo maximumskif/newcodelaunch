@@ -13,6 +13,21 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Backs tests/test_ratelimit_storage.py's real Redis-backed rate-limit
+    # coverage — a config-key typo once made RATE_LIMIT_STORAGE_URI silently
+    # do nothing (Flask-Limiter fell back to in-memory storage with no
+    # error), which only a real Redis wire-protocol server behind it could
+    # have caught. Without TEST_REDIS_URL below, those tests just skip.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +60,7 @@ jobs:
           SECRET_KEY: ci-test-secret-key-not-for-real-use
           JWT_SECRET_KEY: ci-test-jwt-secret-key-not-for-real-use
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          TEST_REDIS_URL: redis://localhost:6379
         run: pytest
 
   frontend:

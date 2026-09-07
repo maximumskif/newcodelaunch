@@ -30,5 +30,23 @@ services:
       - ./services/candy-machine/.env
     restart: unless-stopped
 
+  # Optional — only needed once the backend runs with more than one gunicorn
+  # worker (see RATE_LIMIT_STORAGE_URI in backend/.env.example). A single
+  # `flask run` dev process works fine without this.
+  redis:
+    image: redis:7-alpine
+    container_name: launchpad-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  redis_data:
