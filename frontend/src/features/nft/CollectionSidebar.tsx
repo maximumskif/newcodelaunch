@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
-import { IconLayers, IconPlus } from '../../components/ui/icons'
+import { IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   isLoading: boolean
   onSelect: (id: string) => void
   onCreated: (collection: NFTCollection) => void
+  onDeleteRequest: (collection: NFTCollection) => void
   projectId?: string | null
   initialName?: string
 }
@@ -29,6 +30,7 @@ export function CollectionSidebar({
   isLoading,
   onSelect,
   onCreated,
+  onDeleteRequest,
   projectId,
   initialName,
 }: Props) {
@@ -133,18 +135,30 @@ export function CollectionSidebar({
           <p className="px-1 py-2 text-xs text-ink-faint">No collections yet — create your first one above.</p>
         )}
         {collections.map((collection) => (
-          <button
+          <div
             key={collection.id}
-            onClick={() => onSelect(collection.id)}
-            className={`flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors duration-150 ${
+            className={`group flex items-center gap-1 rounded-md text-sm transition-colors duration-150 ${
               collection.id === selectedId
                 ? 'bg-accent-500/15 text-ink ring-1 ring-accent-400/30'
                 : 'text-ink-muted hover:bg-surface-hover'
             }`}
           >
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[collection.status] ?? STATUS_DOT.draft}`} />
-            <span className="flex-1 truncate">{collection.name}</span>
-          </button>
+            <button
+              onClick={() => onSelect(collection.id)}
+              className="flex flex-1 items-center gap-2 px-2.5 py-2 text-left"
+            >
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[collection.status] ?? STATUS_DOT.draft}`} />
+              <span className="flex-1 truncate">{collection.name}</span>
+            </button>
+            <button
+              onClick={() => onDeleteRequest(collection)}
+              aria-label={`Delete collection ${collection.name}`}
+              title="Delete collection"
+              className="mr-1 shrink-0 rounded p-1 text-ink-faint opacity-0 hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+            >
+              <IconTrash className="h-3 w-3" />
+            </button>
+          </div>
         ))}
       </div>
     </Card>

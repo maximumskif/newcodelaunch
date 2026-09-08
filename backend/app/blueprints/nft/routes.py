@@ -48,6 +48,19 @@ def get_collection(collection_id):
     return jsonify(collection=collection.to_dict(include_layers=True))
 
 
+@nft_bp.delete("/collections/<collection_id>")
+@jwt_required()
+def delete_collection(collection_id):
+    try:
+        collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
+        nft_collections.delete_collection(collection, current_app.config["UPLOAD_FOLDER"])
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except nft_collections.ConflictError as exc:
+        return jsonify(error=str(exc)), 409
+    return "", 204
+
+
 @nft_bp.post("/collections/<collection_id>/layers")
 @jwt_required()
 def add_layer(collection_id):
@@ -64,6 +77,55 @@ def add_layer(collection_id):
     order_index = int(data.get("order_index", len(collection.layers)))
     layer = nft_collections.add_layer(collection, name, order_index)
     return jsonify(layer=layer.to_dict()), 201
+
+
+@nft_bp.post("/collections/<collection_id>/layers/reorder")
+@jwt_required()
+def reorder_layers(collection_id):
+    data = request.get_json(silent=True) or {}
+    layer_ids = data.get("layer_ids")
+    if not isinstance(layer_ids, list) or not layer_ids:
+        return jsonify(error="layer_ids (a non-empty array) is required"), 400
+
+    try:
+        collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
+        layers = nft_collections.reorder_layers(collection, layer_ids)
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except nft_collections.ValidationError as exc:
+        return jsonify(error=str(exc)), 400
+
+    return jsonify(layers=[layer.to_dict() for layer in layers])
+
+
+@nft_bp.patch("/layers/<layer_id>")
+@jwt_required()
+def update_layer(layer_id):
+    data = request.get_json(silent=True) or {}
+    name = data.get("name")
+    if name is not None:
+        name = name.strip()
+        if not name:
+            return jsonify(error="name cannot be empty"), 400
+
+    try:
+        layer = nft_collections.get_owned_layer(layer_id, get_jwt_identity())
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+
+    layer = nft_collections.update_layer(layer, name=name)
+    return jsonify(layer=layer.to_dict())
+
+
+@nft_bp.delete("/layers/<layer_id>")
+@jwt_required()
+def delete_layer(layer_id):
+    try:
+        layer = nft_collections.get_owned_layer(layer_id, get_jwt_identity())
+        nft_collections.delete_layer(layer, current_app.config["UPLOAD_FOLDER"])
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    return "", 204
 
 
 @nft_bp.post("/layers/<layer_id>/traits")
@@ -88,6 +150,45 @@ def add_trait(layer_id):
         return jsonify(error=str(exc)), 400
 
     return jsonify(trait=trait.to_dict()), 201
+
+
+@nft_bp.patch("/traits/<trait_id>")
+@jwt_required()
+def update_trait(trait_id):
+    data = request.get_json(silent=True) or {}
+    name = data.get("name")
+    if name is not None:
+        name = name.strip()
+        if not name:
+            return jsonify(error="name cannot be empty"), 400
+
+    rarity_weight = data.get("rarity_weight")
+    if rarity_weight is not None:
+        try:
+            rarity_weight = float(rarity_weight)
+        except (TypeError, ValueError):
+            return jsonify(error="rarity_weight must be a number"), 400
+
+    try:
+        trait = nft_collections.get_owned_trait(trait_id, get_jwt_identity())
+        trait = nft_collections.update_trait(trait, name=name, rarity_weight=rarity_weight)
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except nft_collections.ValidationError as exc:
+        return jsonify(error=str(exc)), 400
+
+    return jsonify(trait=trait.to_dict())
+
+
+@nft_bp.delete("/traits/<trait_id>")
+@jwt_required()
+def delete_trait(trait_id):
+    try:
+        trait = nft_collections.get_owned_trait(trait_id, get_jwt_identity())
+        nft_collections.delete_trait(trait, current_app.config["UPLOAD_FOLDER"])
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    return "", 204
 
 
 @nft_bp.post("/collections/<collection_id>/generate")

@@ -56,8 +56,8 @@ export function Dropzone({
       onDrop={handleDrop}
       role="button"
       tabIndex={0}
-      aria-label={iconOnly ? 'Click or drag an image here' : undefined}
-      title={iconOnly ? 'Click or drag an image here' : undefined}
+      aria-label={iconOnly ? (multiple ? 'Click or drag one or more images here' : 'Click or drag an image here') : undefined}
+      title={iconOnly ? (multiple ? 'Click or drag one or more images here' : 'Click or drag an image here') : undefined}
       className={`group flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-center transition-colors duration-150 ${
         iconOnly ? 'p-1.5' : compact ? 'p-4' : 'p-8'
       } ${

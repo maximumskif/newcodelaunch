@@ -89,6 +89,31 @@ describe('GenerateStep metadata preview', () => {
   })
 })
 
+describe('GenerateStep rarity distribution toggle', () => {
+  beforeEach(() => {
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [draftItem] })
+  })
+
+  it('is hidden until the toggle is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collection} />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('#1')
+    expect(screen.queryByText(/actual trait spread/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Show rarity distribution'))
+    expect(await screen.findByText(/actual trait spread/)).toBeInTheDocument()
+    expect(screen.getByText('Background')).toBeInTheDocument()
+
+    await user.click(screen.getByText('Hide rarity distribution'))
+    expect(screen.queryByText(/actual trait spread/)).not.toBeInTheDocument()
+  })
+})
+
 describe('GenerateStep "Launch Mint Site" link', () => {
   const publishedItem: NFTGeneratedItem = {
     ...draftItem,

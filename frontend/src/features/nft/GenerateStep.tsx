@@ -4,8 +4,9 @@ import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { IconCode, IconLink, IconSparkles, IconSpinner } from '../../components/ui/icons'
+import { IconChevronDown, IconCode, IconLink, IconSparkles, IconSpinner } from '../../components/ui/icons'
 import { ipfsGatewayUrl, maxPossibleCombinations, nftApi, uploadUrl, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
+import { RarityDistribution } from './RarityDistribution'
 
 interface Props {
   token: string
@@ -45,6 +46,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
   const [previews, setPreviews] = useState<Record<string, MetadataPreview>>({})
+  const [showDistribution, setShowDistribution] = useState(false)
 
   const refreshItems = async () => {
     setIsLoadingItems(true)
@@ -149,6 +151,23 @@ export function GenerateStep({ token, collection, projectId }: Props) {
       </div>
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+
+      {items.length > 0 && (
+        <div className="mt-4">
+          <button
+            onClick={() => setShowDistribution((v) => !v)}
+            className="flex items-center gap-1 text-xs text-ink-faint hover:text-ink"
+          >
+            <IconChevronDown className={`h-3 w-3 transition-transform duration-150 ${showDistribution ? '' : '-rotate-90'}`} />
+            {showDistribution ? 'Hide' : 'Show'} rarity distribution
+          </button>
+          {showDistribution && (
+            <div className="mt-2">
+              <RarityDistribution items={items} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-5">
         {isLoadingItems && <p className="text-sm text-ink-faint">Loading items…</p>}

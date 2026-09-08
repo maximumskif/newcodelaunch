@@ -60,12 +60,28 @@ export const nftApi = {
   getCollection: (token: string, collectionId: string) =>
     request<{ collection: NFTCollection }>(`/nft/collections/${collectionId}`, {}, token),
 
+  deleteCollection: (token: string, collectionId: string) =>
+    request<void>(`/nft/collections/${collectionId}`, { method: 'DELETE' }, token),
+
   addLayer: (token: string, collectionId: string, payload: { name: string; order_index: number }) =>
     request<{ layer: NFTLayer }>(
       `/nft/collections/${collectionId}/layers`,
       { method: 'POST', body: JSON.stringify(payload) },
       token,
     ),
+
+  reorderLayers: (token: string, collectionId: string, layerIds: string[]) =>
+    request<{ layers: NFTLayer[] }>(
+      `/nft/collections/${collectionId}/layers/reorder`,
+      { method: 'POST', body: JSON.stringify({ layer_ids: layerIds }) },
+      token,
+    ),
+
+  updateLayer: (token: string, layerId: string, payload: { name: string }) =>
+    request<{ layer: NFTLayer }>(`/nft/layers/${layerId}`, { method: 'PATCH', body: JSON.stringify(payload) }, token),
+
+  deleteLayer: (token: string, layerId: string) =>
+    request<void>(`/nft/layers/${layerId}`, { method: 'DELETE' }, token),
 
   addTrait: (token: string, layerId: string, name: string, rarityWeight: number, image: File) => {
     const formData = new FormData()
@@ -74,6 +90,12 @@ export const nftApi = {
     formData.set('image', image)
     return requestMultipart<{ trait: NFTTrait }>(`/nft/layers/${layerId}/traits`, formData, token)
   },
+
+  updateTrait: (token: string, traitId: string, payload: { name?: string; rarity_weight?: number }) =>
+    request<{ trait: NFTTrait }>(`/nft/traits/${traitId}`, { method: 'PATCH', body: JSON.stringify(payload) }, token),
+
+  deleteTrait: (token: string, traitId: string) =>
+    request<void>(`/nft/traits/${traitId}`, { method: 'DELETE' }, token),
 
   generate: (token: string, collectionId: string, count: number) =>
     request<{ items: NFTGeneratedItem[] }>(
@@ -132,13 +154,38 @@ export interface ImageAnalysis {
   ai_error: string | null
 }
 
-// Batch analysis (POST /nft/analyze/batch) exists on the backend but has no
-// frontend caller — AI trait analysis lives inline in the trait-upload step
-// (LayerCard) as a per-trait rarity suggestion, not a standalone bulk tool.
+export interface BatchAnalysisResult {
+  batch_id: string
+  total_images: number
+  results: ImageAnalysis[]
+  trait_frequency: Record<string, Record<string, number>>
+  rarity_scores: Record<string, { score: number; percentile: number; tier: string }>
+  collection_insights: {
+    collection_size: number
+    unique_traits: Record<string, number>
+    most_common_traits: Record<string, { value: string; percentage: number }>
+    color_distribution: Record<string, number>
+    diversity_score: number
+  }
+  processed_at: string
+}
+
 export const aiTraitsApi = {
   analyzeSingle: (token: string, image: File) => {
     const formData = new FormData()
     formData.set('image', image)
     return requestMultipart<ImageAnalysis>('/nft/analyze', formData, token)
+  },
+
+  // Bulk pre-upload planning tool, distinct from analyzeSingle's inline
+  // per-trait suggestion in LayerCard — analyze a whole batch of candidate
+  // trait images together (real CV analysis for every image, plus a real
+  // AI-vision pass per image when OPENAI_API_KEY is set) to see the
+  // resulting rarity/diversity spread across the batch before committing to
+  // which ones to actually upload and at what weights.
+  analyzeBatch: (token: string, images: File[]) => {
+    const formData = new FormData()
+    images.forEach((image) => formData.append('images', image))
+    return requestMultipart<BatchAnalysisResult>('/nft/analyze/batch', formData, token)
   },
 }

@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { Card } from '../../components/ui/Card'
+import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { IconChevronDown } from '../../components/ui/icons'
 import { PageHero } from '../../components/ui/PageHero'
 import { Stepper } from '../../components/ui/Stepper'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
+import { BatchTraitAnalyzer } from './BatchTraitAnalyzer'
 import { CollectionSidebar } from './CollectionSidebar'
 import { GenerateStep } from './GenerateStep'
 import { LayerEditor } from './LayerEditor'
@@ -24,6 +27,10 @@ export function NFTGeneratorPage() {
   const [collection, setCollection] = useState<NFTCollection | null>(null)
   const [isLoadingCollection, setIsLoadingCollection] = useState(false)
   const [project, setProject] = useState<Project | null>(null)
+  const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NFTCollection | null>(null)
+  const [isDeletingCollection, setIsDeletingCollection] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showBatchAnalyzer, setShowBatchAnalyzer] = useState(false)
 
   const refreshCollections = async (token: string) => {
     setIsLoadingCollections(true)
@@ -75,6 +82,22 @@ export function NFTGeneratorPage() {
   const hasTraitsEverywhere = layers.length > 0 && layers.every((layer) => layer.traits.length > 0)
   const activeId = hasTraitsEverywhere ? 'generate' : 'layers'
 
+  const handleConfirmDeleteCollection = async () => {
+    if (!accessToken || !pendingDeleteCollection) return
+    setIsDeletingCollection(true)
+    setDeleteError(null)
+    try {
+      await nftApi.deleteCollection(accessToken, pendingDeleteCollection.id)
+      setCollections((prev) => prev.filter((c) => c.id !== pendingDeleteCollection.id))
+      setSelectedId((current) => (current === pendingDeleteCollection.id ? null : current))
+      setPendingDeleteCollection(null)
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete collection')
+    } finally {
+      setIsDeletingCollection(false)
+    }
+  }
+
   return (
     <div className="space-y-5 p-8">
       <PageHero
@@ -96,62 +119,90 @@ export function NFTGeneratorPage() {
           <p className="text-ink-muted">Connect and sign in with a wallet above to create and manage collections.</p>
         </Card>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
-          <CollectionSidebar
-            token={accessToken}
-            collections={collections}
-            selectedId={selectedId}
-            isLoading={isLoadingCollections}
-            onSelect={setSelectedId}
-            onCreated={(created) => {
-              setCollections((prev) => [created, ...prev])
-              setSelectedId(created.id)
-              // The collection was created with this project's id, so the
-              // backend already linked it — re-fetch so the context bar's
-              // badge and the sidebar's "still a draft" gating catch up.
-              if (accessToken && projectId) {
-                void projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
-              }
-            }}
-            projectId={project && !project.nft_collection ? project.id : null}
-            initialName={project && !project.nft_collection ? project.name : undefined}
-          />
+        <>
+          <button
+            onClick={() => setShowBatchAnalyzer((v) => !v)}
+            className="flex items-center gap-1 text-xs text-ink-faint hover:text-ink"
+          >
+            <IconChevronDown className={`h-3 w-3 transition-transform duration-150 ${showBatchAnalyzer ? '' : '-rotate-90'}`} />
+            {showBatchAnalyzer ? 'Hide' : 'Show'} bulk trait analysis (AI)
+          </button>
+          {showBatchAnalyzer && <BatchTraitAnalyzer token={accessToken} />}
 
-          <div className="space-y-5">
-            {!collection ? (
-              <EmptyState
-                title={isLoadingCollection ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
-              />
-            ) : (
-              <>
-                <Card>
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-semibold text-ink">{collection.name}</h2>
-                      {collection.description && <p className="mt-1 text-sm text-ink-muted">{collection.description}</p>}
-                    </div>
-                    <Stepper
-                      activeId={activeId}
-                      steps={[
-                        { id: 'layers', label: 'Layers & traits', done: hasTraitsEverywhere },
-                        { id: 'generate', label: 'Generate & publish', done: collection.status === 'published' },
-                      ]}
-                    />
-                  </div>
-                </Card>
+          <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+            <CollectionSidebar
+              token={accessToken}
+              collections={collections}
+              selectedId={selectedId}
+              isLoading={isLoadingCollections}
+              onSelect={setSelectedId}
+              onCreated={(created) => {
+                setCollections((prev) => [created, ...prev])
+                setSelectedId(created.id)
+                // The collection was created with this project's id, so the
+                // backend already linked it — re-fetch so the context bar's
+                // badge and the sidebar's "still a draft" gating catch up.
+                if (accessToken && projectId) {
+                  void projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
+                }
+              }}
+              onDeleteRequest={(target) => {
+                setDeleteError(null)
+                setPendingDeleteCollection(target)
+              }}
+              projectId={project && !project.nft_collection ? project.id : null}
+              initialName={project && !project.nft_collection ? project.name : undefined}
+            />
 
-                <LayerEditor
-                  token={accessToken}
-                  collection={collection}
-                  onChange={() => void refreshCollection(accessToken, collection.id)}
+            <div className="space-y-5">
+              {!collection ? (
+                <EmptyState
+                  title={isLoadingCollection ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
                 />
+              ) : (
+                <>
+                  <Card>
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-ink">{collection.name}</h2>
+                        {collection.description && <p className="mt-1 text-sm text-ink-muted">{collection.description}</p>}
+                      </div>
+                      <Stepper
+                        activeId={activeId}
+                        steps={[
+                          { id: 'layers', label: 'Layers & traits', done: hasTraitsEverywhere },
+                          { id: 'generate', label: 'Generate & publish', done: collection.status === 'published' },
+                        ]}
+                      />
+                    </div>
+                  </Card>
 
-                <GenerateStep token={accessToken} collection={collection} projectId={projectId} />
-              </>
-            )}
+                  <LayerEditor
+                    token={accessToken}
+                    collection={collection}
+                    onChange={() => void refreshCollection(accessToken, collection.id)}
+                  />
+
+                  <GenerateStep token={accessToken} collection={collection} projectId={projectId} />
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteCollection !== null}
+        title={`Delete collection "${pendingDeleteCollection?.name}"?`}
+        description={
+          deleteError ??
+          'This permanently deletes every layer, trait, and generated item in this collection. This can\'t be undone.'
+        }
+        confirmLabel="Delete collection"
+        isConfirming={isDeletingCollection}
+        onConfirm={handleConfirmDeleteCollection}
+        onCancel={() => setPendingDeleteCollection(null)}
+      />
     </div>
   )
 }

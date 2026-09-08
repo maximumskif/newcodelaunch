@@ -319,12 +319,21 @@ def _categorize_resolution(width: int, height: int) -> str:
 def _analyze_composition(image: Image.Image) -> dict[str, Any]:
     width, height = image.size
 
-    left_half = image.crop((0, 0, width // 2, height))
-    right_half = image.crop((width // 2, 0, width, height)).transpose(Image.FLIP_LEFT_RIGHT)
-
-    left_stat = ImageStat.Stat(left_half)
-    right_stat = ImageStat.Stat(right_half)
-    symmetry_score = 1.0 - (abs(sum(left_stat.mean) - sum(right_stat.mean)) / (255 * 3))
+    # A 1px-wide image (or narrower) makes width // 2 == 0, producing a
+    # zero-area left_half crop — ImageStat.Stat.mean then divides by a pixel
+    # count of 0, raising ZeroDivisionError. Real trait art is never this
+    # small, but nothing upstream validates a minimum size before this runs
+    # (found via a real 1x1 test fixture image, not a hypothetical). Treat
+    # anything too narrow to meaningfully halve as trivially symmetric
+    # rather than crashing the whole analysis over it.
+    if width < 2:
+        symmetry_score = 1.0
+    else:
+        left_half = image.crop((0, 0, width // 2, height))
+        right_half = image.crop((width // 2, 0, width, height)).transpose(Image.FLIP_LEFT_RIGHT)
+        left_stat = ImageStat.Stat(left_half)
+        right_stat = ImageStat.Stat(right_half)
+        symmetry_score = 1.0 - (abs(sum(left_stat.mean) - sum(right_stat.mean)) / (255 * 3))
 
     return {
         "symmetry": _categorize_symmetry(symmetry_score),
@@ -343,6 +352,11 @@ def _categorize_symmetry(score: float) -> str:
 
 def _analyze_balance(image: Image.Image) -> str:
     width, height = image.size
+    # Same zero-area-crop hazard as _analyze_composition, in both dimensions
+    # here (quadrants, not just halves) — too small to meaningfully divide
+    # into unequal quadrants, so call it balanced rather than crash.
+    if width < 2 or height < 2:
+        return "balanced"
     quadrants = [
         image.crop((0, 0, width // 2, height // 2)),
         image.crop((width // 2, 0, width, height // 2)),

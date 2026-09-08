@@ -134,7 +134,11 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   e.g. `LayerCard.test.tsx`, never a full click-through) → generate →
   publish to IPFS (real Pinata-shaped pin through the local stub) → open the
   metadata preview and confirm it shows the real pinned content read back
-  through the stub's gateway, not a stale pre-publish placeholder.
+  through the stub's gateway, not a stale pre-publish placeholder. A second
+  test covers real edit/delete of a trait, a layer, and a collection through
+  the same UI (rename, reweight, and the actual DELETE/cascade round trips —
+  not just that the button exists). A third covers the bulk AI trait
+  analyzer independent of any collection.
 
 ## What isn't covered yet
 
