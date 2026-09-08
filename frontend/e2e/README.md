@@ -139,6 +139,15 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   the same UI (rename, reweight, and the actual DELETE/cascade round trips —
   not just that the button exists). A third covers the bulk AI trait
   analyzer independent of any collection.
+- `accessibility.spec.ts` — a real `@axe-core/playwright` scan (WCAG 2 A/AA)
+  of the marketing homepage and every authenticated app-shell route, in the
+  same real Chromium instance every other spec here uses. Closes a gap this
+  project's own accessibility review had explicitly left open pending "a
+  real browser" (`docs/REBUILD_PROGRESS.md`) — this suite already had one
+  the whole time, for wallet-signing reasons unrelated to accessibility,
+  it just hadn't been pointed at axe yet. Found and fixed a real, systemic
+  color-contrast failure (see the root `README.md`'s verification-status
+  note) — not a hypothetical the review had flagged as merely unverified.
 
 ## What isn't covered yet
 

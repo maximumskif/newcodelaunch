@@ -33,7 +33,7 @@
   --color-border-strong: color-mix(in oklab, white 20%, transparent);
   --color-ink: var(--color-zinc-50);
   --color-ink-muted: color-mix(in oklab, white 60%, transparent);
-  --color-ink-faint: color-mix(in oklab, white 38%, transparent);
+  --color-ink-faint: color-mix(in oklab, white 50%, transparent);
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
