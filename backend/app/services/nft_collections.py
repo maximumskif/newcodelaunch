@@ -113,7 +113,13 @@ def update_layer(layer: NFTLayer, name: Optional[str] = None) -> NFTLayer:
 
 def reorder_layers(collection: NFTCollection, layer_ids: list[str]) -> list[NFTLayer]:
     layers_by_id = {layer.id: layer for layer in collection.layers}
-    if set(layer_ids) != set(layers_by_id):
+    # Checking set equality alone doesn't actually enforce "once each" (the
+    # error message below's own claim) -- {a, b, a} == {a, b} as sets, so a
+    # duplicate would silently pass this check, then leave one real layer's
+    # order_index overwritten twice and no layer at all landing on some
+    # earlier index, a real gap in the resulting order. The explicit length
+    # check catches that a plain set comparison can't.
+    if len(layer_ids) != len(layers_by_id) or set(layer_ids) != set(layers_by_id):
         raise ValidationError("layer_ids must include exactly this collection's current layer ids, once each")
 
     for index, layer_id in enumerate(layer_ids):

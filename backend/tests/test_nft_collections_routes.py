@@ -79,6 +79,20 @@ def test_update_trait_rejects_non_positive_rarity_weight(app, client, tmp_path):
         assert response.status_code == 400
 
 
+def test_update_trait_rejects_a_non_string_name_instead_of_crashing(app, client, tmp_path):
+    # Regression: `data.get("name").strip()` on a non-string JSON value
+    # (e.g. a number or array) raised an unhandled AttributeError -> 500
+    # before this validated the type first.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        _, _, trait = _make_collection(str(tmp_path), user.id)
+
+        response = client.patch(f"/api/nft/traits/{trait.id}", json={"name": 123}, headers=_auth_header(user))
+
+        assert response.status_code == 400
+
+
 def test_delete_trait_removes_the_row_and_the_file(app, client, tmp_path):
     with app.app_context():
         app.config["UPLOAD_FOLDER"] = str(tmp_path)
@@ -106,6 +120,17 @@ def test_update_layer_renames(app, client, tmp_path):
 
         assert response.status_code == 200
         assert response.get_json()["layer"]["name"] == "Backdrop"
+
+
+def test_update_layer_rejects_a_non_string_name_instead_of_crashing(app, client, tmp_path):
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        _, layer, _ = _make_collection(str(tmp_path), user.id)
+
+        response = client.patch(f"/api/nft/layers/{layer.id}", json={"name": [1, 2]}, headers=_auth_header(user))
+
+        assert response.status_code == 400
 
 
 def test_delete_layer_cascades_to_its_traits_and_removes_its_directory(app, client, tmp_path):
@@ -143,6 +168,48 @@ def test_reorder_layers_updates_order_index(app, client, tmp_path):
         by_id = {layer["id"]: layer["order_index"] for layer in response.get_json()["layers"]}
         assert by_id[second_layer.id] == 0
         assert by_id[first_layer.id] == 1
+
+
+def test_reorder_layers_rejects_a_non_string_element_instead_of_crashing(app, client, tmp_path):
+    # Regression: set(layer_ids) raised an unhandled TypeError
+    # ("unhashable type: 'dict'") for a non-string element before this
+    # validated every element's type up front.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        collection, first_layer, _ = _make_collection(str(tmp_path), user.id)
+
+        response = client.post(
+            f"/api/nft/collections/{collection.id}/layers/reorder",
+            json={"layer_ids": [first_layer.id, {"x": 1}]},
+            headers=_auth_header(user),
+        )
+
+        assert response.status_code == 400
+
+
+def test_reorder_layers_rejects_a_duplicated_id_even_though_the_set_still_matches(app, client, tmp_path):
+    # Regression: set(layer_ids) == set(layers_by_id) alone doesn't enforce
+    # "once each" -- {a, b, a} == {a, b} as sets. A duplicate silently
+    # passed the old check, then overwrote one layer's order_index twice
+    # while leaving a gap at an earlier index no layer ever got.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        collection, first_layer, _ = _make_collection(str(tmp_path), user.id)
+        second_layer = NFTLayer(collection_id=collection.id, name="Foreground", order_index=1)
+        _db.session.add(second_layer)
+        _db.session.commit()
+
+        response = client.post(
+            f"/api/nft/collections/{collection.id}/layers/reorder",
+            json={"layer_ids": [first_layer.id, second_layer.id, first_layer.id]},
+            headers=_auth_header(user),
+        )
+
+        assert response.status_code == 400
+        assert _db.session.get(NFTLayer, first_layer.id).order_index == 0
+        assert _db.session.get(NFTLayer, second_layer.id).order_index == 1
 
 
 def test_reorder_layers_rejects_a_mismatched_id_set(app, client, tmp_path):

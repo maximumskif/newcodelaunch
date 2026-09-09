@@ -84,8 +84,8 @@ def add_layer(collection_id):
 def reorder_layers(collection_id):
     data = request.get_json(silent=True) or {}
     layer_ids = data.get("layer_ids")
-    if not isinstance(layer_ids, list) or not layer_ids:
-        return jsonify(error="layer_ids (a non-empty array) is required"), 400
+    if not isinstance(layer_ids, list) or not layer_ids or not all(isinstance(x, str) for x in layer_ids):
+        return jsonify(error="layer_ids (a non-empty array of strings) is required"), 400
 
     try:
         collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
@@ -104,6 +104,8 @@ def update_layer(layer_id):
     data = request.get_json(silent=True) or {}
     name = data.get("name")
     if name is not None:
+        if not isinstance(name, str):
+            return jsonify(error="name must be a string"), 400
         name = name.strip()
         if not name:
             return jsonify(error="name cannot be empty"), 400
@@ -158,6 +160,8 @@ def update_trait(trait_id):
     data = request.get_json(silent=True) or {}
     name = data.get("name")
     if name is not None:
+        if not isinstance(name, str):
+            return jsonify(error="name must be a string"), 400
         name = name.strip()
         if not name:
             return jsonify(error="name cannot be empty"), 400
