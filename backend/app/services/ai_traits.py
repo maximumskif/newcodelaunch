@@ -153,7 +153,7 @@ def _analyze_colors(image: Image.Image) -> dict[str, Any]:
 
     brightness = sum(stat.mean) / len(stat.mean) / 255 * 100
 
-    pixels = list(image.getdata())
+    pixels = list(image.get_flattened_data())
     saturations = []
     for pixel in pixels[::100]:
         if isinstance(pixel, int):
@@ -241,7 +241,7 @@ def _analyze_visual_elements(image: Image.Image) -> dict[str, Any]:
 
     gray_image = image.convert("L")
     edges = gray_image.filter(ImageFilter.FIND_EDGES)
-    edge_pixels = sum(1 for pixel in edges.getdata() if pixel > 50)
+    edge_pixels = sum(1 for pixel in edges.get_flattened_data() if pixel > 50)
     complexity = edge_pixels / (width * height)
 
     return {
