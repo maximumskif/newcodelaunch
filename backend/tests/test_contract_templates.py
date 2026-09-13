@@ -31,3 +31,17 @@ def test_render_contract_raises_on_missing_required_param():
 def test_render_contract_raises_on_unknown_template():
     with pytest.raises(contract_templates.UnknownTemplateError):
         contract_templates.render_contract("does_not_exist", {})
+
+
+def test_render_contract_rejects_non_dict_parameters_instead_of_crashing():
+    # Regression: a list containing the required param names as strings
+    # (e.g. ["TOKEN_NAME", "TOKEN_SYMBOL", "TOKEN_DECIMALS", "TOKEN_SUPPLY"])
+    # passed the old `name not in parameters` check (list membership, not
+    # dict-key membership) without being a dict, then crashed `.items()`
+    # with an unhandled AttributeError — reachable via the unauthenticated
+    # /api/contracts/compile route.
+    with pytest.raises(contract_templates.MissingParametersError):
+        contract_templates.render_contract(
+            "erc20_basic",
+            ["TOKEN_NAME", "TOKEN_SYMBOL", "TOKEN_DECIMALS", "TOKEN_SUPPLY"],
+        )

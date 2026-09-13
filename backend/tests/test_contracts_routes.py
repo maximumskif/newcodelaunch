@@ -36,6 +36,22 @@ def _make_deployment(user_id: str, transaction_hash: str) -> ContractDeployment:
     return deployment
 
 
+def test_compile_rejects_a_non_dict_parameters_instead_of_crashing(app, client):
+    # Regression: a list containing the required param names as strings
+    # passed render_contract()'s old membership check without being a dict,
+    # then crashed on `.items()` with an unhandled 500 — reachable with no
+    # authentication at all.
+    with app.app_context():
+        response = client.post(
+            "/api/contracts/compile",
+            json={
+                "template_id": "erc20_basic",
+                "parameters": ["TOKEN_NAME", "TOKEN_SYMBOL", "TOKEN_DECIMALS", "TOKEN_SUPPLY"],
+            },
+        )
+        assert response.status_code == 400
+
+
 def test_list_deployments_only_returns_the_authenticated_users_own(app, client):
     with app.app_context():
         user_a = _make_user("0xUserAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")

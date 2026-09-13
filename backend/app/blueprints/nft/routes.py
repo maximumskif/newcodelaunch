@@ -2,6 +2,7 @@ from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...services import ai_traits, ipfs, nft_collections, nft_generation, projects
+from ...validation import str_field
 
 nft_bp = Blueprint("nft", __name__)
 
@@ -10,7 +11,7 @@ nft_bp = Blueprint("nft", __name__)
 @jwt_required()
 def create_collection():
     data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    name = str_field(data, "name")
     if not name:
         return jsonify(error="name is required"), 400
 
@@ -65,7 +66,7 @@ def delete_collection(collection_id):
 @jwt_required()
 def add_layer(collection_id):
     data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    name = str_field(data, "name")
     if not name:
         return jsonify(error="name is required"), 400
 

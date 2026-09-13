@@ -4,8 +4,8 @@ from app.models.user import Chain, User
 from app.services import blockchain, contracts
 
 
-def _make_user():
-    user = User(wallet_address="0xabc0000000000000000000000000000000000a", chain=Chain.EVM)
+def _make_user(wallet_address: str = "0xabc0000000000000000000000000000000000a"):
+    user = User(wallet_address=wallet_address, chain=Chain.EVM)
     _db.session.add(user)
     _db.session.commit()
     return user
@@ -67,3 +67,46 @@ def test_record_deployment_still_rejects_an_unconfirmed_transaction(app, monkeyp
             pass
 
         assert ContractDeployment.query.filter_by(transaction_hash="0xNeverSucceeded").count() == 0
+
+
+def test_record_deployment_rejects_a_transaction_hash_already_recorded_by_a_different_user(app, monkeypatch):
+    # Regression: the idempotency check above was scoped only by
+    # transaction_hash, not by user — since a transaction hash is public
+    # (visible on any block explorer), a second user could submit a hash
+    # they merely observed (never deployed themselves) and get back, and
+    # silently link into their own project, a deployment row that actually
+    # belongs to a different user.
+    with app.app_context():
+        user_a = _make_user("0xaaa0000000000000000000000000000000000a")
+        user_b = _make_user("0xbbb0000000000000000000000000000000000b")
+
+        monkeypatch.setattr(
+            blockchain,
+            "get_transaction_status",
+            lambda network, tx_hash: {"status": "success", "gas_used": 21000, "gas_price": 1_000_000_000},
+        )
+
+        shared_kwargs = dict(
+            template_id="erc20_basic",
+            network="sepolia",
+            contract_address="0xContractAddress",
+            transaction_hash="0xObservedPubliclyOnAnExplorer",
+            deployer_address="0xDeployerAddress",
+            parameters={},
+        )
+
+        contracts.record_deployment(user_id=user_a.id, **shared_kwargs)
+
+        try:
+            contracts.record_deployment(user_id=user_b.id, **shared_kwargs)
+            assert False, "expected a ValueError — this transaction belongs to a different user"
+        except ValueError:
+            pass
+
+        # Still exactly one row, owned by user_a — user_b's attempt must not
+        # have been handed back someone else's row nor inserted a new one
+        # (which the unique constraint would reject anyway).
+        deployment = ContractDeployment.query.filter_by(
+            transaction_hash="0xObservedPubliclyOnAnExplorer"
+        ).one()
+        assert deployment.user_id == user_a.id

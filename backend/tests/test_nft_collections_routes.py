@@ -5,6 +5,7 @@ from flask_jwt_extended import create_access_token
 from app.extensions import db as _db
 from app.models.candy_machine import CandyMachineDeployment
 from app.models.nft import NFTCollection, NFTLayer, NFTTrait
+from app.models.project import Project, ProjectType
 from app.models.user import Chain, User
 
 
@@ -46,6 +47,19 @@ def _make_collection(upload_folder: str, user_id: str) -> tuple[NFTCollection, N
     _db.session.add(trait)
     _db.session.commit()
     return collection, layer, trait
+
+
+def test_create_collection_rejects_a_non_string_name_instead_of_crashing(app, client, tmp_path):
+    # Regression: name was read as `(data.get("name") or "").strip()` — a
+    # truthy non-string JSON value (e.g. an int) is not caught by `or ""`,
+    # so `.strip()` raised an unhandled 500 instead of a clean 400.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+
+        response = client.post("/api/nft/collections", json={"name": 123}, headers=_auth_header(user))
+
+        assert response.status_code == 400
 
 
 def test_update_trait_renames_and_reweights(app, client, tmp_path):
@@ -263,6 +277,32 @@ def test_delete_collection_rejects_when_a_candy_machine_was_launched_from_it(app
                 creator_wallet="CreatorWalletAddress",
             )
         )
+        _db.session.commit()
+
+        response = client.delete(f"/api/nft/collections/{collection.id}", headers=_auth_header(user))
+
+        assert response.status_code == 409
+        assert _db.session.get(NFTCollection, collection.id) is not None
+
+
+def test_delete_collection_rejects_when_a_project_links_to_it(app, client, tmp_path):
+    # Regression: nft_collections.delete_collection() used to only guard against
+    # a linked CandyMachineDeployment, not a linked Project. projects.nft_collection_id
+    # has no ondelete clause, so on Postgres (which enforces FKs, unlike this test's
+    # SQLite DB) deleting a collection still linked to a Project raised a raw
+    # IntegrityError/500 instead of a clean 409.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        collection, _, _ = _make_collection(str(tmp_path), user.id)
+        project = Project(
+            user_id=user.id,
+            name="Linked Project",
+            project_type=ProjectType.NFT_COLLECTION,
+            chain="solana",
+            nft_collection_id=collection.id,
+        )
+        _db.session.add(project)
         _db.session.commit()
 
         response = client.delete(f"/api/nft/collections/{collection.id}", headers=_auth_header(user))

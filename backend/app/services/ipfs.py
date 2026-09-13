@@ -62,12 +62,15 @@ def _auth_headers() -> dict[str, str]:
 
 
 def upload_file(file_bytes: bytes, filename: str) -> dict[str, Any]:
-    response = requests.post(
-        f"{PINATA_BASE_URL}/pinning/pinFileToIPFS",
-        files={"file": (filename, file_bytes)},
-        headers=_auth_headers(),
-        timeout=60,
-    )
+    try:
+        response = requests.post(
+            f"{PINATA_BASE_URL}/pinning/pinFileToIPFS",
+            files={"file": (filename, file_bytes)},
+            headers=_auth_headers(),
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise IPFSUploadError(f"Pinata file upload request failed: {exc}") from exc
     if response.status_code != 200:
         raise IPFSUploadError(f"Pinata file upload failed ({response.status_code}): {response.text}")
 
@@ -86,12 +89,15 @@ def upload_json(data: dict[str, Any], filename: str) -> dict[str, Any]:
         "pinataContent": data,
         "pinataMetadata": {"name": filename},
     }
-    response = requests.post(
-        f"{PINATA_BASE_URL}/pinning/pinJSONToIPFS",
-        headers={**_auth_headers(), "Content-Type": "application/json"},
-        data=json.dumps(payload),
-        timeout=30,
-    )
+    try:
+        response = requests.post(
+            f"{PINATA_BASE_URL}/pinning/pinJSONToIPFS",
+            headers={**_auth_headers(), "Content-Type": "application/json"},
+            data=json.dumps(payload),
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise IPFSUploadError(f"Pinata JSON upload request failed: {exc}") from exc
     if response.status_code != 200:
         raise IPFSUploadError(f"Pinata JSON upload failed ({response.status_code}): {response.text}")
 

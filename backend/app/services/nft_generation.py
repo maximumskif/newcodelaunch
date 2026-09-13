@@ -56,17 +56,30 @@ def generate_collection(collection: NFTCollection, count: int, upload_folder: st
     output_dir = os.path.join(upload_folder, "generated", collection.id)
     os.makedirs(output_dir, exist_ok=True)
 
-    used_combinations: set[tuple[str, ...]] = set()
+    # Continue after whatever's already been generated, rather than always
+    # restarting at 1 — a second generate_collection() call used to reuse
+    # earlier items' token_index (and therefore their on-disk filename,
+    # "generated/<collection_id>/<token_index>.png"), silently overwriting
+    # an earlier item's image with a new one while its DB row's `attributes`
+    # kept describing the now-destroyed original. Existing items' attribute
+    # combinations are also seeded into `used_combinations` below so the
+    # dedup guarantee holds across calls, not just within one.
+    existing_items = collection.items
+    start_index = max((item.token_index for item in existing_items), default=0)
+    used_combinations: set[tuple[tuple[str, str], ...]] = {
+        tuple((attr["trait_type"], attr["value"]) for attr in item.attributes) for item in existing_items
+    }
     items: list[NFTGeneratedItem] = []
 
-    for token_index in range(1, count + 1):
+    for offset in range(1, count + 1):
+        token_index = start_index + offset
         selection = None
         for _ in range(MAX_UNIQUE_ATTEMPTS_PER_ITEM):
             candidate = [
                 random.choices(layer.traits, weights=[t.rarity_weight for t in layer.traits], k=1)[0]
                 for layer in collection.layers
             ]
-            signature = tuple(trait.id for trait in candidate)
+            signature = tuple((layer.name, trait.name) for layer, trait in zip(collection.layers, candidate))
             if signature not in used_combinations:
                 selection = candidate
                 used_combinations.add(signature)

@@ -21,6 +21,7 @@ from werkzeug.utils import secure_filename
 from ..extensions import db
 from ..models.candy_machine import CandyMachineDeployment
 from ..models.nft import NFTCollection, NFTGeneratedItem, NFTLayer, NFTTrait
+from ..models.project import Project
 from . import ipfs
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "webp"}
@@ -170,6 +171,17 @@ def delete_collection(collection: NFTCollection, upload_folder: str) -> None:
         raise ConflictError(
             "This collection already has a Candy Machine launched from it and can't be deleted"
         )
+
+    # Same reasoning for a Project that links to this collection —
+    # projects.nft_collection_id has no ondelete clause, so deleting the
+    # collection out from under a linked Project would raise a raw
+    # IntegrityError on Postgres (the real deploy target; SQLite doesn't
+    # enforce foreign keys by default, which is why this was invisible in
+    # every dev/test run against it so far). Unlink first via the project
+    # if you actually want to delete both.
+    has_linked_project = Project.query.filter_by(nft_collection_id=collection.id).first() is not None
+    if has_linked_project:
+        raise ConflictError("This collection is linked to a project and can't be deleted directly")
 
     for relative_dir in (os.path.join("traits", collection.id), os.path.join("generated", collection.id)):
         shutil.rmtree(os.path.join(upload_folder, relative_dir), ignore_errors=True)

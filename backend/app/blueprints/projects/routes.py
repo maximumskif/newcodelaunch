@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...services import projects
+from ...validation import str_field
 
 projects_bp = Blueprint("projects", __name__)
 
@@ -10,7 +11,7 @@ projects_bp = Blueprint("projects", __name__)
 @jwt_required()
 def create_project():
     data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    name = str_field(data, "name")
     project_type = data.get("project_type")
     chain = data.get("chain")
 
@@ -58,7 +59,7 @@ def patch_project(project_id):
         project = projects.get_owned_project(project_id, get_jwt_identity())
         project = projects.update_project(
             project,
-            name=(data.get("name") or "").strip() or None,
+            name=str_field(data, "name") or None,
             draft_data=data.get("draft_data"),
             network=data.get("network"),
             status=data.get("status"),

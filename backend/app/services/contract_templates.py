@@ -641,6 +641,15 @@ def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, A
     if template is None:
         raise UnknownTemplateError(f"Unknown template: {template_id}")
 
+    # A caller-controlled JSON value — e.g. a list containing the required
+    # param names as strings — can pass the `name not in parameters`
+    # membership check below (list membership, not dict-key membership)
+    # without actually being a dict, and then crash `.items()` further down
+    # with an unhandled AttributeError. Both /compile and /estimate reach
+    # this function unauthenticated, so this must fail clean, not crash.
+    if not isinstance(parameters, dict):
+        raise MissingParametersError("parameters must be an object of PARAM_NAME -> value")
+
     required = [p["name"] for p in template.deployment_params if p.get("required")]
     missing = [name for name in required if name not in parameters]
     if missing:

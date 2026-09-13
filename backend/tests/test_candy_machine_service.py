@@ -97,6 +97,26 @@ def test_prepare_collection_rejects_non_positive_price(app):
             )
 
 
+def test_prepare_collection_rejects_an_out_of_range_seller_fee_bps(app):
+    # Regression: seller_fee_bps reached the sidecar (and, on-chain, the
+    # Royalties plugin) completely unvalidated — an out-of-range value
+    # (basis points must be 0-10000, i.e. 0-100%) failed on-chain instead of
+    # with a clean validation error up front.
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        _add_published_items(collection, 1)
+        with pytest.raises(candy_machine.ValidationError, match="seller_fee_bps"):
+            candy_machine.prepare_collection(
+                collection=collection,
+                network="solana_devnet",
+                creator_wallet="Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
+                price_sol=0.1,
+                go_live_date="2026-09-01T00:00:00Z",
+                seller_fee_bps=10001,
+            )
+
+
 def test_prepare_collection_rejects_collection_with_no_published_items(app):
     with app.app_context():
         user = _make_user()
@@ -286,6 +306,83 @@ def test_record_is_idempotent_for_the_same_candy_machine_address(app, monkeypatc
 
         assert first.id == second.id
         assert CandyMachineDeployment.query.filter_by(candy_machine=VALID_ADDRESS).count() == 1
+
+
+def test_record_rejects_a_malformed_go_live_date_with_a_clean_validation_error(app, monkeypatch):
+    # Regression: datetime.fromisoformat(go_live_date) used to run
+    # unguarded, after the on-chain transaction was already independently
+    # confirmed successful — a malformed value raised a plain ValueError,
+    # which mint/routes.py's `except candy_machine.ValidationError` doesn't
+    # catch (ValidationError is a stricter subclass), producing an
+    # unhandled 500 instead of a clean validation error.
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+
+        monkeypatch.setattr(
+            blockchain,
+            "get_transaction_status",
+            lambda network, tx_hash: {"status": "success", "account_keys": [VALID_ADDRESS]},
+        )
+
+        with pytest.raises(candy_machine.ValidationError):
+            candy_machine.record_candy_machine(
+                collection=collection,
+                network="solana_devnet",
+                collection_mint=OTHER_ADDRESS,
+                candy_machine=VALID_ADDRESS,
+                transaction_signatures=["5" * 88],
+                price_sol=0.1,
+                items_available=1,
+                go_live_date="not-a-real-date",
+                creator_wallet=VALID_ADDRESS,
+            )
+
+        # Nothing should have been persisted for a request that failed validation.
+        assert CandyMachineDeployment.query.filter_by(candy_machine=VALID_ADDRESS).count() == 0
+
+
+def test_record_rejects_a_candy_machine_address_already_recorded_under_a_different_owner(app, monkeypatch):
+    # Regression: the idempotency check above was scoped only by the
+    # candy_machine address, not by owner — the address is public on-chain
+    # data, so a caller who happens to submit an address already recorded
+    # under a different collection/user would get back — and could link
+    # into their own project — a deployment row that isn't theirs. Same bug
+    # class, and same fix, as contracts.record_deployment's transaction_hash
+    # check.
+    with app.app_context():
+        owner_a = _make_user()
+        collection_a = _make_collection(owner_a.id)
+
+        other_user = User(wallet_address="0xother00000000000000000000000000000000", chain=Chain.EVM)
+        _db.session.add(other_user)
+        _db.session.commit()
+        collection_b = _make_collection(other_user.id)
+
+        monkeypatch.setattr(
+            blockchain,
+            "get_transaction_status",
+            lambda network, tx_hash: {"status": "success", "account_keys": [VALID_ADDRESS, OTHER_ADDRESS]},
+        )
+
+        shared_kwargs = dict(
+            network="solana_devnet",
+            collection_mint=OTHER_ADDRESS,
+            candy_machine=VALID_ADDRESS,
+            transaction_signatures=["5" * 88],
+            price_sol=0.1,
+            items_available=1,
+            go_live_date="2026-09-01T00:00:00Z",
+            creator_wallet=VALID_ADDRESS,
+        )
+
+        candy_machine.record_candy_machine(collection=collection_a, **shared_kwargs)
+
+        with pytest.raises(candy_machine.ValidationError):
+            candy_machine.record_candy_machine(collection=collection_b, **shared_kwargs)
+
+        deployment = CandyMachineDeployment.query.filter_by(candy_machine=VALID_ADDRESS).one()
+        assert deployment.user_id == owner_a.id
 
 
 def test_prepare_collection_sends_the_sidecars_own_network_ids(app, monkeypatch):

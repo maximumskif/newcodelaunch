@@ -111,6 +111,51 @@ def test_generate_collection_requires_every_layer_to_have_a_trait(app, tmp_path)
             nft_generation.generate_collection(collection, count=1, upload_folder=upload_folder)
 
 
+def test_generate_collection_a_second_time_continues_token_index_and_does_not_overwrite(app, tmp_path):
+    with app.app_context():
+        upload_folder = str(tmp_path)
+        user = _make_user()
+        collection = _make_collection(upload_folder, user.id)  # 1 layer x 2 traits
+
+        eyes = NFTLayer(collection_id=collection.id, name="Eyes", order_index=1)
+        _db.session.add(eyes)
+        _db.session.flush()
+        for name in ("Open", "Closed", "Wink"):
+            _db.session.add(
+                NFTTrait(
+                    layer_id=eyes.id,
+                    name=name,
+                    rarity_weight=10.0,
+                    image_path=_make_trait_image(upload_folder, f"traits/eyes_{name}.png", (0, 255, 0, 255)),
+                )
+            )
+        _db.session.commit()
+        # 2 (Background) x 3 (Eyes) == 6 unique combinations available.
+
+        first_batch = nft_generation.generate_collection(collection, count=2, upload_folder=upload_folder)
+        assert {item.token_index for item in first_batch} == {1, 2}
+
+        first_item = first_batch[0]
+        first_item_path = os.path.join(upload_folder, first_item.image_path)
+        original_bytes = open(first_item_path, "rb").read()
+        original_attributes = first_item.attributes
+
+        second_batch = nft_generation.generate_collection(collection, count=2, upload_folder=upload_folder)
+
+        # Regression: token_index used to restart at 1 on every call, so the
+        # second batch would reuse the first batch's filenames and silently
+        # overwrite their images.
+        assert {item.token_index for item in second_batch} == {3, 4}
+        assert open(first_item_path, "rb").read() == original_bytes
+        assert _db.session.get(NFTGeneratedItem, first_item.id).attributes == original_attributes
+
+        # Regression: dedup used to reset per-call, so a second call could
+        # reproduce a combination the first call already used.
+        all_items = NFTGeneratedItem.query.filter_by(collection_id=collection.id).all()
+        signatures = [tuple((a["trait_type"], a["value"]) for a in item.attributes) for item in all_items]
+        assert len(signatures) == len(set(signatures)) == 4
+
+
 def test_max_possible_combinations_multiplies_across_layers(app, tmp_path):
     with app.app_context():
         upload_folder = str(tmp_path)

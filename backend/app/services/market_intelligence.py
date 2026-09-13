@@ -69,19 +69,28 @@ def get_top_tokens(limit: int = 20) -> list[dict[str, Any]]:
         # something is wrong even though raise_for_status() didn't catch it.
         raise MarketDataError(f"CoinGecko returned an unexpected response shape: {coins!r}")
 
-    result = [
-        {
-            "id": coin["id"],
-            "symbol": coin["symbol"].upper(),
-            "name": coin["name"],
-            "image": coin.get("image"),
-            "current_price": coin.get("current_price"),
-            "market_cap": coin.get("market_cap"),
-            "market_cap_rank": coin.get("market_cap_rank"),
-            "total_volume": coin.get("total_volume"),
-            "price_change_percentage_24h": coin.get("price_change_percentage_24h"),
-        }
-        for coin in coins
-    ]
+    result = []
+    for coin in coins:
+        # A well-formed list can still contain a malformed/edge-case item
+        # (a delisted token, say) missing id/symbol/name — direct indexing
+        # (coin["id"], coin["symbol"].upper()) raised an unhandled
+        # KeyError/AttributeError for exactly that case, bypassing the
+        # MarketDataError -> clean-502 handling this function otherwise
+        # provides. defi_scanner.py already defends against this the same
+        # way (.get() everywhere) for its own per-protocol shape.
+        symbol = coin.get("symbol")
+        result.append(
+            {
+                "id": coin.get("id"),
+                "symbol": symbol.upper() if isinstance(symbol, str) else symbol,
+                "name": coin.get("name"),
+                "image": coin.get("image"),
+                "current_price": coin.get("current_price"),
+                "market_cap": coin.get("market_cap"),
+                "market_cap_rank": coin.get("market_cap_rank"),
+                "total_volume": coin.get("total_volume"),
+                "price_change_percentage_24h": coin.get("price_change_percentage_24h"),
+            }
+        )
     _cache[limit] = (time.monotonic(), result)
     return result

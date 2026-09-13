@@ -86,8 +86,20 @@ def record_deployment(
     # that actually succeeded server-side must not create a second row for
     # the same on-chain deployment — same pattern (and same bug class,
     # fixed there first) as candy_machine.record_candy_machine.
+    #
+    # Scoped to the SAME user, though — a transaction_hash is a public value
+    # (visible on any block explorer), so without this check, any
+    # authenticated user could call this with a transaction_hash they merely
+    # observed (never deployed themselves) and get back — and silently link
+    # into their own project — a deployment row that actually belongs to a
+    # different user. transaction_hash is also a unique DB column, so a
+    # different user genuinely can't ever record their own row under the
+    # same hash; surface that as a clear error instead of silently handing
+    # back someone else's row.
     existing = ContractDeployment.query.filter_by(transaction_hash=transaction_hash).first()
     if existing is not None:
+        if existing.user_id != user_id:
+            raise ValueError("This transaction has already been recorded under a different account")
         return existing
 
     tx_status = blockchain.get_transaction_status(network, transaction_hash)

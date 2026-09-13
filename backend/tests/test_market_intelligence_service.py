@@ -72,6 +72,24 @@ def test_get_top_tokens_raises_a_clean_error_on_a_malformed_200(app, monkeypatch
             pass
 
 
+def test_get_top_tokens_tolerates_an_item_missing_id_or_symbol(app, monkeypatch):
+    # Regression: a well-formed list response (passes the isinstance(list)
+    # guard above) could still contain one item missing id/symbol/name —
+    # a plausible delisted/edge-case token, not just a whole-body error
+    # shape. Direct indexing (coin["id"], coin["symbol"].upper()) raised an
+    # unhandled KeyError instead of a clean MarketDataError.
+    with app.app_context():
+        _reset_cache()
+        malformed_payload = [{"current_price": 1.23, "market_cap": 100}]
+        monkeypatch.setattr(market_intelligence.requests, "get", lambda *a, **k: _FakeResponse(malformed_payload))
+
+        tokens = market_intelligence.get_top_tokens(limit=5)
+
+        assert tokens[0]["id"] is None
+        assert tokens[0]["symbol"] is None
+        assert tokens[0]["current_price"] == 1.23
+
+
 def test_get_top_tokens_caches_within_the_ttl_window(app, monkeypatch):
     with app.app_context():
         _reset_cache()

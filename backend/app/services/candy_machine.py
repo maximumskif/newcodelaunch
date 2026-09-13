@@ -167,6 +167,12 @@ def prepare_collection(
     the creator's wallet has signed and sent every transaction from both
     steps, via `record_candy_machine`."""
     _validate_launch_inputs(collection, network, price_sol)
+    if not (0 <= seller_fee_bps <= 10000):
+        # 0-10000 basis points (0-100%) is the Royalties plugin's own valid
+        # range on the sidecar — validated here too so a creator finds out
+        # before paying gas for the collection transaction, not after a
+        # confusing on-chain failure.
+        raise ValidationError("seller_fee_bps must be between 0 and 10000")
 
     collection_metadata = ipfs.upload_json(
         {
@@ -239,6 +245,17 @@ def record_candy_machine(
         raise ValidationError(f"network must be one of: {', '.join(SOLANA_NETWORKS)}")
     if not transaction_signatures:
         raise ValidationError("transaction_signatures must include at least one signature")
+    try:
+        parsed_go_live_date = datetime.fromisoformat(go_live_date)
+    except (TypeError, ValueError) as exc:
+        # Validated up front, before the on-chain re-verification call below —
+        # a plain ValueError here used to reach mint/routes.py's
+        # `except candy_machine.ValidationError`, which doesn't catch it,
+        # producing an unhandled 500 *after* a real successful transaction
+        # had already been independently confirmed. Same "fail fast on bad
+        # input before doing real work" principle prepare_candy_machine_step
+        # already applies to price/item-count.
+        raise ValidationError(f"go_live_date must be a valid ISO 8601 datetime: {exc}") from exc
 
     last_signature = transaction_signatures[-1]
     tx_status = blockchain.get_transaction_status(network, last_signature)
@@ -263,8 +280,17 @@ def record_candy_machine(
     # actually succeeded server-side must not create a second row for the same
     # on-chain candy_machine — return the existing record rather than relying on
     # the DB's unique constraint to reject it as an unhandled 500.
+    #
+    # Scoped to the SAME owner, though (same reasoning, and same bug class,
+    # as contracts.record_deployment's transaction_hash check) — a Candy
+    # Machine's on-chain address is public, so without this check, a caller
+    # who happens to submit an address already recorded under a different
+    # collection/user would get back — and could link into their own
+    # project — a deployment row that isn't theirs.
     existing = CandyMachineDeployment.query.filter_by(candy_machine=candy_machine).first()
     if existing is not None:
+        if existing.user_id != collection.user_id:
+            raise ValidationError("This candy_machine has already been recorded under a different account")
         return existing
 
     deployment = CandyMachineDeployment(
@@ -275,7 +301,7 @@ def record_candy_machine(
         candy_machine=candy_machine,
         price_sol=price_sol,
         items_available=items_available,
-        go_live_date=datetime.fromisoformat(go_live_date),
+        go_live_date=parsed_go_live_date,
         creator_wallet=creator_wallet,
         transaction_signatures=transaction_signatures,
         explorer_url=_explorer_url(network, candy_machine),

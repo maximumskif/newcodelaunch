@@ -13,6 +13,7 @@ from ...services.auth import (
     normalize_address,
     verify_signature,
 )
+from ...validation import str_field
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -23,8 +24,8 @@ def _nonce_request_key() -> str:
     flood a single wallet's row count in wallet_nonces (only bounded by
     prune-nonces' TTL cleanup, not by request volume)."""
     data = request.get_json(silent=True) or {}
-    wallet_address = (data.get("wallet_address") or "").strip().lower()
-    chain = (data.get("chain") or "").strip().lower()
+    wallet_address = str_field(data, "wallet_address").lower()
+    chain = str_field(data, "chain").lower()
     if wallet_address and chain:
         return f"{chain}:{wallet_address}"
     # Malformed request with no wallet_address/chain to key on — fall back
@@ -38,8 +39,8 @@ def _nonce_request_key() -> str:
 @limiter.limit("10/minute", key_func=_nonce_request_key)
 def request_nonce():
     data = request.get_json(silent=True) or {}
-    wallet_address = (data.get("wallet_address") or "").strip()
-    chain = (data.get("chain") or "").strip().lower()
+    wallet_address = str_field(data, "wallet_address")
+    chain = str_field(data, "chain").lower()
 
     if not wallet_address or chain not in Chain.ALL:
         return jsonify(error="wallet_address and a valid chain ('evm' or 'solana') are required"), 400
@@ -57,10 +58,10 @@ def request_nonce():
 @limiter.limit("20/minute")
 def verify():
     data = request.get_json(silent=True) or {}
-    wallet_address = (data.get("wallet_address") or "").strip()
-    chain = (data.get("chain") or "").strip().lower()
-    signature = (data.get("signature") or "").strip()
-    nonce = (data.get("nonce") or "").strip()
+    wallet_address = str_field(data, "wallet_address")
+    chain = str_field(data, "chain").lower()
+    signature = str_field(data, "signature")
+    nonce = str_field(data, "nonce")
 
     if not all([wallet_address, chain, signature, nonce]) or chain not in Chain.ALL:
         return jsonify(error="wallet_address, chain, signature and nonce are required"), 400

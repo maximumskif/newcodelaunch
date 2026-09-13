@@ -25,3 +25,20 @@ def test_nonce_endpoint_falls_back_to_ip_key_when_wallet_address_missing(client)
     # request into a single global bucket.
     response = client.post("/api/auth/nonce", json={})
     assert response.status_code == 400
+
+
+def test_nonce_endpoint_rejects_non_string_fields_instead_of_crashing(client):
+    # Regression: wallet_address/chain used to be read as `(data.get(x) or
+    # "").strip()` — a truthy non-string JSON value (e.g. an int) is not
+    # caught by `or ""`, so `.strip()` raised an unhandled 500. This is
+    # unauthenticated attack surface (no token required to reach it).
+    response = client.post("/api/auth/nonce", json={"wallet_address": 12345, "chain": "evm"})
+    assert response.status_code == 400
+
+
+def test_verify_endpoint_rejects_non_string_fields_instead_of_crashing(client):
+    response = client.post(
+        "/api/auth/verify",
+        json={"wallet_address": 12345, "chain": "evm", "signature": ["not", "a", "string"], "nonce": {}},
+    )
+    assert response.status_code == 400
