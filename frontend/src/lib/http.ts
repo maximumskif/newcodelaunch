@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api'
+// `||`, not `??` — see the identical comment in lib/solanaWallets.tsx: an
+// unset Vite build arg bakes in an empty string, not undefined.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
 export class ApiError extends Error {
   status: number

@@ -64,6 +64,26 @@ export function useDeployTemplate() {
     if (hasStartedRecordingRef.current) return
     hasStartedRecordingRef.current = true
 
+    // viem's TransactionReceipt resolves normally (doesn't throw) even for
+    // an on-chain revert — only `.status` distinguishes it. Without this
+    // check, a reverted deployment (out of gas, constructor revert) still
+    // satisfied the truthy `receipt` check above and proceeded straight to
+    // "recording…"; the backend's own independent re-verification does
+    // reject it eventually, but only after the user watches "confirming…"
+    // then "recording…" first. Same on-chain-failure-doesn't-throw pattern
+    // already guarded against on the Solana side (see MintLaunchPage.tsx's
+    // `.value.err` check) — fail fast here the same way.
+    if (receipt.status === 'reverted') {
+      // Synchronizing with the external chain receipt (wagmi's
+      // useWaitForTransactionReceipt), not deriving from a prop this
+      // component owns — there's no render-time alternative to reacting
+      // when a real on-chain result arrives.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setError('Deployment transaction reverted on-chain')
+      setStep('error')
+      return
+    }
+
     let cancelled = false
     setStep('recording')
 

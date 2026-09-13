@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { Button } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/Dialog'
 import { Dropzone } from '../../components/ui/Dropzone'
 import { IconChevronDown, IconPlus, IconSparkles, IconSpinner, IconTrash } from '../../components/ui/icons'
 import { aiTraitsApi, nftApi, uploadUrl, type ImageAnalysis, type NFTLayer, type NFTTrait } from '../../lib/nftApi'
@@ -47,13 +48,24 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
 
   const [isEditingName, setIsEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(layer.name)
-  useEffect(() => setNameDraft(layer.name), [layer.name])
+  // Keeps nameDraft in sync with the layer.name prop without a useEffect —
+  // this is React's own recommended pattern for "adjust state when a prop
+  // changes" (https://react.dev/learn/you-might-not-need-an-effect):
+  // comparing against the last-seen prop value during render and adjusting
+  // state right then triggers an immediate re-render before the browser
+  // paints, instead of the extra effect-triggered render an effect would add.
+  const [syncedLayerName, setSyncedLayerName] = useState(layer.name)
+  if (layer.name !== syncedLayerName) {
+    setSyncedLayerName(layer.name)
+    setNameDraft(layer.name)
+  }
 
   const [editingTrait, setEditingTrait] = useState<NFTTrait | null>(null)
   const [editName, setEditName] = useState('')
   const [editRarity, setEditRarity] = useState(50)
   const [isSavingTrait, setIsSavingTrait] = useState(false)
   const [isDeletingTrait, setIsDeletingTrait] = useState(false)
+  const [isConfirmingTraitDelete, setIsConfirmingTraitDelete] = useState(false)
 
   const previewUrl = useMemo(() => (pendingFile ? URL.createObjectURL(pendingFile) : null), [pendingFile])
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
@@ -139,6 +151,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
     setError(null)
     try {
       await nftApi.deleteTrait(token, editingTrait.id)
+      setIsConfirmingTraitDelete(false)
       setEditingTrait(null)
       onTraitAdded()
     } catch (err) {
@@ -183,7 +196,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
   }
 
   return (
-    <div className="rounded-md border border-border bg-surface p-3">
+    <div className="rounded-lg border border-border bg-surface p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         {isEditingName ? (
           <input
@@ -266,7 +279,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
               key={trait.id}
               onClick={() => startEditTrait(trait)}
               title={`${trait.name} · weight ${trait.rarity_weight} · click to edit`}
-              className="overflow-hidden rounded-md border border-border bg-canvas text-left transition-shadow duration-150 hover:ring-1 hover:ring-accent-400/40"
+              className="overflow-hidden rounded-lg border border-border bg-canvas text-left transition-all duration-150 hover:-translate-y-0.5 hover:ring-1 hover:ring-accent-400/40"
             >
               <img src={uploadUrl(trait.image_path)} alt={trait.name} className="aspect-square w-full object-contain" />
               <p className="truncate px-1 py-0.5 text-[9px] text-ink-faint">{trait.name}</p>
@@ -318,8 +331,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
             <Button
               variant="danger"
               size="sm"
-              onClick={handleDeleteTrait}
-              isLoading={isDeletingTrait}
+              onClick={() => setIsConfirmingTraitDelete(true)}
               aria-label="Delete trait"
             >
               <IconTrash className="h-3 w-3" /> Delete
@@ -330,6 +342,16 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={isConfirmingTraitDelete}
+        title={`Delete trait "${editingTrait?.name}"?`}
+        description="This permanently deletes the trait's image and rarity weight. This can't be undone."
+        confirmLabel="Delete trait"
+        isConfirming={isDeletingTrait}
+        onConfirm={handleDeleteTrait}
+        onCancel={() => setIsConfirmingTraitDelete(false)}
+      />
 
       {isFormOpen && (
         <div className="rounded-md border border-border bg-canvas p-2">

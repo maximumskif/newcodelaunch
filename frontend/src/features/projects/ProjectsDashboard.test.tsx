@@ -117,6 +117,25 @@ describe('ProjectsDashboard', () => {
     expect(await screen.findByText('Archived')).toBeInTheDocument()
   })
 
+  it('shows an error instead of silently failing when archiving fails', async () => {
+    // Regression: handleArchive had no try/catch at all — a failed request
+    // was an unhandled promise rejection with zero user-visible feedback.
+    mockSignedIn()
+    const draftProject: Project = { ...baseProject, project_type: 'token', status: 'draft', candy_machine_deployment: null }
+    vi.mocked(projectsApi.list).mockResolvedValue({ projects: [draftProject] })
+    vi.mocked(projectsApi.update).mockRejectedValue(new Error('Session expired'))
+
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await screen.findByText('My Drop')
+    await user.click(screen.getByText('Archive'))
+
+    expect(await screen.findByText('Session expired')).toBeInTheDocument()
+    // Status must not have silently changed.
+    expect(screen.getByText('Draft')).toBeInTheDocument()
+  })
+
   it('does not delete a project just from clicking the trash icon — asks for confirmation first', async () => {
     // Regression coverage for the confirm-dialog gate added on top of what
     // used to be an immediate, un-confirmed delete.

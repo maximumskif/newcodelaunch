@@ -1,7 +1,7 @@
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import bs58 from 'bs58'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 
 import { Badge } from '../../components/ui/Badge'
@@ -44,6 +44,42 @@ export function WalletConnect() {
       setIsAuthenticating(false)
     }
   }
+
+  // The JWT session is established once, at sign-in, and never re-validated
+  // against the currently connected wallet — nothing else in this app
+  // watches for the connected address changing. Without this, switching
+  // accounts in MetaMask/Phantom (without disconnecting) leaves every
+  // deploy/launch flow signing with the new wallet while still recording
+  // that action under the old wallet's JWT identity, with no warning. Force
+  // a sign-out the moment the connected wallet for the session's own chain
+  // no longer matches who's actually signed in, so the user has to
+  // re-authenticate (and every authenticated call fails safely in the
+  // meantime) rather than silently drifting.
+  useEffect(() => {
+    if (!user || !accessToken) return
+    if (user.chain === 'evm' && address && address.toLowerCase() !== user.wallet_address.toLowerCase()) {
+      // This IS the "synchronize with an external system" case the rule's
+      // own guidance carves out: `address` comes from wagmi's
+      // wallet-connection state, not a prop this component owns, so
+      // there's no "derive during render" alternative — the whole point is
+      // reacting when that external system's value changes out from under
+      // an already-signed-in session.
+      logout()
+      // oxlint-disable-next-line react/set-state-in-effect
+      setError('Your connected wallet changed — please sign in again.')
+    }
+  }, [address, user, accessToken, logout])
+
+  useEffect(() => {
+    if (!user || !accessToken) return
+    if (user.chain === 'solana' && publicKey && publicKey.toBase58() !== user.wallet_address) {
+      // Same reasoning as the EVM effect above, for the Solana
+      // wallet-adapter's publicKey.
+      logout()
+      // oxlint-disable-next-line react/set-state-in-effect
+      setError('Your connected wallet changed — please sign in again.')
+    }
+  }, [publicKey, user, accessToken, logout])
 
   const handleConnectEvm = () => {
     // Prefer the plain injected connector when a wallet is already injected

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -268,5 +268,67 @@ describe('MintLaunchPage project linking', () => {
         expect.objectContaining({ project_id: undefined }),
       ),
     )
+  })
+})
+
+describe('MintLaunchPage collection-fetch race', () => {
+  it('ignores a stale response after navigating to a different collection before it resolves', async () => {
+    // Regression: the effect fetching the collection/items had no
+    // cancellation guard against collectionId changing mid-flight — an
+    // out-of-order response could overwrite state with the wrong
+    // collection's data, and items_available (sent to candyMachineApi.create
+    // when launching) is computed from that same state.
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: null,
+      sendTransaction: vi.fn(),
+    } as unknown as ReturnType<typeof useWallet>)
+
+    const collectionTwo: NFTCollection = { ...collection, id: 'col-2', name: 'Collection Two' }
+
+    let resolveColOne!: (value: { collection: NFTCollection }) => void
+    const colOnePromise = new Promise<{ collection: NFTCollection }>((resolve) => {
+      resolveColOne = resolve
+    })
+
+    vi.mocked(nftApi.getCollection).mockImplementation(async (_token, id) => {
+      if (id === 'col-1') return colOnePromise
+      return { collection: collectionTwo }
+    })
+    vi.mocked(nftApi.listItems).mockImplementation(async (_token, id) => ({
+      items: id === 'col-1' ? [publishedItem] : [{ ...publishedItem, id: 'item-2' }],
+    }))
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/mint?collection=col-1']}>
+        <Routes>
+          <Route
+            path="/mint"
+            element={
+              <>
+                <Link to="/mint?collection=col-2">Go to collection two</Link>
+                <MintLaunchPage />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // col-1's fetch is still in flight (deliberately held open above).
+    // Navigate to col-2 before it resolves — same route, so MintLaunchPage
+    // stays mounted and only its collectionId search param changes.
+    await user.click(screen.getByText('Go to collection two'))
+    expect(await screen.findByText('Collection Two')).toBeInTheDocument()
+
+    // Now let the stale col-1 response arrive late.
+    resolveColOne({ collection })
+
+    // Give the resolved (and, pre-fix, un-guarded) promise a chance to run
+    // its .then() before asserting nothing changed.
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(screen.getByText('Collection Two')).toBeInTheDocument()
+    expect(screen.queryByText('Test Collection')).not.toBeInTheDocument()
   })
 })

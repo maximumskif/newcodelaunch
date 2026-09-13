@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { Card } from '../../components/ui/Card'
@@ -43,17 +43,38 @@ export function NFTGeneratorPage() {
     }
   }
 
+  // Tracks the most recently *requested* collection id, not the currently
+  // selected/rendered one — a ref (not state) because it's read/written
+  // synchronously inside async callbacks, not something that should itself
+  // trigger a re-render. Without this, an out-of-order response (e.g.
+  // clicking a different collection in the sidebar before the previous
+  // one's fetch resolves) could overwrite `collection` with the wrong
+  // collection's data while `selectedId`/the sidebar highlight already show
+  // the newer one — the exact bug class already fixed in MintLaunchPage.tsx.
+  // A ref-based "is this still the latest request" check (rather than a
+  // per-effect `cancelled` closure) is used here because refreshCollection
+  // is also called directly (not just from the effect below) after
+  // layer/trait edits.
+  const latestCollectionRequestRef = useRef<string | null>(null)
+
   const refreshCollection = async (token: string, id: string) => {
+    latestCollectionRequestRef.current = id
     setIsLoadingCollection(true)
     try {
       const { collection: fetched } = await nftApi.getCollection(token, id)
+      if (latestCollectionRequestRef.current !== id) return
       setCollection(fetched)
     } finally {
-      setIsLoadingCollection(false)
+      if (latestCollectionRequestRef.current === id) setIsLoadingCollection(false)
     }
   }
 
   useEffect(() => {
+    // Fetching data on an external dependency (accessToken) change is the
+    // legitimate "synchronize with an external system" case this rule's own
+    // guidance carves out; refreshCollections' setIsLoadingCollections(true)
+    // ahead of the request is the standard fetch-effect idiom.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (accessToken) void refreshCollections(accessToken)
   }, [accessToken])
 
@@ -74,6 +95,10 @@ export function NFTGeneratorPage() {
   }, [accessToken, projectId])
 
   useEffect(() => {
+    // Same reasoning as the refreshCollections effect above: fetching (or
+    // clearing, when there's nothing to fetch) on an external dependency
+    // change.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (accessToken && selectedId) void refreshCollection(accessToken, selectedId)
     else setCollection(null)
   }, [accessToken, selectedId])

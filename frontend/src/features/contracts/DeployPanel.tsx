@@ -41,16 +41,22 @@ export function DeployPanel({ title, description, templateType, projectId, prese
   const [hasRestoredDraft, setHasRestoredDraft] = useState(!projectId)
   const [project, setProject] = useState<Project | null>(null)
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
+  // Re-arms the confirmation every time the network changes (so switching
+  // straight from one mainnet to another still requires a fresh tick),
+  // without a useEffect — React's own recommended "adjust state when a prop
+  // changes" pattern (https://react.dev/learn/you-might-not-need-an-effect):
+  // comparing against the last-seen network during render and adjusting
+  // state right then avoids the extra effect-triggered render an effect
+  // would add.
+  const [confirmedForNetwork, setConfirmedForNetwork] = useState(network)
+  if (network !== confirmedForNetwork) {
+    setConfirmedForNetwork(network)
+    setMainnetConfirmed(false)
+  }
 
   const { deploy, step, error, deployment, txHash } = useDeployTemplate()
 
   const isMainnet = isMainnetNetwork(network)
-
-  // Re-arm the confirmation every time the network changes so switching
-  // straight from one mainnet to another still requires a fresh tick.
-  useEffect(() => {
-    setMainnetConfirmed(false)
-  }, [network])
 
   useEffect(() => {
     contractsApi.listTemplates(templateType).then(({ templates: fetched }) => {
@@ -178,7 +184,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
             <button
               key={template.id}
               onClick={() => setSelectedId(template.id)}
-              className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors duration-150 ${
+              className={`w-full rounded-lg border px-3.5 py-2.5 text-left text-sm transition-colors duration-150 ${
                 template.id === selectedId ? 'border-accent-500 bg-accent-500/10' : 'border-border hover:bg-surface-hover'
               }`}
             >

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -68,7 +68,7 @@ describe('trait edit', () => {
     expect(props.onTraitAdded).toHaveBeenCalled()
   })
 
-  it('the edit panel\'s Delete button calls deleteTrait', async () => {
+  it('the edit panel\'s Delete button asks for confirmation before calling deleteTrait', async () => {
     const user = userEvent.setup()
     vi.mocked(nftApi.deleteTrait).mockResolvedValue(undefined)
     const props = renderLayerCard()
@@ -76,8 +76,27 @@ describe('trait edit', () => {
     await user.click(screen.getByAltText('Blue'))
     await user.click(screen.getByLabelText('Delete trait'))
 
+    // Regression: this used to delete immediately with zero confirmation,
+    // unlike layer/collection delete added in the same pass.
+    expect(nftApi.deleteTrait).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete trait' }))
+
     await waitFor(() => expect(nftApi.deleteTrait).toHaveBeenCalledWith('tok', 'trait-1'))
     expect(props.onTraitAdded).toHaveBeenCalled()
+  })
+
+  it('cancelling the confirmation leaves the trait untouched', async () => {
+    const user = userEvent.setup()
+    renderLayerCard()
+
+    await user.click(screen.getByAltText('Blue'))
+    await user.click(screen.getByLabelText('Delete trait'))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(nftApi.deleteTrait).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

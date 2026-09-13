@@ -55,14 +55,28 @@ export function ProjectsDashboard() {
   }
 
   useEffect(() => {
+    // Fetching data on an external dependency (accessToken) change is the
+    // legitimate "synchronize with an external system" case this rule's own
+    // guidance carves out; refresh's setIsLoading(true) ahead of the
+    // request is the standard fetch-effect idiom.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (accessToken) void refresh(accessToken)
   }, [accessToken])
 
   const handleArchive = async (project: Project) => {
     if (!accessToken) return
+    setError(null)
     const nextStatus = project.status === 'archived' ? 'draft' : 'archived'
-    const { project: updated } = await projectsApi.update(accessToken, project.id, { status: nextStatus })
-    setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    try {
+      const { project: updated } = await projectsApi.update(accessToken, project.id, { status: nextStatus })
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch (err) {
+      // Regression: this used to have no try/catch at all — a failed
+      // request (expired session, network blip, 5xx) was an unhandled
+      // promise rejection with zero feedback: no error shown, the button
+      // just silently did nothing.
+      setError(err instanceof Error ? err.message : 'Could not update project')
+    }
   }
 
   const handleConfirmDelete = async () => {
@@ -126,7 +140,7 @@ export function ProjectsDashboard() {
                 const Icon = meta.icon
                 const linked = linkedRecordLabel(project)
                 return (
-                  <Card key={project.id} padding="md" className="flex flex-col gap-3">
+                  <Card key={project.id} padding="md" interactive className="flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Icon className="h-4 w-4 shrink-0 text-ink-faint" />

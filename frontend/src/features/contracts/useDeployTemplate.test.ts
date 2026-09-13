@@ -95,4 +95,53 @@ describe('useDeployTemplate', () => {
     await waitFor(() => expect(result.current.step).toBe('done'))
     expect(result.current.deployment?.id).toBe('dep-1')
   })
+
+  it('goes straight to "error" on a reverted receipt instead of proceeding to record it', async () => {
+    // Regression: the recording effect only checked `!receipt`, never
+    // `receipt.status` — viem's TransactionReceipt resolves normally
+    // (doesn't throw) even for an on-chain revert, so a reverted deployment
+    // (out of gas, constructor revert) still satisfied the truthy check and
+    // proceeded to "recording…"/createDeployment(), only failing later once
+    // the backend's own independent re-verification rejected it. Same
+    // on-chain-failure-doesn't-throw bug class already guarded against on
+    // the Solana side (MintLaunchPage.tsx's `.value.err` check).
+    vi.mocked(useAccount).mockReturnValue({
+      address: '0xDeployer000000000000000000000000000000',
+    } as unknown as ReturnType<typeof useAccount>)
+    vi.mocked(useChainId).mockReturnValue(11155111)
+    vi.mocked(useSwitchChain).mockReturnValue({
+      switchChainAsync: vi.fn(),
+    } as unknown as ReturnType<typeof useSwitchChain>)
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+
+    const deployContractAsync = vi.fn().mockResolvedValue(TX_HASH)
+    vi.mocked(useDeployContract).mockReturnValue({
+      deployContractAsync,
+    } as unknown as ReturnType<typeof useDeployContract>)
+
+    let receiptValue: unknown
+    vi.mocked(useWaitForTransactionReceipt).mockImplementation(
+      () => ({ data: receiptValue }) as unknown as ReturnType<typeof useWaitForTransactionReceipt>,
+    )
+
+    vi.mocked(contractsApi.compile).mockResolvedValue({ abi: [], bytecode: '0x00', contract_name: 'Foo' })
+    vi.mocked(contractsApi.createDeployment).mockClear()
+
+    const { result, rerender } = renderHook(() => useDeployTemplate())
+
+    await act(async () => {
+      await result.current.deploy('erc20_basic', {}, 'sepolia')
+    })
+
+    receiptValue = {
+      status: 'reverted',
+      contractAddress: null,
+      transactionHash: TX_HASH,
+    }
+    rerender()
+
+    await waitFor(() => expect(result.current.step).toBe('error'))
+    expect(result.current.error).toMatch(/reverted/i)
+    expect(contractsApi.createDeployment).not.toHaveBeenCalled()
+  })
 })

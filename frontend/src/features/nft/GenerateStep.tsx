@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '../../components/ui/Button'
@@ -48,13 +48,23 @@ export function GenerateStep({ token, collection, projectId }: Props) {
   const [previews, setPreviews] = useState<Record<string, MetadataPreview>>({})
   const [showDistribution, setShowDistribution] = useState(false)
 
+  // Same reasoning as NFTGeneratorPage.tsx's refreshCollection: a ref
+  // tracking the latest *requested* collection id, so an out-of-order
+  // response (e.g. this component re-rendering for a different collection
+  // — collection.id changing — before the previous one's listItems() call
+  // resolves) can't overwrite `items` with the wrong collection's data.
+  const latestItemsRequestRef = useRef<string | null>(null)
+
   const refreshItems = async () => {
+    const requestId = collection.id
+    latestItemsRequestRef.current = requestId
     setIsLoadingItems(true)
     try {
-      const { items: fetched } = await nftApi.listItems(token, collection.id)
+      const { items: fetched } = await nftApi.listItems(token, requestId)
+      if (latestItemsRequestRef.current !== requestId) return
       setItems(fetched)
     } finally {
-      setIsLoadingItems(false)
+      if (latestItemsRequestRef.current === requestId) setIsLoadingItems(false)
     }
   }
 
@@ -121,7 +131,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
   }
 
   return (
-    <Card>
+    <Card rounded="xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-1.5 text-lg font-medium text-ink">
@@ -177,7 +187,10 @@ export function GenerateStep({ token, collection, projectId }: Props) {
             {items.map((item) => {
               const isPublished = Boolean(item.ipfs_image_hash)
               return (
-                <div key={item.id} className="overflow-hidden rounded-md border border-border bg-canvas">
+                <div
+                  key={item.id}
+                  className="overflow-hidden rounded-xl border border-border bg-canvas transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-border-strong hover:shadow-elevated"
+                >
                   <img src={uploadUrl(item.image_path)} alt={`#${item.token_index}`} className="aspect-square w-full object-cover" />
                   <div className="p-3">
                     <div className="flex items-center justify-between">
@@ -206,7 +219,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
                       {item.attributes.slice(0, 3).map((attribute) => (
                         <span
                           key={attribute.trait_type}
-                          className="truncate rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-ink-muted"
+                          className="truncate rounded-full bg-surface-raised px-2 py-0.5 text-[10px] text-ink-muted"
                           title={`${attribute.trait_type}: ${attribute.value}`}
                         >
                           {attribute.value}

@@ -8,6 +8,13 @@ interface DialogProps {
   title: string
   description?: string
   children?: ReactNode
+  // False while a confirmed action is in flight — Escape/backdrop-click
+  // used to close the dialog unconditionally even then, which looked like
+  // it cancelled the action (the confirm button's own `disabled`/isLoading
+  // state was the only thing gated) while the request kept running
+  // underneath and completed moments later anyway. Defaults to true so
+  // every other Dialog usage is unaffected.
+  dismissible?: boolean
 }
 
 // Minimal modal — a backdrop, Escape-to-close, closes on backdrop click, and
@@ -16,25 +23,29 @@ interface DialogProps {
 // still leave the dialog) — fine for the one use case this exists for today
 // (a confirm dialog with two buttons); revisit if a future dialog has more
 // content worth trapping focus inside.
-export function Dialog({ open, onClose, title, description, children }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, dismissible = true }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && dismissible) onClose()
     }
     document.addEventListener('keydown', handleKeyDown)
     panelRef.current?.focus()
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  }, [open, onClose, dismissible])
 
   if (!open) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={dismissible ? onClose : undefined}
+        aria-hidden="true"
+      />
       <div
         ref={panelRef}
         role="dialog"
@@ -80,7 +91,7 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Dialog open={open} onClose={onCancel} title={title} description={description}>
+    <Dialog open={open} onClose={onCancel} title={title} description={description} dismissible={!isConfirming}>
       <div className="flex justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={onCancel} disabled={isConfirming}>
           {cancelLabel}

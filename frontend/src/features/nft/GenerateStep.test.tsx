@@ -40,6 +40,51 @@ const draftItem: NFTGeneratedItem = {
   ipfs_metadata_hash: null,
 }
 
+describe('GenerateStep collection-switch race', () => {
+  it('ignores a stale listItems response after the collection prop changes', async () => {
+    // Regression: refreshItems() had no guard against an out-of-order
+    // response — if `collection.id` changes (e.g. NFTGeneratorPage.tsx
+    // switching the selected collection) before a previous listItems() call
+    // resolves, the stale response could overwrite `items` with the wrong
+    // collection's items. Same bug class already fixed in MintLaunchPage.tsx
+    // and NFTGeneratorPage.tsx's refreshCollection.
+    const collectionTwo: NFTCollection = { ...collection, id: 'col-2' }
+    const itemFromCollectionOne: NFTGeneratedItem = { ...draftItem, token_index: 111 }
+    const itemFromCollectionTwo: NFTGeneratedItem = { ...draftItem, id: 'item-2', token_index: 222 }
+
+    let resolveColOne!: (value: { items: NFTGeneratedItem[] }) => void
+    const colOnePromise = new Promise<{ items: NFTGeneratedItem[] }>((resolve) => {
+      resolveColOne = resolve
+    })
+
+    vi.mocked(nftApi.listItems).mockImplementation(async (_token, id) => {
+      if (id === 'col-1') return colOnePromise
+      return { items: [itemFromCollectionTwo] }
+    })
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collection} />
+      </MemoryRouter>,
+    )
+
+    // col-1's fetch is deliberately held open. Switch to col-2 before it resolves.
+    rerender(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collectionTwo} />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('#222')).toBeInTheDocument()
+
+    // Now let the stale col-1 response arrive late.
+    resolveColOne({ items: [itemFromCollectionOne] })
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(screen.getByText('#222')).toBeInTheDocument()
+    expect(screen.queryByText('#111')).not.toBeInTheDocument()
+  })
+})
+
 describe('GenerateStep metadata preview', () => {
   beforeEach(() => {
     vi.mocked(nftApi.listItems).mockResolvedValue({ items: [draftItem] })

@@ -62,22 +62,49 @@ export function MintLaunchPage() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CandyMachineDeployment | null>(null)
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
+  // Re-arms the confirmation every time the network changes (so switching
+  // straight from one mainnet to another still requires a fresh tick),
+  // without a useEffect — React's own recommended "adjust state when a prop
+  // changes" pattern (https://react.dev/learn/you-might-not-need-an-effect):
+  // comparing against the last-seen network during render and adjusting
+  // state right then avoids the extra effect-triggered render an effect
+  // would add.
+  const [confirmedForNetwork, setConfirmedForNetwork] = useState(network)
+  if (network !== confirmedForNetwork) {
+    setConfirmedForNetwork(network)
+    setMainnetConfirmed(false)
+  }
 
   const isMainnet = isSolanaMainnet(network)
 
   useEffect(() => {
-    setMainnetConfirmed(false)
-  }, [network])
-
-  useEffect(() => {
     if (!accessToken || !collectionId) return
+    let cancelled = false
+    // Fetching data on an external dependency (collectionId) change is the
+    // legitimate "synchronize with an external system" case this rule's own
+    // guidance carves out; setIsLoading(true) ahead of the request is the
+    // standard fetch-effect idiom.
+    // oxlint-disable-next-line react/set-state-in-effect
     setIsLoading(true)
     Promise.all([nftApi.getCollection(accessToken, collectionId), nftApi.listItems(accessToken, collectionId)])
       .then(([{ collection: fetchedCollection }, { items: fetchedItems }]) => {
+        // Without this guard, an out-of-order response from a previous
+        // collectionId (e.g. navigating between two "Launch Mint Site"
+        // links without a full reload) could overwrite state with data for
+        // the wrong collection — items_available in handleLaunch below is
+        // computed from this same items state and gets sent to
+        // candyMachineApi.create(), so a stale race could record a launch
+        // with an item count that doesn't match the collection actually launched.
+        if (cancelled) return
         setCollection(fetchedCollection)
         setItems(fetchedItems)
       })
-      .finally(() => setIsLoading(false))
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [accessToken, collectionId])
 
   // Resume: show the project context bar when arriving via ?project=<id> —
@@ -237,7 +264,7 @@ export function MintLaunchPage() {
       {isLoading && <p className="text-ink-muted">Loading collection…</p>}
 
       {!isLoading && collection && (
-        <Card padding="lg" className="max-w-xl space-y-4">
+        <Card padding="lg" rounded="xl" className="max-w-xl space-y-4">
           <div>
             <h2 className="text-lg font-medium text-ink">{collection.name}</h2>
             <p className="mt-1 text-sm text-ink-muted">
