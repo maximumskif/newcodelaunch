@@ -16,14 +16,17 @@ const COLLAPSE_STORAGE_KEY = 'newcodelaunch.sidebar-collapsed'
 function NetworkSelector() {
   const { network, setNetwork } = useNetwork()
   return (
-    <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5 text-xs">
+    // overflow-x-auto + flex-nowrap: at 6 real networks this doesn't fit a
+    // phone-width screen next to the wallet-connect buttons — scrolls
+    // horizontally instead of wrapping each pill's own label mid-row.
+    <div className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-md border border-border p-0.5 text-xs">
       {EVM_NETWORKS.map((item) => (
         <button
           key={item.id}
           type="button"
           onClick={() => setNetwork(item.id)}
           title={item.isTestnet ? undefined : 'Mainnet — deploys cost real funds'}
-          className={`flex items-center gap-1 rounded px-2 py-1 transition-colors duration-150 ${
+          className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 whitespace-nowrap transition-colors duration-150 ${
             network === item.id
               ? item.isTestnet
                 ? 'bg-accent-500/10 text-ink'
@@ -31,7 +34,7 @@ function NetworkSelector() {
               : 'text-ink-muted hover:text-ink'
           }`}
         >
-          {!item.isTestnet && <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />}
+          {!item.isTestnet && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden />}
           {item.label}
         </button>
       ))}
@@ -56,6 +59,14 @@ function sidebarLinkClassName({ isActive }: { isActive: boolean }): string {
 export function AppShell() {
   const location = useLocation()
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1')
+  // Desktop-only "narrow to icons" state (isCollapsed, persisted) and this
+  // mobile-only "open the off-canvas drawer" state are deliberately
+  // separate — at phone width the sidebar used to stay permanently visible
+  // at its full 240px, eating well over half of a 390px-wide screen and
+  // squeezing every real page into a narrow leftover column. Below the
+  // md breakpoint the sidebar is now closed by default and slides in as an
+  // overlay; at md and up this state is simply never read.
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   const toggleCollapsed = () => {
     setIsCollapsed((prev) => {
@@ -70,7 +81,19 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
-      <aside className={`flex shrink-0 flex-col border-r border-border transition-[width] duration-150 ${isCollapsed ? 'w-16' : 'w-60'}`}>
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          aria-hidden="true"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-border bg-canvas transition-transform duration-200 ease-out md:static md:translate-x-0 md:transition-[width] ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${isCollapsed ? 'md:w-16' : 'md:w-60'}`}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
           {!isCollapsed && (
             <Link to="/" className="font-display text-sm font-semibold tracking-tight text-ink">
@@ -81,14 +104,27 @@ export function AppShell() {
             type="button"
             onClick={toggleCollapsed}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="rounded-md p-1 text-ink-faint hover:bg-surface-hover hover:text-ink"
+            className="hidden rounded-md p-1 text-ink-faint hover:bg-surface-hover hover:text-ink md:block"
           >
             <IconArrowRight className={`h-4 w-4 transition-transform duration-150 ${isCollapsed ? '' : 'rotate-180'}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(false)}
+            aria-label="Close menu"
+            className="rounded-md p-1 text-ink-faint hover:bg-surface-hover hover:text-ink md:hidden"
+          >
+            <IconArrowRight className="h-4 w-4 rotate-180" />
           </button>
         </div>
 
         <nav className="flex-1 space-y-0.5 px-2 py-3">
-          <NavLink to="/dashboard" title={isCollapsed ? 'Dashboard' : undefined} className={sidebarLinkClassName}>
+          <NavLink
+            to="/dashboard"
+            title={isCollapsed ? 'Dashboard' : undefined}
+            className={sidebarLinkClassName}
+            onClick={() => setIsMobileOpen(false)}
+          >
             <IconGrid className="h-4 w-4 shrink-0" />
             {!isCollapsed && <span>Dashboard</span>}
           </NavLink>
@@ -101,6 +137,7 @@ export function AppShell() {
                 to={item.path!}
                 title={isCollapsed ? item.label : undefined}
                 className={sidebarLinkClassName}
+                onClick={() => setIsMobileOpen(false)}
               >
                 {Icon && <Icon className="h-4 w-4 shrink-0" />}
                 {!isCollapsed && <span>{item.label}</span>}
@@ -121,12 +158,20 @@ export function AppShell() {
         )}
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-end gap-3 border-b border-border px-6 py-3">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex flex-wrap items-center justify-end gap-3 border-b border-border px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(true)}
+            aria-label="Open menu"
+            className="mr-auto rounded-md p-1.5 text-ink-faint hover:bg-surface-hover hover:text-ink md:hidden"
+          >
+            <IconGrid className="h-5 w-5" />
+          </button>
           {NETWORK_AWARE_PATHS.has(location.pathname) && <NetworkSelector />}
           <WalletConnect />
         </header>
-        <main className="flex-1">
+        <main className="min-w-0 flex-1">
           <Outlet />
         </main>
       </div>

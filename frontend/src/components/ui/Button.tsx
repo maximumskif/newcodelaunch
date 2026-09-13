@@ -35,7 +35,12 @@ export function buttonClassName(variant: ButtonVariant = 'secondary', size: Butt
   // animate too, not just color — active:scale is a cheap, real tactile
   // press cue with no motion for prefers-reduced-motion (index.css's global
   // media query already zeroes every transition duration for that case).
-  return `inline-flex items-center justify-center rounded-md font-medium transition-all duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`
+  // whitespace-nowrap: a button shrinking below its label's natural width in
+  // a tight flex row (e.g. two wallet-connect buttons on a phone-width
+  // screen) should never wrap the label across multiple lines inside the
+  // button — the row wrapping the buttons themselves is the right behavior,
+  // not the text inside one.
+  return `inline-flex items-center justify-center rounded-md font-medium whitespace-nowrap transition-all duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`
 }
 
 // The one place button styling is decided app-wide — every feature should

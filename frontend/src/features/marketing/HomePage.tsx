@@ -101,7 +101,7 @@ export function HomePage() {
         />
         <div className="relative mx-auto max-w-3xl text-center">
           <Badge tone="neutral">Early build — see what's real below</Badge>
-          <h1 className="mt-6 text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-ink sm:text-5xl lg:text-6xl">
             Launch Web3 projects without writing smart contracts.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base text-ink-muted sm:text-lg">

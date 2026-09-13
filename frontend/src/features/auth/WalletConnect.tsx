@@ -168,7 +168,7 @@ export function WalletConnect() {
 
   return (
     <div className="flex flex-col items-end gap-2 text-sm">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         {!isEvmConnected ? (
           <Button variant="primary" onClick={handleConnectEvm}>
             Connect EVM Wallet
