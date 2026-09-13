@@ -104,9 +104,14 @@ test('editing and deleting real traits, layers, and collections — through the 
 
   // Trait delete: a real DELETE that removes both the DB row and the
   // uploaded file server-side (nft_collections.delete_trait) — the grid
-  // goes empty.
+  // goes empty. Confirmation-gated (see LayerCard.tsx's ConfirmDialog,
+  // added so a single click can't destroy a trait by accident) — clicking
+  // the trigger only opens the dialog; the confirm button inside it is
+  // what actually fires the DELETE.
   await page.getByAltText('Sky Blue').click()
   await page.getByLabel('Delete trait').click()
+  await expect(page.getByText('Delete trait "Sky Blue"?')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete trait' }).click()
   await expect(page.getByAltText('Sky Blue')).not.toBeVisible({ timeout: 10_000 })
 
   // Layer rename: click-to-edit in the layer header.
