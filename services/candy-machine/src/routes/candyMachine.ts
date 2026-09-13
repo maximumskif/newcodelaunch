@@ -97,6 +97,17 @@ candyMachineRouter.post("/prepare-collection", async (req, res) => {
     res.status(400).json({ error: "collectionName, collectionSymbol and collectionMetadataUri are required" });
     return;
   }
+  if (
+    body.sellerFeeBasisPoints !== undefined &&
+    (!Number.isInteger(body.sellerFeeBasisPoints) || body.sellerFeeBasisPoints < 0 || body.sellerFeeBasisPoints > 10000)
+  ) {
+    // 0-10000 basis points (0-100%) is the Royalties plugin's own valid
+    // range — out-of-range values previously reached it unvalidated and
+    // failed on-chain instead of with a clean 400 up front, wasting a
+    // wallet approval to find out.
+    res.status(400).json({ error: "sellerFeeBasisPoints must be an integer between 0 and 10000" });
+    return;
+  }
 
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
@@ -162,8 +173,21 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
     res.status(400).json({ error: `at most ${MAX_ITEMS} items are supported per candy machine right now` });
     return;
   }
-  if (!body.priceSol || body.priceSol <= 0) {
-    res.status(400).json({ error: "priceSol must be a positive number" });
+  // Beyond just ">0": Umi's sol() -> createAmountFromDecimals does
+  // `multiplier.toString().split('.')` then `BigInt(...)` on the pieces.
+  // JS numbers print in exponential notation ("1e-7") outside roughly
+  // [1e-6, 1e21) — BigInt() can't parse that, so a value like 0.0000001
+  // (still > 0, passing the old check) crashed with a raw SDK
+  // SyntaxError instead of a clean validation error. These bounds are also
+  // a reasonable sanity range for an actual mint price, not just a
+  // workaround for the notation quirk.
+  if (
+    typeof body.priceSol !== "number" ||
+    !Number.isFinite(body.priceSol) ||
+    body.priceSol < 0.000001 ||
+    body.priceSol > 1_000_000
+  ) {
+    res.status(400).json({ error: "priceSol must be a number between 0.000001 and 1,000,000" });
     return;
   }
   if (!body.goLiveDate) {
@@ -210,11 +234,13 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
     // into a separate transaction otherwise rather than guessing. Each is
     // independently valid — inserting config lines is a distinct, retryable
     // action, not something that leaves a "half-created" account if it runs
-    // in its own transaction. Both still share this one call's single fresh
-    // blockhash+ephemeral-signer pair, so a drop large enough to split still
-    // needs its 2 transactions approved reasonably close together — the fix
-    // here is eliminating the gap *between steps*, not within one step's
-    // own transaction(s).
+    // in its own transaction. Both still use the same ephemeral candy_machine
+    // signer generated once above, and each gets its own serializeSigned()
+    // call below (its own fresh blockhash fetch, milliseconds apart within
+    // this one request) — so a drop large enough to split still needs its 2
+    // transactions approved reasonably close together — the fix here is
+    // eliminating the gap *between steps*, not within one step's own
+    // transaction(s).
     const combined = candyMachineBuilder.add(configLinesBuilder);
     const transactions: string[] = [];
     if (combined.fitsInOneTransaction(umi)) {
