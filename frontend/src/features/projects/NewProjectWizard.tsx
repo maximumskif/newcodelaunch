@@ -77,9 +77,11 @@ export function NewProjectWizard() {
               const Icon = info.icon
               return (
                 <button key={type} onClick={() => setProjectType(type)} className="text-left">
-                  <Card padding="md" className="h-full transition-colors duration-150 hover:border-accent-500">
-                    <Icon className="h-5 w-5 text-accent-400" />
-                    <p className="mt-3 text-sm font-medium text-ink">{info.label}</p>
+                  <Card padding="lg" rounded="xl" interactive className="h-full">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <p className="mt-3 font-display text-sm font-medium text-ink">{info.label}</p>
                     <p className="mt-1 text-xs text-ink-faint">{info.description}</p>
                   </Card>
                 </button>
@@ -88,7 +90,7 @@ export function NewProjectWizard() {
           )}
         </div>
       ) : (
-        <Card padding="lg" className="max-w-md space-y-4">
+        <Card padding="lg" rounded="xl" className="max-w-md space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-ink">{meta!.label}</p>
             <Button variant="ghost" size="sm" onClick={() => setProjectType(null)}>

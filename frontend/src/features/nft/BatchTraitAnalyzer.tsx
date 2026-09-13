@@ -40,7 +40,7 @@ export function BatchTraitAnalyzer({ token }: Props) {
   }
 
   return (
-    <Card>
+    <Card rounded="xl">
       <h2 className="flex items-center gap-1.5 text-lg font-medium text-ink">
         <IconSparkles className="h-4 w-4 text-accent-400" />
         Bulk trait analysis
@@ -82,7 +82,7 @@ export function BatchTraitAnalyzer({ token }: Props) {
               // ai_traits._generate_analysis_id) — two byte-identical
               // images in the same batch (e.g. the same file picked twice)
               // collide on it, so the index has to be part of the key too.
-              <div key={`${index}-${analysis.analysis_id}`} className="rounded-md border border-border bg-canvas p-2">
+              <div key={`${index}-${analysis.analysis_id}`} className="rounded-lg border border-border bg-canvas p-2">
                 <p className="truncate text-xs font-medium text-ink" title={analysis.filename}>
                   {analysis.filename}
                 </p>

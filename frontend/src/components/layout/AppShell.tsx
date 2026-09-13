@@ -39,6 +39,18 @@ function NetworkSelector() {
   )
 }
 
+// Shared active/inactive treatment for every sidebar link — a left accent
+// bar on the active item (instead of only a background tint) is a small,
+// common cue in dense product sidebars (Linear/Vercel-style) that makes the
+// current page legible even at a glance, not just on close inspection.
+function sidebarLinkClassName({ isActive }: { isActive: boolean }): string {
+  return `flex items-center gap-2.5 rounded-md border-l-2 px-2.5 py-2 text-sm transition-colors duration-150 ${
+    isActive
+      ? 'border-l-accent-500 bg-accent-500/10 font-medium text-ink'
+      : 'border-l-transparent text-ink-muted hover:bg-surface-hover hover:text-ink'
+  }`
+}
+
 // Wraps the live product pages (tokens/nft/contracts/dashboard) with a
 // persistent sidebar + top bar, distinct from the marketing site's top nav.
 export function AppShell() {
@@ -61,7 +73,7 @@ export function AppShell() {
       <aside className={`flex shrink-0 flex-col border-r border-border transition-[width] duration-150 ${isCollapsed ? 'w-16' : 'w-60'}`}>
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
           {!isCollapsed && (
-            <Link to="/" className="text-sm font-semibold text-ink">
+            <Link to="/" className="font-display text-sm font-semibold tracking-tight text-ink">
               NewCodeLaunch
             </Link>
           )}
@@ -76,15 +88,7 @@ export function AppShell() {
         </div>
 
         <nav className="flex-1 space-y-0.5 px-2 py-3">
-          <NavLink
-            to="/dashboard"
-            title={isCollapsed ? 'Dashboard' : undefined}
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm ${
-                isActive ? 'bg-accent-500/10 text-ink' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
-              }`
-            }
-          >
+          <NavLink to="/dashboard" title={isCollapsed ? 'Dashboard' : undefined} className={sidebarLinkClassName}>
             <IconGrid className="h-4 w-4 shrink-0" />
             {!isCollapsed && <span>Dashboard</span>}
           </NavLink>
@@ -96,11 +100,7 @@ export function AppShell() {
                 key={item.path}
                 to={item.path!}
                 title={isCollapsed ? item.label : undefined}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm ${
-                    isActive ? 'bg-accent-500/10 text-ink' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
-                  }`
-                }
+                className={sidebarLinkClassName}
               >
                 {Icon && <Icon className="h-4 w-4 shrink-0" />}
                 {!isCollapsed && <span>{item.label}</span>}

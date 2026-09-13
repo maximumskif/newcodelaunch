@@ -31,9 +31,17 @@ function NetworkStatusCard({ networkId, name }: { networkId: string; name: strin
   })
 
   return (
-    <Card padding="sm">
-      <p className="font-medium text-ink">{name}</p>
-      <p className={`mt-1 text-sm ${data?.connected ? 'text-success' : 'text-danger'}`}>
+    <Card padding="md" rounded="xl">
+      <div className="flex items-center gap-2">
+        <span className="relative flex h-2 w-2 shrink-0">
+          {data?.connected && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+          )}
+          <span className={`relative inline-flex h-2 w-2 rounded-full ${data?.connected ? 'bg-success' : 'bg-danger'}`} />
+        </span>
+        <p className="font-medium text-ink">{name}</p>
+      </div>
+      <p className={`mt-2 text-sm ${data?.connected ? 'text-success' : 'text-danger'}`}>
         {isLoading ? 'Checking…' : data?.connected ? 'Connected' : (data?.error ?? 'Unavailable')}
       </p>
       {data?.connected && 'gas_price_gwei' in data && (

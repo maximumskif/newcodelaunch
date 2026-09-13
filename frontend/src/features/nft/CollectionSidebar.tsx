@@ -71,7 +71,7 @@ export function CollectionSidebar({
   }
 
   return (
-    <Card padding="sm" className="flex flex-col gap-3">
+    <Card padding="sm" rounded="xl" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
           <IconLayers className="h-4 w-4 text-ink-faint" />

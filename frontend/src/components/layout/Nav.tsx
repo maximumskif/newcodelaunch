@@ -28,9 +28,9 @@ function ProductRow({ label, path }: ProductLink) {
 
 export function Nav() {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4">
+    <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-border bg-canvas/80 px-6 py-4 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-6 text-sm">
-        <Link to="/" className="font-semibold text-ink">
+        <Link to="/" className="font-display text-base font-semibold tracking-tight text-ink">
           NewCodeLaunch
         </Link>
         <nav className="flex flex-wrap items-center gap-5 text-ink-muted">

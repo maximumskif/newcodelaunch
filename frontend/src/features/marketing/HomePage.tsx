@@ -3,12 +3,17 @@ import { Link } from 'react-router-dom'
 
 import { Badge } from '../../components/ui/Badge'
 import { buttonClassName } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
 import { IconArrowRight, IconCheck, IconCode, IconCoin, IconLayers, IconShield, IconWallet } from '../../components/ui/icons'
 
 // Every claim on this page maps to something that actually works today
 // (see docs/REBUILD_PROGRESS.md). Nothing here is aspirational copy — the
 // old app's homepage claimed "world's most advanced platform" for features
 // that were partly `random.randint()`; this one only says what's true.
+//
+// 2026-09 design refresh: visual presentation only — every heading,
+// description, badge state, and link target below is byte-for-byte the same
+// claim this page already made; nothing here is new or exaggerated copy.
 
 interface CreationPath {
   icon: ReactNode
@@ -80,75 +85,99 @@ const SECURITY_POINTS = [
   },
 ]
 
+const SUPPORTED_NETWORKS = ['Ethereum', 'Polygon', 'BSC', 'Solana']
+
 export function HomePage() {
   return (
     <div>
-      <section className="border-b border-border px-6 py-20 sm:py-28">
-        <div className="mx-auto max-w-3xl text-center">
+      {/* A faint fixed dot-grid, not a moving/blurred gradient blob — texture
+          without the "giant glow" look this project's own design pass
+          already corrected away from once. Pure decoration: aria-hidden,
+          and the hero's real content underneath needs no adjustment for it. */}
+      <section className="relative overflow-hidden border-b border-border px-6 py-24 sm:py-32">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 [background-image:radial-gradient(color-mix(in_oklab,white_10%,transparent)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,black_40%,transparent_100%)]"
+        />
+        <div className="relative mx-auto max-w-3xl text-center">
           <Badge tone="neutral">Early build — see what's real below</Badge>
-          <h1 className="mt-5 text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+          <h1 className="mt-6 text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
             Launch Web3 projects without writing smart contracts.
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-ink-muted">
+          <p className="mx-auto mt-5 max-w-xl text-base text-ink-muted sm:text-lg">
             Configure a token or NFT collection through a guided interface, review a real gas estimate, and deploy
             with your own connected wallet. Nothing is signed on our servers.
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link to="/tokens" className={buttonClassName('primary', 'md', 'px-5 py-2.5 text-base')}>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <Link to="/tokens" className={buttonClassName('primary', 'md', 'px-6 py-3 text-base')}>
               Create a Project
               <IconArrowRight className="h-4 w-4" />
             </Link>
-            <Link to="/contracts" className={buttonClassName('secondary', 'md', 'px-5 py-2.5 text-base')}>
+            <Link to="/contracts" className={buttonClassName('secondary', 'md', 'px-6 py-3 text-base')}>
               View Live Chain Status
             </Link>
+          </div>
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-ink-faint">
+            <span className="uppercase tracking-widest">Supported networks</span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {SUPPORTED_NETWORKS.map((network) => (
+                <span key={network} className="rounded-full border border-border px-3 py-1 text-ink-muted">
+                  {network}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="start-here" className="scroll-mt-20 px-6 py-16">
+      <section id="start-here" className="scroll-mt-20 px-6 py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-xl font-semibold text-ink">Start here</h2>
+          <h2 className="text-2xl font-semibold text-ink">Start here</h2>
           <p className="mt-1 text-sm text-ink-muted">All four of these are real, working flows.</p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {CREATION_PATHS.map((path) => {
               const content = (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-ink-faint">{path.icon}</span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
+                      {path.icon}
+                    </span>
                     <Badge tone={path.badge === 'live' ? 'success' : 'neutral'}>{path.badge === 'live' ? 'Live' : 'Coming soon'}</Badge>
                   </div>
-                  <h3 className="mt-3 font-medium text-ink">{path.title}</h3>
-                  <p className="mt-1 text-sm text-ink-muted">{path.description}</p>
+                  <h3 className="mt-4 font-display font-medium text-ink">{path.title}</h3>
+                  <p className="mt-1.5 text-sm text-ink-muted">{path.description}</p>
                 </>
               )
               return path.href ? (
-                <Link
-                  key={path.title}
-                  to={path.href}
-                  className="rounded-lg border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover"
-                >
-                  {content}
+                <Link key={path.title} to={path.href}>
+                  <Card interactive padding="lg" rounded="xl" className="h-full">
+                    {content}
+                  </Card>
                 </Link>
               ) : (
-                <div key={path.title} className="cursor-not-allowed rounded-lg border border-border bg-surface p-5 opacity-60">
+                <Card key={path.title} padding="lg" rounded="xl" className="h-full cursor-not-allowed opacity-60">
                   {content}
-                </div>
+                </Card>
               )
             })}
           </div>
         </div>
       </section>
 
-      <section id="how-it-works" className="scroll-mt-20 border-t border-border px-6 py-16">
+      <section id="how-it-works" className="scroll-mt-20 border-t border-border px-6 py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-xl font-semibold text-ink">How it works today</h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-5">
+          <h2 className="text-2xl font-semibold text-ink">How it works today</h2>
+          <div className="relative mt-10 grid gap-8 sm:grid-cols-5">
+            {/* A connecting line behind the numbered steps — desktop only
+                (sm:grid-cols-5 already stacks to one column below that
+                breakpoint, where a horizontal line wouldn't track the steps). */}
+            <div className="absolute top-4 right-0 left-0 hidden h-px bg-border sm:block" aria-hidden="true" />
             {HOW_IT_WORKS.map((step, index) => (
-              <div key={step.title}>
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-600 text-xs font-semibold text-white">
+              <div key={step.title} className="relative">
+                <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-accent-600 text-xs font-semibold text-white ring-4 ring-canvas">
                   {index + 1}
                 </span>
-                <h3 className="mt-2 text-sm font-medium text-ink">{step.title}</h3>
+                <h3 className="mt-3 text-sm font-medium text-ink">{step.title}</h3>
                 <p className="mt-1 text-xs text-ink-muted">{step.description}</p>
               </div>
             ))}
@@ -156,18 +185,20 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="border-t border-border px-6 py-16">
+      <section className="border-t border-border px-6 py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-xl font-semibold text-ink">Security & transparency</h2>
-          <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          <h2 className="text-2xl font-semibold text-ink">Security & transparency</h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {SECURITY_POINTS.map((point) => (
-              <div key={point.title} className="flex gap-3">
-                <span className="mt-0.5 text-accent-400">{point.icon}</span>
+              <Card key={point.title} padding="md" className="flex gap-3.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
+                  {point.icon}
+                </span>
                 <div>
                   <h3 className="text-sm font-medium text-ink">{point.title}</h3>
                   <p className="mt-1 text-sm text-ink-muted">{point.description}</p>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </div>

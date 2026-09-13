@@ -1,5 +1,15 @@
 @import 'tailwindcss';
 
+/* Self-hosted (no external request, works offline, no CSP/privacy concerns)
+ * — see the 2026-09 design-refresh entry in docs/REBUILD_PROGRESS.md. Inter
+ * Variable for body copy (renders identically across every OS, unlike the
+ * previous system-ui stack); Space Grotesk for headings/display only, a
+ * distinctive geometric sans common in premium Web3 product design. */
+@import '@fontsource-variable/inter';
+@import '@fontsource/space-grotesk/500.css';
+@import '@fontsource/space-grotesk/600.css';
+@import '@fontsource/space-grotesk/700.css';
+
 /*
  * Design tokens. One accent hue (violet) for primary actions/links/focus —
  * never a gradient, never decorative. Status colors are semantic only (they
@@ -7,6 +17,14 @@
  * attention). Neutral surfaces are named by role (canvas/surface/border/ink)
  * so the whole app's depth can be retuned from here instead of grepping for
  * `bg-white/[0.03]` across every component.
+ *
+ * 2026-09 design refresh: kept every rule above — still one accent hue,
+ * still no gradient/glow backgrounds (the spec's own prior "no giant glows"
+ * correction stands) — while adding a second surface tier for real depth on
+ * bento-style card grids, a richer shadow/glow pair used only on the
+ * primary CTA and elevated cards (not ambient), and a wider radius scale so
+ * feature/marketing cards read as more contemporary than the tight
+ * form-control radii, which stay small on purpose.
  */
 @theme {
   --color-accent-50: var(--color-violet-50);
@@ -29,26 +47,41 @@
   --color-canvas: var(--color-zinc-950);
   --color-surface: color-mix(in oklab, white 3%, transparent);
   --color-surface-hover: color-mix(in oklab, white 6%, transparent);
+  /* A second, more opaque tier — a card nested inside a card (a stat tile
+     inside a feature card, a grid item inside a section) reads as sitting
+     visibly above its parent instead of blending into the same flat plane. */
+  --color-surface-raised: color-mix(in oklab, white 5%, transparent);
+  --color-surface-raised-hover: color-mix(in oklab, white 8%, transparent);
   --color-border: color-mix(in oklab, white 10%, transparent);
   --color-border-strong: color-mix(in oklab, white 20%, transparent);
   --color-ink: var(--color-zinc-50);
   --color-ink-muted: color-mix(in oklab, white 60%, transparent);
   --color-ink-faint: color-mix(in oklab, white 50%, transparent);
 
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Space Grotesk', var(--font-sans);
   --font-mono:
     ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
+  /* Marketing/feature cards only — form controls, badges, and buttons stay
+     on the tighter radii above so interactive elements don't read as "soft". */
+  --radius-xl: 1.25rem;
 
   --shadow-elevated: 0 4px 16px -4px rgb(0 0 0 / 0.4);
+  /* A tight accent ring plus a soft, close falloff — a hover cue on the
+     primary CTA and the active/featured card only, never ambient background
+     decoration (the thing this project's own design pass already corrected
+     away from once). */
+  --shadow-glow-accent: 0 0 0 1px var(--color-accent-500), 0 8px 24px -10px color-mix(in oklab, var(--color-accent-500) 55%, transparent);
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 120ms;
   --duration-base: 200ms;
+  --duration-slow: 400ms;
 }
 
 body {
@@ -57,6 +90,12 @@ body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: 'ss01' 1, 'cv01' 1;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 @media (prefers-reduced-motion: reduce) {

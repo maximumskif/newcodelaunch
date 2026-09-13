@@ -41,22 +41,22 @@ export function DefiScannerPage() {
       {data && data.protocols.length === 0 && <EmptyState title="No protocol data available." />}
 
       {data && data.protocols.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
           <table className="w-full text-sm">
-            <thead className="border-b border-border bg-surface text-left text-xs text-ink-faint">
+            <thead className="border-b border-border text-left text-xs text-ink-faint">
               <tr>
-                <th className="px-4 py-2 font-medium">Protocol</th>
-                <th className="px-4 py-2 font-medium">Category</th>
-                <th className="px-4 py-2 font-medium">Chains</th>
-                <th className="px-4 py-2 font-medium text-right">TVL</th>
-                <th className="px-4 py-2 font-medium text-right">1D</th>
-                <th className="px-4 py-2 font-medium text-right">7D</th>
+                <th className="px-4 py-3 font-medium">Protocol</th>
+                <th className="px-4 py-3 font-medium">Category</th>
+                <th className="px-4 py-3 font-medium">Chains</th>
+                <th className="px-4 py-3 font-medium text-right">TVL</th>
+                <th className="px-4 py-3 font-medium text-right">1D</th>
+                <th className="px-4 py-3 font-medium text-right">7D</th>
               </tr>
             </thead>
             <tbody>
               {data.protocols.map((protocol) => (
-                <tr key={protocol.id ?? protocol.name} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                  <td className="px-4 py-2.5">
+                <tr key={protocol.id ?? protocol.name} className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
+                  <td className="px-4 py-3">
                     {protocol.url ? (
                       <a href={protocol.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline">
                         {protocol.logo && <img src={protocol.logo} alt="" className="h-5 w-5 rounded-full" />}
@@ -69,16 +69,16 @@ export function DefiScannerPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-ink-muted">{protocol.category ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-ink-faint">
+                  <td className="px-4 py-3 text-ink-muted">{protocol.category ?? '—'}</td>
+                  <td className="px-4 py-3 text-ink-faint">
                     <span className="truncate" title={protocol.chains.join(', ')}>
                       {protocol.chains.slice(0, 2).join(', ')}
                       {protocol.chains.length > 2 ? ` +${protocol.chains.length - 2}` : ''}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right text-ink">{formatTvl(protocol.tvl)}</td>
-                  <td className={`px-4 py-2.5 text-right ${changeTone(protocol.change_1d)}`}>{formatChange(protocol.change_1d)}</td>
-                  <td className={`px-4 py-2.5 text-right ${changeTone(protocol.change_7d)}`}>{formatChange(protocol.change_7d)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-ink">{formatTvl(protocol.tvl)}</td>
+                  <td className={`px-4 py-3 text-right font-mono ${changeTone(protocol.change_1d)}`}>{formatChange(protocol.change_1d)}</td>
+                  <td className={`px-4 py-3 text-right font-mono ${changeTone(protocol.change_7d)}`}>{formatChange(protocol.change_7d)}</td>
                 </tr>
               ))}
             </tbody>

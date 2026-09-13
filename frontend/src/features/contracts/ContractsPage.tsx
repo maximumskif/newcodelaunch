@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 
+import { PageHero } from '../../components/ui/PageHero'
 import { DeployPanel } from './DeployPanel'
 import { NetworkStatusGrid } from './NetworkStatusGrid'
 
@@ -9,13 +10,12 @@ export function ContractsPage() {
   const templateId = searchParams.get('template')
 
   return (
-    <div className="space-y-10 p-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">Smart Contracts Hub</h1>
-        <p className="mt-2 text-ink-muted">
-          Live chain status, plus compile, estimate, and deploy from real Solidity templates.
-        </p>
-      </div>
+    <div className="space-y-8 p-8">
+      <PageHero
+        eyebrow="Smart Contracts Hub"
+        title="Compile, estimate, deploy"
+        description="Live chain status, plus compile, estimate, and deploy from real Solidity templates."
+      />
 
       <NetworkStatusGrid />
 

@@ -38,32 +38,32 @@ export function MarketIntelligencePage() {
       {data && data.tokens.length === 0 && <EmptyState title="No market data available." />}
 
       {data && data.tokens.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
           <table className="w-full text-sm">
-            <thead className="border-b border-border bg-surface text-left text-xs text-ink-faint">
+            <thead className="border-b border-border text-left text-xs text-ink-faint">
               <tr>
-                <th className="px-4 py-2 font-medium">#</th>
-                <th className="px-4 py-2 font-medium">Token</th>
-                <th className="px-4 py-2 font-medium text-right">Price</th>
-                <th className="px-4 py-2 font-medium text-right">24h</th>
-                <th className="px-4 py-2 font-medium text-right">Market Cap</th>
-                <th className="px-4 py-2 font-medium text-right">Volume (24h)</th>
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">Token</th>
+                <th className="px-4 py-3 font-medium text-right">Price</th>
+                <th className="px-4 py-3 font-medium text-right">24h</th>
+                <th className="px-4 py-3 font-medium text-right">Market Cap</th>
+                <th className="px-4 py-3 font-medium text-right">Volume (24h)</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="font-mono">
               {data.tokens.map((token) => (
-                <tr key={token.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                  <td className="px-4 py-2.5 text-ink-faint">{token.market_cap_rank ?? '—'}</td>
-                  <td className="px-4 py-2.5">
+                <tr key={token.id} className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
+                  <td className="px-4 py-3 font-sans text-ink-faint">{token.market_cap_rank ?? '—'}</td>
+                  <td className="px-4 py-3 font-sans">
                     <div className="flex items-center gap-2">
                       {token.image && <img src={token.image} alt="" className="h-5 w-5 rounded-full" />}
                       <span className="font-medium text-ink">{token.name}</span>
                       <span className="text-ink-faint">{token.symbol}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-right text-ink">{formatPrice(token.current_price)}</td>
+                  <td className="px-4 py-3 text-right text-ink">{formatPrice(token.current_price)}</td>
                   <td
-                    className={`px-4 py-2.5 text-right ${
+                    className={`px-4 py-3 text-right ${
                       token.price_change_percentage_24h === null
                         ? 'text-ink-faint'
                         : token.price_change_percentage_24h >= 0
@@ -75,8 +75,8 @@ export function MarketIntelligencePage() {
                       ? '—'
                       : `${token.price_change_percentage_24h >= 0 ? '+' : ''}${token.price_change_percentage_24h.toFixed(2)}%`}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-ink-muted">{formatLarge(token.market_cap)}</td>
-                  <td className="px-4 py-2.5 text-right text-ink-muted">{formatLarge(token.total_volume)}</td>
+                  <td className="px-4 py-3 text-right text-ink-muted">{formatLarge(token.market_cap)}</td>
+                  <td className="px-4 py-3 text-right text-ink-muted">{formatLarge(token.total_volume)}</td>
                 </tr>
               ))}
             </tbody>

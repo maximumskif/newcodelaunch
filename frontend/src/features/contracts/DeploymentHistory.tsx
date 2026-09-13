@@ -6,22 +6,22 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
       <table className="w-full text-left text-sm">
-        <thead className="text-ink-faint">
+        <thead className="border-b border-border text-xs text-ink-faint">
           <tr>
-            <th className="pb-2 pr-4">Template</th>
-            <th className="pb-2 pr-4">Network</th>
-            <th className="pb-2 pr-4">Contract</th>
-            <th className="pb-2 pr-4">Deployed</th>
+            <th className="px-4 py-3 font-medium">Template</th>
+            <th className="px-4 py-3 font-medium">Network</th>
+            <th className="px-4 py-3 font-medium">Contract</th>
+            <th className="px-4 py-3 font-medium">Deployed</th>
           </tr>
         </thead>
         <tbody>
           {deployments.map((deployment) => (
-            <tr key={deployment.id} className="border-t border-border">
-              <td className="py-2 pr-4 text-ink">{deployment.template_name}</td>
-              <td className="py-2 pr-4 text-ink">{deployment.network}</td>
-              <td className="py-2 pr-4 font-mono text-ink">
+            <tr key={deployment.id} className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
+              <td className="px-4 py-3 text-ink">{deployment.template_name}</td>
+              <td className="px-4 py-3 text-ink">{deployment.network}</td>
+              <td className="px-4 py-3 font-mono text-ink">
                 {deployment.explorer_url ? (
                   <a
                     href={deployment.explorer_url}
@@ -35,7 +35,7 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                   `${deployment.contract_address.slice(0, 10)}…`
                 )}
               </td>
-              <td className="py-2 pr-4 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
+              <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
             </tr>
           ))}
         </tbody>

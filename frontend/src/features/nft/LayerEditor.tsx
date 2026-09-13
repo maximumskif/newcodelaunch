@@ -82,7 +82,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
   }
 
   return (
-    <Card>
+    <Card rounded="xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-ink">Layers & Traits</h2>

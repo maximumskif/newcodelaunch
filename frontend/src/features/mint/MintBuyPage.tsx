@@ -40,6 +40,13 @@ export function MintBuyPage() {
   }, [candyMachineId])
 
   useEffect(() => {
+    // Fetching data on an external dependency (candyMachineId) change is
+    // exactly what this rule's own guidance calls a legitimate use of an
+    // effect ("synchronize with an external system"); loadStatus's
+    // setIsLoading(true)/setLoadError(null) ahead of the request are the
+    // standard fetch-effect idiom, not state derived from a prop that could
+    // be computed during render instead.
+    // oxlint-disable-next-line react/set-state-in-effect
     loadStatus()
   }, [loadStatus])
 
@@ -95,69 +102,83 @@ export function MintBuyPage() {
       {isLoading && !status && <p className="text-ink-muted">Loading drop…</p>}
 
       {status && (
-        <Card padding="lg" className="max-w-xl space-y-4">
-          {status.preview_image && (
-            <img src={status.preview_image} alt={status.collection_name ?? 'Collection preview'} className="h-48 w-48 rounded-md object-cover" />
-          )}
+        <Card padding="lg" rounded="xl" className="max-w-3xl">
+          <div className="grid gap-6 sm:grid-cols-[minmax(0,280px)_1fr]">
+            {status.preview_image ? (
+              <img
+                src={status.preview_image}
+                alt={status.collection_name ?? 'Collection preview'}
+                className="aspect-square w-full rounded-lg object-cover"
+              />
+            ) : (
+              <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-surface-raised text-ink-faint">
+                No preview
+              </div>
+            )}
 
-          {status.collection_description && <p className="text-sm text-ink-muted">{status.collection_description}</p>}
+            <div className="flex flex-col gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={status.is_live ? 'success' : 'warning'}>{status.is_live ? 'Live now' : 'Not live yet'}</Badge>
+                  <Badge tone="neutral">{status.items_remaining} of {status.items_available} remaining</Badge>
+                  {isMainnet && <Badge tone="warning">Solana Mainnet</Badge>}
+                </div>
+                {status.collection_description && (
+                  <p className="mt-3 text-sm text-ink-muted">{status.collection_description}</p>
+                )}
+              </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={status.is_live ? 'success' : 'warning'}>{status.is_live ? 'Live now' : 'Not live yet'}</Badge>
-            <Badge tone="neutral">{status.items_remaining} of {status.items_available} remaining</Badge>
-            {isMainnet && <Badge tone="warning">Solana Mainnet</Badge>}
-          </div>
+              <div className="rounded-lg border border-border bg-surface-raised p-4">
+                <p className="text-xs text-ink-faint">Price</p>
+                <p className="font-display text-3xl font-semibold text-ink">{status.price_sol} SOL</p>
+                <p className="mt-1 text-xs text-ink-faint">Opens {new Date(status.go_live_date).toLocaleString()}</p>
+              </div>
 
-          <div className="text-sm text-ink-muted">
-            <p>
-              Price: <span className="font-medium text-ink">{status.price_sol} SOL</span>
-            </p>
-            <p>Opens: {new Date(status.go_live_date).toLocaleString()}</p>
-          </div>
+              {mintedNft ? (
+                // Checked before sold-out/not-live below on purpose: loadStatus() re-fetches
+                // items_remaining right after a successful mint, so minting the last item
+                // would otherwise flip straight to the "Sold out" empty state and hide the
+                // buyer's own confirmation + mint address before they ever see it.
+                <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
+                  <p className="text-success">Minted!</p>
+                  <p className="mt-1 font-mono text-xs text-ink-muted">{mintedNft}</p>
+                  <Button variant="secondary" size="sm" className="mt-3" onClick={() => setMintedNft(null)}>
+                    Mint another
+                  </Button>
+                </div>
+              ) : status.items_remaining === 0 ? (
+                <EmptyState title="Sold out" description="Every item in this drop has already been minted." />
+              ) : !status.is_live ? (
+                <EmptyState title="Minting hasn't opened yet" description="Check back after the opening time above." />
+              ) : (
+                <>
+                  {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to mint.</p>}
 
-          {mintedNft ? (
-            // Checked before sold-out/not-live below on purpose: loadStatus() re-fetches
-            // items_remaining right after a successful mint, so minting the last item
-            // would otherwise flip straight to the "Sold out" empty state and hide the
-            // buyer's own confirmation + mint address before they ever see it.
-            <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
-              <p className="text-success">Minted!</p>
-              <p className="mt-1 font-mono text-xs text-ink-muted">{mintedNft}</p>
-              <Button variant="secondary" size="sm" className="mt-3" onClick={() => setMintedNft(null)}>
-                Mint another
-              </Button>
-            </div>
-          ) : status.items_remaining === 0 ? (
-            <EmptyState title="Sold out" description="Every item in this drop has already been minted." />
-          ) : !status.is_live ? (
-            <EmptyState title="Minting hasn't opened yet" description="Check back after the opening time above." />
-          ) : (
-            <>
-              {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to mint.</p>}
+                  {isMainnet && (
+                    <MainnetConfirmCheckbox
+                      checked={mainnetConfirmed}
+                      onChange={setMainnetConfirmed}
+                      disabled={isBusy}
+                      verb="mints on"
+                      networkLabel="Solana Mainnet"
+                    />
+                  )}
 
-              {isMainnet && (
-                <MainnetConfirmCheckbox
-                  checked={mainnetConfirmed}
-                  onChange={setMainnetConfirmed}
-                  disabled={isBusy}
-                  verb="mints on"
-                  networkLabel="Solana Mainnet"
-                />
+                  {mintError && <p className="text-sm text-danger">{mintError}</p>}
+
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    disabled={!publicKey || isBusy || (isMainnet && !mainnetConfirmed)}
+                    isLoading={isBusy}
+                    onClick={() => void handleMint()}
+                  >
+                    {isBusy ? 'Minting…' : `Mint for ${status.price_sol} SOL`}
+                  </Button>
+                </>
               )}
-
-              {mintError && <p className="text-sm text-danger">{mintError}</p>}
-
-              <Button
-                variant="primary"
-                className="w-full"
-                disabled={!publicKey || isBusy || (isMainnet && !mainnetConfirmed)}
-                isLoading={isBusy}
-                onClick={() => void handleMint()}
-              >
-                {isBusy ? 'Minting…' : `Mint for ${status.price_sol} SOL`}
-              </Button>
-            </>
-          )}
+            </div>
+          </div>
         </Card>
       )}
     </div>
