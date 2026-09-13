@@ -24,8 +24,6 @@ The paragraphs below describe what's actually implemented and verified, not a ro
 - Candy Machine's blockhash-expiry risk was fixed 2026-09-06 (staged two-step launch flow — see `docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md`), but not yet devnet-click-through-verified — that checklist is still open.
 - NFT generation is synchronous and capped at 200 items/call; a background job queue is the natural next step if that cap needs to rise.
 - `backend/Dockerfile` and `frontend/Dockerfile` are now wired into `docker-compose.yml` (see "Running the whole stack in Docker instead" above) but still aren't build-verified — no Docker in the sandbox that wrote them. Rate limiting itself defaults to in-memory storage (fine for a single dev process) — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker; `docker compose up -d redis` starts one, and both the wiring and the cross-process sharing it exists for are covered by a real Redis instance in CI (`backend/tests/test_ratelimit_storage.py`), not mocked.
-- No project switcher in the app shell yet (deliberately deferred pending real multi-project usage).
-
 ## Architecture
 
 Monorepo:

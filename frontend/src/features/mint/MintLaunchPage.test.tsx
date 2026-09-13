@@ -49,7 +49,11 @@ vi.mock('../../lib/projectsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/projectsApi')>()
   return {
     ...actual,
-    projectsApi: { ...actual.projectsApi, get: vi.fn() },
+    // list: ProjectContextBar's own "switch project" dropdown fetches this
+    // independently of the page's own project-resume logic (mocked via
+    // `get` below) — mocked here too so it doesn't fall through to a real,
+    // unmocked network call in every test that renders the bar.
+    projectsApi: { ...actual.projectsApi, get: vi.fn(), list: vi.fn().mockResolvedValue({ projects: [] }) },
   }
 })
 

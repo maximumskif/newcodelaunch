@@ -4,12 +4,18 @@ interface Props {
   trigger: ReactNode
   children: ReactNode
   align?: 'left' | 'right'
+  // Applied to the outer positioning wrapper, not the trigger button itself
+  // — for callers in a `flex-wrap` row that need to control where this
+  // dropdown (and thus its `align`-anchored menu) ends up sitting once
+  // wrapped onto its own line, e.g. `ml-auto` to keep it pinned to that
+  // line's right edge (see ProjectContextBar's "Switch project" trigger).
+  className?: string
 }
 
 // Minimal click-toggle dropdown — closes on outside click or Escape.
 // Not a full menu/listbox implementation (no roving tabindex); fine for the
 // nav's small, mostly-link content. Revisit if a future use case needs more.
-export function Dropdown({ trigger, children, align = 'left' }: Props) {
+export function Dropdown({ trigger, children, align = 'left', className = '' }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -31,7 +37,7 @@ export function Dropdown({ trigger, children, align = 'left' }: Props) {
   }, [isOpen])
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={`relative ${className}`}>
       <button
         type="button"
         aria-expanded={isOpen}
