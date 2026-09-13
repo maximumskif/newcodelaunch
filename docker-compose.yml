@@ -32,6 +32,14 @@ services:
       - '4000:4000'
     env_file:
       - ./services/candy-machine/.env
+    healthcheck:
+      # Without this, backend's `depends_on` below could only use
+      # `condition: service_started` (container started, not "Express is
+      # actually listening") — a narrow but real race on stack startup.
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   # Optional — only needed once the backend runs with more than one gunicorn
@@ -72,11 +80,22 @@ services:
       # frontend service's port mapping below) — the browser sends this as
       # its real Origin, not the container network.
       CORS_ORIGINS: http://localhost:8080
+      # Same reasoning as DATABASE_URL above: backend/.env.example documents
+      # redis://localhost:6379 for enabling this outside compose (a bare
+      # `flask run` next to a host-mapped Redis port) — "localhost" inside
+      # this network doesn't reach the separate `redis` service below, so
+      # following that doc verbatim under compose would silently keep
+      # rate-limiting in-memory (per-worker) with no error surfaced. `redis`
+      # here is already a normal (non-optional-by-profile) service in this
+      # file, so it starts by default with `docker compose up` regardless.
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
       candy-machine:
-        condition: service_started
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # The image itself doesn't run migrations (see Dockerfile) — do it here,
     # once, before gunicorn starts, rather than requiring a separate manual
     # step every time this stack comes up fresh.
