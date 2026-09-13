@@ -1,7 +1,8 @@
 """
 Real, read-only blockchain connectivity — chain status, gas price, tx lookup.
 
-Ported from the old root-level blockchain_manager.py, with two deliberate changes:
+Ported from the old root-level blockchain_manager.py, with three deliberate
+changes:
 
 1. Connections are created per-request instead of once at import time. The old
    module made live RPC calls as a side effect of `import blockchain_manager`
@@ -14,23 +15,26 @@ Ported from the old root-level blockchain_manager.py, with two deliberate change
    `response['result']` indexing — both were removed years ago; that code would
    raise on every call, silently caught by a broad `except`, so Solana never
    actually connected in the old app.
-
-NOTE: written against the documented solana-py 0.30+/solders typed API but not
-execution-verified in this environment (no pip/venv available here — see
-backend/requirements.txt). Smoke-test the /api/blockchain/solana/status route
-first thing once you can actually install and run this.
+3. solana==0.40.3/solders==0.29.0 (bumped 2026-09, see requirements.txt)
+   removed `solana.rpc.api`'s synchronous `Client` entirely — `AsyncClient` is
+   now the only option. Rather than making every Flask route async (this app's
+   WSGI server and every other blueprint stay synchronous), each Solana call
+   site below opens its own `AsyncClient` inside a freshly-run `asyncio.run()`
+   — the public functions (`_get_solana_status`, `_get_solana_transaction_status`)
+   keep the exact same synchronous signature every caller already expects.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 from flask import current_app
-from solana.rpc.api import Client as SolanaClient
+from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solders.signature import Signature
 from web3 import HTTPProvider, Web3
-from web3.middleware import geth_poa_middleware
+from web3.middleware import ExtraDataToPOAMiddleware
 
 EVM_NETWORKS = {
     # Testnets first — this is also the order the frontend network picker
@@ -131,7 +135,7 @@ def _rpc_url(network: str) -> str:
 def _get_web3(network: str) -> Web3:
     w3 = Web3(HTTPProvider(_rpc_url(network), request_kwargs={"timeout": 10}))
     if EVM_NETWORKS[network]["poa"]:
-        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     return w3
 
 
@@ -144,7 +148,7 @@ def get_web3(network: str) -> Web3:
     return _get_web3(network)
 
 
-def _get_solana_client(network: str) -> SolanaClient:
+def _get_solana_client(network: str) -> AsyncClient:
     # Explicit "confirmed", not solana-py's own default ("finalized") — the
     # frontend only waits for "confirmed" before ever calling this app's own
     # record/verify endpoints (see MintLaunchPage.tsx's confirmTransaction
@@ -157,7 +161,7 @@ def _get_solana_client(network: str) -> SolanaClient:
     # timing happened not to land in the gap. "Confirmed" (supermajority
     # vote) is what Solana's own docs recommend trusting for this kind of
     # check; matching it here removes the gap instead of narrowing it.
-    return SolanaClient(_rpc_url(network), commitment=Confirmed, timeout=10)
+    return AsyncClient(_rpc_url(network), commitment=Confirmed, timeout=10)
 
 
 def get_supported_networks() -> list[dict]:
@@ -195,18 +199,21 @@ def _get_evm_status(network: str) -> dict:
 
 
 def _get_solana_status(network: str) -> dict:
-    client = _get_solana_client(network)
+    async def _fetch() -> dict:
+        async with _get_solana_client(network) as client:
+            slot = (await client.get_slot()).value
+            version = (await client.get_version()).value
+            blockhash_resp = (await client.get_latest_blockhash()).value
+            return {
+                "connected": True,
+                "network": SOLANA_NETWORKS[network]["name"],
+                "slot": slot,
+                "solana_core_version": getattr(version, "solana_core", str(version)),
+                "latest_blockhash": str(blockhash_resp.blockhash),
+            }
+
     try:
-        slot = client.get_slot().value
-        version = client.get_version().value
-        blockhash_resp = client.get_latest_blockhash().value
-        return {
-            "connected": True,
-            "network": SOLANA_NETWORKS[network]["name"],
-            "slot": slot,
-            "solana_core_version": getattr(version, "solana_core", str(version)),
-            "latest_blockhash": str(blockhash_resp.blockhash),
-        }
+        return asyncio.run(_fetch())
     except Exception as exc:  # noqa: BLE001
         return {"connected": False, "error": str(exc)}
 
@@ -251,28 +258,32 @@ def _get_evm_transaction_status(network: str, tx_hash: str) -> dict:
 
 
 def _get_solana_transaction_status(network: str, tx_hash: str) -> dict:
-    client = _get_solana_client(network)
     try:
         signature = Signature.from_string(tx_hash)
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "error": f"Invalid signature: {exc}"}
 
+    async def _fetch() -> dict:
+        async with _get_solana_client(network) as client:
+            resp = await client.get_transaction(signature, max_supported_transaction_version=0)
+            if resp.value is None:
+                return {"status": "not_found"}
+            meta = resp.value.transaction.meta
+            # Account keys touched by this transaction — used by
+            # candy_machine.py to independently confirm a claimed
+            # collection_mint/candy_machine address was actually involved in
+            # the verified transaction, not just that *some* successful
+            # signature was supplied.
+            account_keys = [str(key) for key in resp.value.transaction.transaction.message.account_keys]
+            return {
+                "status": "success" if meta.err is None else "failed",
+                "slot": resp.value.slot,
+                "fee": meta.fee,
+                "error": str(meta.err) if meta.err else None,
+                "account_keys": account_keys,
+            }
+
     try:
-        resp = client.get_transaction(signature, max_supported_transaction_version=0)
-        if resp.value is None:
-            return {"status": "not_found"}
-        meta = resp.value.transaction.meta
-        # Account keys touched by this transaction — used by candy_machine.py
-        # to independently confirm a claimed collection_mint/candy_machine
-        # address was actually involved in the verified transaction, not
-        # just that *some* successful signature was supplied.
-        account_keys = [str(key) for key in resp.value.transaction.transaction.message.account_keys]
-        return {
-            "status": "success" if meta.err is None else "failed",
-            "slot": resp.value.slot,
-            "fee": meta.fee,
-            "error": str(meta.err) if meta.err else None,
-            "account_keys": account_keys,
-        }
+        return asyncio.run(_fetch())
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "error": str(exc)}

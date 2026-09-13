@@ -28,30 +28,37 @@ redis==8.1.0
 
 # Chain SDKs
 #
-# web3/eth-account tried at 8.0.0/0.14.0 during a 2026-09 dependency-bump
-# pass — the code-level fix was trivial (web3 renamed geth_poa_middleware to
-# ExtraDataToPOAMiddleware) and real signature-verification/live-RPC/compile
-# +estimate checks all passed. Reverted anyway: web3==8.0.0's async
-# websocket provider requires websockets>=13, but solana==0.34.3 (below)
-# has a hard `websockets<12` constraint — pip/uv CANNOT resolve both from a
-# clean install (confirmed: a fresh `uv pip install -r requirements.txt`
-# fails outright), even though installing them in a specific order in an
-# already-populated venv appeared to work. Bumping web3 alone would ship an
-# environment no clean install could reproduce.
+# web3/eth-account bumped to 8.0.0/0.14.0 and solana/solders to 0.40.3/0.29.0
+# together, 2026-09 — the pair was previously held back (see git history /
+# docs/REBUILD_PROGRESS.md's 2026-09-11 entry for the full prior reasoning)
+# for two separate reasons, both now resolved:
 #
-# solana/solders themselves are held back for a separate, bigger reason:
-# 0.40.3/0.29.0 remove solana.rpc.api's synchronous Client entirely
-# (async-only now), which blockchain.py's whole Solana integration is built
-# on — that's a real rewrite (async Flask routes, or wrapping every call
-# site in asyncio.run), not a safe isolated bump.
+# 1. web3==8.0.0's async websocket provider needs websockets>=13, which used
+#    to conflict outright with solana==0.34.3's hard `websockets<12` pin
+#    (confirmed back then via a clean `rm -rf .venv` reinstall — genuinely
+#    unresolvable, not an install-order artifact). solana==0.40.3 no longer
+#    constrains websockets at all, so both now resolve together on a clean
+#    `uv pip install -r requirements.txt` — websockets lands on 17.1.
+# 2. web3's `geth_poa_middleware` was renamed to `ExtraDataToPOAMiddleware`
+#    (updated in blockchain.py) — verified against a real live POA chain
+#    (BSC testnet), not just imported.
+# 3. solana==0.40.3/solders==0.29.0 remove `solana.rpc.api`'s synchronous
+#    `Client` entirely (async-only now). Rather than making every Flask
+#    route async, `blockchain.py`'s two Solana call sites
+#    (`_get_solana_status`, `_get_solana_transaction_status`) now open an
+#    `AsyncClient` inside their own `asyncio.run()` call — every public
+#    function in that module keeps its original synchronous signature, so
+#    no caller (`candy_machine.py`, `contracts.py`, the blueprint routes)
+#    needed to change at all.
 #
-# Bumping either now requires bumping both together as one dedicated pass
-# (the Solana async rewrite, verified against the real solana-test-validator
-# this environment has access to), not a routine update.
-web3==6.20.1
-eth-account==0.11.2
-solana==0.34.3
-solders==0.21.0
+# Verified against real live networks, not just the test suite: a real
+# devnet RPC status check and a real, valid transaction lookup (both via
+# the new AsyncClient), plus a real anvil chain and a real POA chain (BSC
+# testnet) through the renamed middleware.
+web3==8.0.0
+eth-account==0.14.0
+solana==0.40.3
+solders==0.29.0
 PyNaCl==1.6.2
 base58==2.1.1
 
@@ -85,12 +92,14 @@ openai==3.13.0
 # not the real `httpx` package, so the version conflict this used to work
 # around no longer applies to openai at all.
 #
-# httpx itself is still pinned — not for openai anymore, but because
-# solana==0.34.3 (above) directly depends on it (httpx>=0.23.0) and this is
-# a known-good version already verified working with everything else here;
-# no forcing reason to touch it until solana itself gets its own dedicated
-# bump pass.
-httpx==0.27.2
+# httpx's pin is gone as of the 2026-09 solana/solders bump above: it was
+# only ever kept here because solana==0.34.3 depended directly on the real
+# `httpx` package. solana==0.40.3 depends on its own namespaced `httpx2`
+# fork instead (same as openai 3.x, per the comment above) — confirmed via
+# `importlib.metadata.requires()` across every installed package that
+# nothing in this project's dependency tree needs plain `httpx` anymore,
+# and no backend code imports it directly. Removed rather than left as an
+# orphaned pin.
 
 # Testing (Phase 7). `pytest` from backend/ picks these up via pytest.ini
 # (testpaths = tests) + tests/conftest.py.
