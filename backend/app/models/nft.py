@@ -112,3 +112,36 @@ class NFTGeneratedItem(db.Model):
             "ipfs_image_hash": self.ipfs_image_hash,
             "ipfs_metadata_hash": self.ipfs_metadata_hash,
         }
+
+
+class NFTGenerationJobStatus:
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+    ALL = (QUEUED, RUNNING, DONE, FAILED)
+
+
+class NFTGenerationJob(db.Model):
+    __tablename__ = "nft_generation_jobs"
+
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
+    collection_id = db.Column(db.String(36), db.ForeignKey("nft_collections.id"), nullable=False, index=True)
+    requested_count = db.Column(db.Integer, nullable=False)
+    items_generated = db.Column(db.Integer, nullable=False, default=0)
+    status = db.Column(db.String(16), nullable=False, default=NFTGenerationJobStatus.QUEUED)
+    error = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "collection_id": self.collection_id,
+            "requested_count": self.requested_count,
+            "items_generated": self.items_generated,
+            "status": self.status,
+            "error": self.error,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }

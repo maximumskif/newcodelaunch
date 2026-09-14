@@ -20,7 +20,7 @@ from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models.candy_machine import CandyMachineDeployment
-from ..models.nft import NFTCollection, NFTGeneratedItem, NFTLayer, NFTTrait
+from ..models.nft import NFTCollection, NFTGeneratedItem, NFTGenerationJob, NFTLayer, NFTTrait
 from ..models.project import Project
 from . import ipfs
 
@@ -73,6 +73,17 @@ def get_owned_collection(collection_id: str, user_id: str) -> NFTCollection:
     if collection is None:
         raise NotFoundError(f"Collection not found: {collection_id}")
     return collection
+
+
+def get_owned_job(job_id: str, user_id: str) -> NFTGenerationJob:
+    job = (
+        NFTGenerationJob.query.join(NFTCollection, NFTGenerationJob.collection_id == NFTCollection.id)
+        .filter(NFTGenerationJob.id == job_id, NFTCollection.user_id == user_id)
+        .first()
+    )
+    if job is None:
+        raise NotFoundError(f"Generation job not found: {job_id}")
+    return job
 
 
 def add_layer(collection: NFTCollection, name: str, order_index: int) -> NFTLayer:

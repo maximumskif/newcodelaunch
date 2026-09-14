@@ -15,13 +15,19 @@ from __future__ import annotations
 
 import os
 import random
-from typing import Any
+from typing import Any, Callable, Optional
 
 from ..extensions import db
 from ..models.nft import NFTCollection, NFTCollectionStatus, NFTGeneratedItem
 from . import nft_compositing
 
-MAX_ITEMS_PER_GENERATE_CALL = 200
+# A hard sanity cap, not a "must fit in one HTTP request/response" limit —
+# generation always runs through a background job now (see
+# nft_generation_jobs.py), so a large collection no longer risks a
+# gunicorn/proxy timeout the way it did when this ran synchronously inside
+# the request. Still capped well short of "unbounded" as cheap protection
+# against a single request kicking off a runaway job.
+MAX_ITEMS_PER_GENERATE_CALL = 10_000
 MAX_UNIQUE_ATTEMPTS_PER_ITEM = 50
 
 
@@ -38,7 +44,17 @@ def max_possible_combinations(collection: NFTCollection) -> int:
     return combinations
 
 
-def generate_collection(collection: NFTCollection, count: int, upload_folder: str) -> list[NFTGeneratedItem]:
+def generate_collection(
+    collection: NFTCollection,
+    count: int,
+    upload_folder: str,
+    on_item: Optional[Callable[[int], None]] = None,
+) -> list[NFTGeneratedItem]:
+    """`on_item`, when given, is called with the running count of items
+    generated so far after each one is composited and committed — the
+    background job wrapper (nft_generation_jobs.py) uses this to persist
+    live progress a client can poll mid-run, rather than only learning the
+    result once the whole batch finishes."""
     if not collection.layers or any(not layer.traits for layer in collection.layers):
         raise GenerationError("Every layer needs at least one trait before generating")
 
@@ -48,10 +64,7 @@ def generate_collection(collection: NFTCollection, count: int, upload_folder: st
             f"Requested {count} items but only {max_combinations} unique combinations are possible"
         )
     if count > MAX_ITEMS_PER_GENERATE_CALL:
-        raise GenerationError(
-            f"Generate at most {MAX_ITEMS_PER_GENERATE_CALL} items per call (requested {count}); "
-            "larger collections need a background job, which is future work"
-        )
+        raise GenerationError(f"Generate at most {MAX_ITEMS_PER_GENERATE_CALL} items per call (requested {count})")
 
     output_dir = os.path.join(upload_folder, "generated", collection.id)
     os.makedirs(output_dir, exist_ok=True)
@@ -111,8 +124,17 @@ def generate_collection(collection: NFTCollection, count: int, upload_folder: st
             image_path=relative_path,
         )
         db.session.add(item)
+        collection.status = NFTCollectionStatus.GENERATED
+        # Committed per item, not once after the whole loop: a background
+        # job (nft_generation_jobs.py) may run this for thousands of items,
+        # and this is what makes each one's progress actually visible to a
+        # client polling the job mid-run, and what keeps already-generated
+        # items on disk *and* in the DB if a later item in the same run hits
+        # the "couldn't find a unique combination" error below instead of
+        # losing the whole batch to one late failure.
+        db.session.commit()
         items.append(item)
+        if on_item is not None:
+            on_item(len(items))
 
-    collection.status = NFTCollectionStatus.GENERATED
-    db.session.commit()
     return items

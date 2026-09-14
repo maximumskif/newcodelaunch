@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NFTCollection, NFTGeneratedItem } from '../../lib/nftApi'
+import type { NFTCollection, NFTGeneratedItem, NFTGenerationJob } from '../../lib/nftApi'
 import { nftApi } from '../../lib/nftApi'
 import { GenerateStep } from './GenerateStep'
 
@@ -16,6 +16,8 @@ vi.mock('../../lib/nftApi', async (importOriginal) => {
       listItems: vi.fn(),
       getItemMetadata: vi.fn(),
       publishItem: vi.fn(),
+      generate: vi.fn(),
+      getGenerationJob: vi.fn(),
     },
   }
 })
@@ -156,6 +158,87 @@ describe('GenerateStep rarity distribution toggle', () => {
 
     await user.click(screen.getByText('Hide rarity distribution'))
     expect(screen.queryByText(/actual trait spread/)).not.toBeInTheDocument()
+  })
+})
+
+describe('GenerateStep generate button', () => {
+  const collectionWithLayer: NFTCollection = {
+    ...collection,
+    layers: [
+      { id: 'layer-1', name: 'Background', order_index: 0, traits: [{ id: 't1', name: 'Blue', rarity_weight: 50, image_path: 'x.png' }] },
+    ],
+  }
+
+  it('polls the background job, showing live progress, until it finishes and refreshes items', async () => {
+    // Regression coverage for the switch from a single blocking POST
+    // (which used to return the finished items directly) to a background
+    // job the client must poll — see nft_generation_jobs.py. Real timers
+    // (not fake ones): Testing Library's findBy*/waitFor do their own
+    // internal setTimeout-based polling that isn't fake-timer-aware, so
+    // mixing the two here just hangs — real timers plus a generous
+    // per-assertion timeout is simpler and still fast (well under a second
+    // per poll tick).
+    const user = userEvent.setup()
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [] })
+
+    const baseJob: NFTGenerationJob = {
+      id: 'job-1',
+      collection_id: collectionWithLayer.id,
+      requested_count: 2,
+      items_generated: 0,
+      status: 'queued',
+      error: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    const runningJob: NFTGenerationJob = { ...baseJob, status: 'running', items_generated: 1 }
+    const doneJob: NFTGenerationJob = { ...baseJob, status: 'done', items_generated: 2 }
+
+    vi.mocked(nftApi.generate).mockResolvedValue({ job: baseJob })
+    vi.mocked(nftApi.getGenerationJob).mockResolvedValueOnce({ job: runningJob }).mockResolvedValueOnce({ job: doneJob })
+
+    render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collectionWithLayer} />
+      </MemoryRouter>,
+    )
+    await screen.findByText('Generate') // wait for the mount-time listItems() to settle first
+    const listItemsCallsBeforeGenerate = vi.mocked(nftApi.listItems).mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    expect(await screen.findByText(/Generating 0 \/ 2/)).toBeInTheDocument()
+    expect(await screen.findByText(/Generating 1 \/ 2/, {}, { timeout: 3000 })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText(/Generating/)).not.toBeInTheDocument(), { timeout: 3000 })
+    // Exactly one more real refetch once the job finished, to pick up the
+    // now-real items — not zero (which would leave the grid stuck showing
+    // nothing generated) and not more than one.
+    expect(vi.mocked(nftApi.listItems).mock.calls.length - listItemsCallsBeforeGenerate).toBe(1)
+  }, 10_000)
+
+  it('shows the job error instead of a generic message when generation fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [] })
+
+    const failedJob: NFTGenerationJob = {
+      id: 'job-2',
+      collection_id: collectionWithLayer.id,
+      requested_count: 1,
+      items_generated: 0,
+      status: 'failed',
+      error: 'Simulated compositing failure',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    vi.mocked(nftApi.generate).mockResolvedValue({ job: failedJob })
+
+    render(
+      <MemoryRouter>
+        <GenerateStep token="tok" collection={collectionWithLayer} />
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    expect(await screen.findByText('Simulated compositing failure')).toBeInTheDocument()
   })
 })
 

@@ -51,6 +51,28 @@ async function waitForClonedPrograms(connection: Connection) {
   }
 }
 
+// Generation now runs as a background job (see
+// backend/app/services/nft_generation_jobs.py) instead of the old
+// single blocking POST that returned the finished items directly — a real
+// caller (this spec included) has to poll GET /nft/generation-jobs/<id>
+// until it's done or failed instead of trusting the initial POST response.
+async function waitForGenerationJob(
+  request: import('@playwright/test').APIRequestContext,
+  authHeaders: Record<string, string>,
+  jobId: string,
+) {
+  const deadline = Date.now() + 30_000
+  for (;;) {
+    const res = await request.get(`${API_BASE_URL}/nft/generation-jobs/${jobId}`, { headers: authHeaders })
+    expect(res.ok()).toBe(true)
+    const { job } = await res.json()
+    if (job.status === 'done') return job
+    if (job.status === 'failed') throw new Error(`Generation job failed: ${job.error}`)
+    if (Date.now() > deadline) throw new Error(`Generation job ${jobId} never finished`)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+}
+
 test.beforeAll(async () => {
   const connection = new Connection(VALIDATOR_RPC_URL, 'confirmed')
   await waitForClonedPrograms(connection)
@@ -140,8 +162,15 @@ test('a real Candy Machine launch and public mint — against a real local Solan
     headers: authHeaders,
     data: { count: 1 },
   })
-  expect(generateRes.ok()).toBe(true)
-  const { items } = await generateRes.json()
+  expect(generateRes.status()).toBe(202)
+  const { job } = await generateRes.json()
+  await waitForGenerationJob(request, authHeaders, job.id)
+
+  const itemsRes = await request.get(`${API_BASE_URL}/nft/collections/${collection.id}/items`, {
+    headers: authHeaders,
+  })
+  expect(itemsRes.ok()).toBe(true)
+  const { items } = await itemsRes.json()
 
   const publishRes = await request.post(`${API_BASE_URL}/nft/items/${items[0].id}/publish`, {
     headers: authHeaders,

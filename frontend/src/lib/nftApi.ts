@@ -36,6 +36,19 @@ export interface NFTGeneratedItem {
   ipfs_metadata_hash: string | null
 }
 
+export type NFTGenerationJobStatus = 'queued' | 'running' | 'done' | 'failed'
+
+export interface NFTGenerationJob {
+  id: string
+  collection_id: string
+  requested_count: number
+  items_generated: number
+  status: NFTGenerationJobStatus
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
 export function uploadUrl(relativePath: string): string {
   return `${API_BASE_URL}/nft/uploads/${relativePath.split('/').map(encodeURIComponent).join('/')}`
 }
@@ -97,12 +110,20 @@ export const nftApi = {
   deleteTrait: (token: string, traitId: string) =>
     request<void>(`/nft/traits/${traitId}`, { method: 'DELETE' }, token),
 
+  // Kicks off generation as a background job rather than blocking until
+  // every item is composited — see backend/app/services/nft_generation_jobs.py.
+  // Returns the job immediately (already "done" for a small/fast batch by
+  // the time this resolves, but callers must not assume that — poll via
+  // getGenerationJob until status is 'done' or 'failed').
   generate: (token: string, collectionId: string, count: number) =>
-    request<{ items: NFTGeneratedItem[] }>(
+    request<{ job: NFTGenerationJob }>(
       `/nft/collections/${collectionId}/generate`,
       { method: 'POST', body: JSON.stringify({ count }) },
       token,
     ),
+
+  getGenerationJob: (token: string, jobId: string) =>
+    request<{ job: NFTGenerationJob }>(`/nft/generation-jobs/${jobId}`, {}, token),
 
   listItems: (token: string, collectionId: string) =>
     request<{ items: NFTGeneratedItem[] }>(`/nft/collections/${collectionId}/items`, {}, token),

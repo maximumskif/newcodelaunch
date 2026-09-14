@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import ai_traits, ipfs, nft_collections, nft_generation, projects
+from ...services import ai_traits, ipfs, nft_collections, nft_generation, nft_generation_jobs, projects
 from ...validation import str_field
 
 nft_bp = Blueprint("nft", __name__)
@@ -206,13 +206,25 @@ def generate(collection_id):
 
     try:
         collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
-        items = nft_generation.generate_collection(collection, count, current_app.config["UPLOAD_FOLDER"])
+        job = nft_generation_jobs.create_job(
+            current_app._get_current_object(), collection, count, current_app.config["UPLOAD_FOLDER"]
+        )
     except nft_collections.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
     except nft_generation.GenerationError as exc:
         return jsonify(error=str(exc)), 422
 
-    return jsonify(items=[item.to_dict() for item in items]), 201
+    return jsonify(job=job.to_dict()), 202
+
+
+@nft_bp.get("/generation-jobs/<job_id>")
+@jwt_required()
+def get_generation_job(job_id):
+    try:
+        job = nft_collections.get_owned_job(job_id, get_jwt_identity())
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    return jsonify(job=job.to_dict())
 
 
 @nft_bp.get("/collections/<collection_id>/items")

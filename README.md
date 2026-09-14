@@ -22,8 +22,9 @@ The paragraphs below describe what's actually implemented and verified, not a ro
 - The AI Trait Identifier (real third-party OpenAI calls) doesn't have end-to-end browser coverage — see `frontend/e2e/README.md`'s "What isn't covered yet" for why.
 - The accessibility scan checks WCAG 2 A/AA automatically (color contrast, ARIA, labels, etc.) — it can't check things that need a human judgment call, like whether focus order or screen-reader announcement order actually make sense. Nothing currently does.
 - Candy Machine's blockhash-expiry risk was fixed 2026-09-06 (staged two-step launch flow — see `docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md`), but not yet devnet-click-through-verified — that checklist is still open.
-- NFT generation is synchronous and capped at 200 items/call; a background job queue is the natural next step if that cap needs to rise.
+- NFT generation runs as a background job now (`backend/app/services/nft_generation_jobs.py`, a real Python thread coordinating through the job's DB row — not a broker-backed queue like Celery/RQ, since there's no Redis/broker instance to actually run and verify one against in this project's dev sandboxes) rather than blocking the request, so the old 200-item cap is now a 10,000-item sanity ceiling instead of a "must fit in one HTTP round trip" limit. One real trade-off worth knowing: if the worker process running a job's thread dies mid-run, that job is stuck at "running" with no supervisor to requeue it — a real distributed queue doesn't have this gap.
 - `backend/Dockerfile` and `frontend/Dockerfile` are now wired into `docker-compose.yml` (see "Running the whole stack in Docker instead" above) but still aren't build-verified — no Docker in the sandbox that wrote them. Rate limiting itself defaults to in-memory storage (fine for a single dev process) — set `RATE_LIMIT_STORAGE_URI` to a `redis://` URL before running more than one backend worker; `docker compose up -d redis` starts one, and both the wiring and the cross-process sharing it exists for are covered by a real Redis instance in CI (`backend/tests/test_ratelimit_storage.py`), not mocked.
+
 ## Architecture
 
 Monorepo:
