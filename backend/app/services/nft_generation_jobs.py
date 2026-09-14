@@ -37,6 +37,7 @@ from flask import Flask
 from ..extensions import db
 from ..models.nft import NFTCollection, NFTGenerationJob, NFTGenerationJobStatus
 from . import nft_generation
+from .nft_collections import ConflictError
 
 
 def create_job(app: Flask, collection: NFTCollection, count: int, upload_folder: str) -> NFTGenerationJob:
@@ -45,6 +46,27 @@ def create_job(app: Flask, collection: NFTCollection, count: int, upload_folder:
     clear error instead of creating a job that's guaranteed to fail — then
     hands the actual generation off to a background thread (or runs it
     inline, deterministically, under TESTING; see _run_job)."""
+    # generate_collection computes its starting token_index and dedup set
+    # from collection.items *once*, at the start of a run — two jobs racing
+    # on the same collection could both read the same starting point before
+    # either commits, then both write items under the same token_index
+    # (the second silently overwriting the first's on-disk image while the
+    # DB rows describe two different attribute sets for one file). This was
+    # already possible with the old synchronous endpoint (two rapid
+    # double-clicks), but background jobs can now run for a long time,
+    # turning a narrow timing accident into an easy-to-hit window — one tab
+    # generating 5,000 items while a second tab (or a retried request)
+    # starts another run on the same collection. Block it outright instead.
+    has_active_job = (
+        NFTGenerationJob.query.filter(
+            NFTGenerationJob.collection_id == collection.id,
+            NFTGenerationJob.status.in_((NFTGenerationJobStatus.QUEUED, NFTGenerationJobStatus.RUNNING)),
+        ).first()
+        is not None
+    )
+    if has_active_job:
+        raise ConflictError("A generation job is already running for this collection")
+
     if not collection.layers or any(not layer.traits for layer in collection.layers):
         raise nft_generation.GenerationError("Every layer needs at least one trait before generating")
 

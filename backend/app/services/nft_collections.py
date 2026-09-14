@@ -20,7 +20,7 @@ from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models.candy_machine import CandyMachineDeployment
-from ..models.nft import NFTCollection, NFTGeneratedItem, NFTGenerationJob, NFTLayer, NFTTrait
+from ..models.nft import NFTCollection, NFTGeneratedItem, NFTGenerationJob, NFTGenerationJobStatus, NFTLayer, NFTTrait
 from ..models.project import Project
 from . import ipfs
 
@@ -194,10 +194,28 @@ def delete_collection(collection: NFTCollection, upload_folder: str) -> None:
     if has_linked_project:
         raise ConflictError("This collection is linked to a project and can't be deleted directly")
 
+    # A generation job that's still queued/running has a background thread
+    # actively reading this exact collection (nft_generation_jobs.py) and
+    # writing new items/files for it — deleting out from under that isn't a
+    # foreign-key problem (generation_jobs cascades, see NFTCollection), but
+    # it would race the thread into either a confusing "job failed: 'NoneType'
+    # has no attribute 'layers'" or, worse, new item rows silently orphaned
+    # the instant the delete commits. Finished/failed jobs are just history
+    # and delete along with the collection with no such risk.
+    has_active_job = (
+        NFTGenerationJob.query.filter(
+            NFTGenerationJob.collection_id == collection.id,
+            NFTGenerationJob.status.in_((NFTGenerationJobStatus.QUEUED, NFTGenerationJobStatus.RUNNING)),
+        ).first()
+        is not None
+    )
+    if has_active_job:
+        raise ConflictError("This collection has a generation job in progress and can't be deleted yet")
+
     for relative_dir in (os.path.join("traits", collection.id), os.path.join("generated", collection.id)):
         shutil.rmtree(os.path.join(upload_folder, relative_dir), ignore_errors=True)
 
-    db.session.delete(collection)  # cascades to layers/traits/items (see NFTCollection's relationships)
+    db.session.delete(collection)  # cascades to layers/traits/items/generation_jobs (see NFTCollection's relationships)
     db.session.commit()
 
 

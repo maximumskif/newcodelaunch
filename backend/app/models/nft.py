@@ -39,6 +39,17 @@ class NFTCollection(db.Model):
         "NFTGeneratedItem", backref="collection", cascade="all, delete-orphan",
         order_by="NFTGeneratedItem.token_index",
     )
+    # Without this, deleting a collection that has ever had a generation job
+    # run against it (essentially every non-empty collection) leaves
+    # nft_generation_jobs.collection_id pointing at nothing — invisible on
+    # SQLite (no FK enforcement by default) but a real IntegrityError on
+    # Postgres, the actual deploy target. Same bug class `delete_collection`
+    # already guards against explicitly for CandyMachineDeployment/Project
+    # (see nft_collections.py) — those two are blocked outright instead of
+    # cascaded because they represent live external state; a generation
+    # job is just a historical record of a run, safe to delete along with
+    # the collection it describes.
+    generation_jobs = db.relationship("NFTGenerationJob", backref="collection", cascade="all, delete-orphan")
 
     def to_dict(self, include_layers: bool = False) -> dict:
         data = {

@@ -7,7 +7,7 @@ from PIL import Image
 from app.extensions import db as _db
 from app.models.nft import NFTCollection, NFTGeneratedItem, NFTGenerationJob, NFTGenerationJobStatus, NFTLayer, NFTTrait
 from app.models.user import Chain, User
-from app.services import nft_generation, nft_generation_jobs
+from app.services import nft_collections, nft_generation, nft_generation_jobs
 
 
 def _make_user(wallet_address: str = "0xabc0000000000000000000000000000000000a") -> User:
@@ -67,6 +67,26 @@ class TestCreateJob:
             assert job.requested_count == 2
             assert job.error is None
             assert NFTGeneratedItem.query.filter_by(collection_id=collection.id).count() == 2
+
+    def test_rejects_a_second_job_while_one_is_still_active_for_the_same_collection(self, app, tmp_path):
+        # Regression coverage: two jobs racing on the same collection could
+        # both compute the same starting token_index and dedup set from
+        # collection.items before either committed, then both write items
+        # under the same token_index — one silently overwriting the
+        # other's on-disk image. Real risk once jobs run in the background
+        # for a while (e.g. two tabs open on the same collection), not just
+        # a same-millisecond double-click.
+        with app.app_context():
+            upload_folder = str(tmp_path)
+            user = _make_user()
+            collection = _make_collection(upload_folder, user.id)
+            _db.session.add(
+                NFTGenerationJob(collection_id=collection.id, requested_count=1, status=NFTGenerationJobStatus.RUNNING)
+            )
+            _db.session.commit()
+
+            with pytest.raises(nft_collections.ConflictError, match="already running"):
+                nft_generation_jobs.create_job(app, collection, count=1, upload_folder=upload_folder)
 
     def test_rejects_an_invalid_count_without_creating_a_job_row(self, app, tmp_path):
         # 3 traits on one layer -> at most 3 unique combinations possible.
@@ -132,6 +152,22 @@ class TestGenerateRoute:
             assert poll_response.status_code == 200
             assert poll_response.get_json()["job"]["id"] == job_payload["id"]
             assert poll_response.get_json()["job"]["status"] == "done"
+
+    def test_generate_returns_409_when_a_job_is_already_running(self, app, client, tmp_path):
+        with app.app_context():
+            app.config["UPLOAD_FOLDER"] = str(tmp_path)
+            user = _make_user()
+            collection = _make_collection(str(tmp_path), user.id)
+            headers = _auth_header(user)
+            _db.session.add(
+                NFTGenerationJob(collection_id=collection.id, requested_count=1, status=NFTGenerationJobStatus.RUNNING)
+            )
+            _db.session.commit()
+
+            response = client.post(
+                f"/api/nft/collections/{collection.id}/generate", json={"count": 1}, headers=headers
+            )
+            assert response.status_code == 409
 
     def test_generate_rejects_a_non_positive_count(self, app, client, tmp_path):
         with app.app_context():

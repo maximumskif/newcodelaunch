@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token
 
 from app.extensions import db as _db
 from app.models.candy_machine import CandyMachineDeployment
-from app.models.nft import NFTCollection, NFTLayer, NFTTrait
+from app.models.nft import NFTCollection, NFTGenerationJob, NFTGenerationJobStatus, NFTLayer, NFTTrait
 from app.models.project import Project, ProjectType
 from app.models.user import Chain, User
 
@@ -257,6 +257,48 @@ def test_delete_collection_cascades_and_removes_upload_directories(app, client, 
         assert _db.session.get(NFTLayer, layer.id) is None
         assert _db.session.get(NFTTrait, trait.id) is None
         assert not os.path.exists(collection_traits_dir)
+
+
+def test_delete_collection_cascades_to_a_finished_generation_job(app, client, tmp_path):
+    # Regression: NFTCollection had no relationship/cascade for
+    # NFTGenerationJob, so nft_generation_jobs.collection_id (a required FK
+    # with no ondelete clause) would raise a raw IntegrityError on Postgres
+    # deleting any collection that had ever had a job run against it — the
+    # same bug class already caught for CandyMachineDeployment/Project below.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        collection, _, _ = _make_collection(str(tmp_path), user.id)
+        job = NFTGenerationJob(
+            collection_id=collection.id, requested_count=1, items_generated=1, status=NFTGenerationJobStatus.DONE
+        )
+        _db.session.add(job)
+        _db.session.commit()
+        job_id = job.id
+
+        response = client.delete(f"/api/nft/collections/{collection.id}", headers=_auth_header(user))
+
+        assert response.status_code == 204
+        assert _db.session.get(NFTGenerationJob, job_id) is None
+
+
+def test_delete_collection_rejects_while_a_generation_job_is_still_running(app, client, tmp_path):
+    # A queued/running job has a background thread actively reading and
+    # writing this exact collection (nft_generation_jobs.py) — deleting out
+    # from under it would race the thread, not just leave orphaned rows.
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        collection, _, _ = _make_collection(str(tmp_path), user.id)
+        _db.session.add(
+            NFTGenerationJob(collection_id=collection.id, requested_count=5, status=NFTGenerationJobStatus.RUNNING)
+        )
+        _db.session.commit()
+
+        response = client.delete(f"/api/nft/collections/{collection.id}", headers=_auth_header(user))
+
+        assert response.status_code == 409
+        assert _db.session.get(NFTCollection, collection.id) is not None
 
 
 def test_delete_collection_rejects_when_a_candy_machine_was_launched_from_it(app, client, tmp_path):

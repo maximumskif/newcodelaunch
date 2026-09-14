@@ -211,6 +211,8 @@ def generate(collection_id):
         )
     except nft_collections.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
+    except nft_collections.ConflictError as exc:
+        return jsonify(error=str(exc)), 409
     except nft_generation.GenerationError as exc:
         return jsonify(error=str(exc)), 422
 
