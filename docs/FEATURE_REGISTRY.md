@@ -34,6 +34,7 @@ Last updated 2026-09-15 (NFT Generator's "Generate collection" row corrected for
 | New Project → pick type → name it → create draft | Real | Creates a real `Project` row, hands off into the real Token/NFT/Contracts page. |
 | Resume a draft | Real | Restores template/parameters/network (tokens/contracts) or the linked collection (NFT) from `draft_data`. |
 | Archive / Unarchive / Delete | Real | `PATCH`/`DELETE /api/projects/:id`. |
+| Switch project (from the Token/Contracts/NFT/Mint pages, not the Dashboard itself) | Real | Added 2026-09-13. `ProjectContextBar`'s "Switch project" dropdown, shown whenever a page is reached via `?project=<id>`; lists the user's other real projects (`GET /api/projects`) and navigates straight to each one's own page. |
 
 ## Token Launchpad (`/tokens`) & Smart Contracts Hub (`/contracts`)
 
