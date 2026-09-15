@@ -301,6 +301,43 @@ def test_delete_collection_rejects_while_a_generation_job_is_still_running(app, 
         assert _db.session.get(NFTCollection, collection.id) is not None
 
 
+def test_delete_collection_succeeds_once_a_stuck_job_is_reaped(app, client, tmp_path):
+    # The real interaction between two independent gaps closed on different
+    # days: this route's 409 guard above (2026-09-13) and
+    # `flask reap-stale-generation-jobs` (2026-09-15, see
+    # backend/app/commands.py) both exist so a background job's thread is
+    # never deleted out from under it — but a job the reaper has correctly
+    # given up on (no progress in NFT_GENERATION_JOB_STALE_SECONDS, worker
+    # presumed dead) must stop blocking deletion, or the two fixes would
+    # combine into a permanently stuck collection nothing can ever remove.
+    from datetime import datetime, timedelta, timezone
+
+    with app.app_context():
+        app.config["UPLOAD_FOLDER"] = str(tmp_path)
+        user = _make_user()
+        collection, _, _ = _make_collection(str(tmp_path), user.id)
+        stale_seconds = app.config["NFT_GENERATION_JOB_STALE_SECONDS"]
+        _db.session.add(
+            NFTGenerationJob(
+                collection_id=collection.id,
+                requested_count=5,
+                status=NFTGenerationJobStatus.RUNNING,
+                updated_at=datetime.now(timezone.utc) - timedelta(seconds=stale_seconds + 60),
+            )
+        )
+        _db.session.commit()
+
+        blocked = client.delete(f"/api/nft/collections/{collection.id}", headers=_auth_header(user))
+        assert blocked.status_code == 409
+
+        reap_result = app.test_cli_runner().invoke(args=["reap-stale-generation-jobs"])
+        assert "Reaped 1" in reap_result.output
+
+        allowed = client.delete(f"/api/nft/collections/{collection.id}", headers=_auth_header(user))
+        assert allowed.status_code == 204
+        assert _db.session.get(NFTCollection, collection.id) is None
+
+
 def test_delete_collection_rejects_when_a_candy_machine_was_launched_from_it(app, client, tmp_path):
     with app.app_context():
         app.config["UPLOAD_FOLDER"] = str(tmp_path)
