@@ -3,11 +3,13 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
 from .extensions import cors, db, jwt, limiter, migrate
+from .logging_config import configure_logging
 
 
 def create_app(config_object=Config):
     app = Flask(__name__)
     app.config.from_object(config_object)
+    configure_logging(app)
 
     # No-op when TRUSTED_PROXY_COUNT is 0 (the default) — only takes effect
     # once a deployment actually sits behind that many reverse-proxy hops.

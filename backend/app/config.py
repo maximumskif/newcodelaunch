@@ -38,6 +38,7 @@ class Config:
     # varies with image size/layer count, and this only needs to catch a
     # worker that's actually gone, not a merely slow one.
     NFT_GENERATION_JOB_STALE_SECONDS = int(os.environ.get("NFT_GENERATION_JOB_STALE_SECONDS", "600"))
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL", "postgresql://launchpad:launchpad@localhost:5432/launchpad"
@@ -131,3 +132,8 @@ class TestConfig(Config):
     # isn't) need a non-empty value or every such call 500s before the mock
     # is ever reached.
     CANDY_MACHINE_SHARED_SECRET = "test-shared-secret"
+    # Quiets the per-request JSON log line (see logging_config.py) across
+    # 130+ tests' worth of requests — tests that specifically want to
+    # assert on logging behavior use caplog.set_level(..., logger="app")
+    # to override this for just that test.
+    LOG_LEVEL = "WARNING"
