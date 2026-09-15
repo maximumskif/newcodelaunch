@@ -11,7 +11,7 @@ claiming something works when it doesn't.
 - **Real (optional config)** — real when its API key/credential is set; fails with a clear error instead of faking a result when it isn't.
 - **Unavailable** — not built. Shown with a "Soon" badge or a disabled tile, never a dead link or a button that does nothing.
 
-Last updated 2026-08-17, alongside the public mint storefront. See `docs/REBUILD_PROGRESS.md` for the living build checklist this doc summarizes the user-facing side of.
+Last updated 2026-09-15 (NFT Generator's "Generate collection" row corrected for the 2026-09-13 background-job move — was still describing the old synchronous 200-item/no-progress-UI behavior). See `docs/REBUILD_PROGRESS.md` for the living build checklist this doc summarizes the user-facing side of.
 
 ## Marketing site (`/`)
 
@@ -52,7 +52,7 @@ Last updated 2026-08-17, alongside the public mint storefront. See `docs/REBUILD
 |---|---|---|
 | Create collection / add layer / upload trait | Real | Persisted, real file storage. |
 | AI-assisted rarity suggestion ("AI Suggest") | Real (optional config) | Real CV analysis (color/composition/technical) always runs; the AI-vision fields only appear if `OPENAI_API_KEY` is set — never faked when it's absent. |
-| Generate collection | Real (capped) | Real rarity-weighted PIL compositing, deduped against actual trait combinations — capped at 200 items/call, no progress UI yet (documented gap, not urgent at this cap). |
+| Generate collection | Real (capped) | Real rarity-weighted PIL compositing, deduped against actual trait combinations, run as a background job (`backend/app/services/nft_generation_jobs.py`) with live "Generating N / M…" progress — capped at 10,000 items/call (was 200 before the background-job move, 2026-09-13). |
 | Preview metadata | Real | Published items fetch the literal JSON already pinned to IPFS; unpublished items show an honest preview with `image`/`created_at` left `null` rather than guessed. |
 | Download metadata JSON | Real | Real browser download of exactly what's previewed. |
 | Publish to IPFS | Real (optional config) | Real Pinata upload; returns a clear 503 if `PINATA_JWT`/keys aren't configured, never a fake hash. |
