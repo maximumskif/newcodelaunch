@@ -31,6 +31,13 @@ class Config:
     JWT_SECRET_KEY = _require("JWT_SECRET_KEY")
     JWT_ACCESS_TOKEN_EXPIRES_SECONDS = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", "3600"))
     WALLET_NONCE_TTL_SECONDS = int(os.environ.get("WALLET_NONCE_TTL_SECONDS", "300"))
+    # How long a generation job can sit with no progress (no item committed,
+    # no status change — see NFTGenerationJob.updated_at) while still
+    # "queued"/"running" before `flask reap-stale-generation-jobs` treats it
+    # as abandoned. Generous on purpose: real per-item PIL compositing time
+    # varies with image size/layer count, and this only needs to catch a
+    # worker that's actually gone, not a merely slow one.
+    NFT_GENERATION_JOB_STALE_SECONDS = int(os.environ.get("NFT_GENERATION_JOB_STALE_SECONDS", "600"))
 
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL", "postgresql://launchpad:launchpad@localhost:5432/launchpad"
