@@ -1,15 +1,13 @@
 # Candy Machine blockhash-expiry fix — implementation spec
 
-**Status: implemented 2026-09-06 (Option B, staged re-prepare), per this
-spec — see `docs/REBUILD_PROGRESS.md`'s corresponding entry for exactly
-what changed across the sidecar/backend/frontend.** Written 2026-09-05,
-originally handed off unimplemented because this session had no funded
-devnet wallet or browser to meet this subsystem's own established
-verification bar. That access became available the next day; the code
-below describes the design that was then actually built. **Devnet
-click-through verification per the checklist at the bottom of this
-document is still the user's to run before trusting this in production** —
-implementing from this spec is not a substitute for it.
+**Status: implemented 2026-09-06 (Option B, staged re-prepare) and devnet
+click-through-verified 2026-09-15, including the actual delay-between-steps
+regression case** — see `docs/REBUILD_PROGRESS.md`'s corresponding entries
+for exactly what changed and what the real verification run found. Written
+2026-09-05, originally handed off unimplemented because that session had no
+funded devnet wallet or browser to meet this subsystem's own established
+verification bar; implemented the next day once that access existed. The
+checklist at the bottom of this document is now fully checked off.
 
 This is a precise, code-referenced spec
 for the highest-value open fix on the Candy Machine surface (see
@@ -126,15 +124,15 @@ Matching this project's own established standard for every prior Candy
 Machine change (see `REBUILD_PROGRESS.md`'s "Verified for real against live
 devnet, not just typechecked" entries):
 
-- [ ] `tsc`/build clean on the sidecar and frontend (necessary, not sufficient).
-- [ ] A real devnet run: generate a throwaway funded devnet wallet, click
+- [x] `tsc`/build clean on the sidecar and frontend (necessary, not sufficient) — already covered by CI on every push; not independently re-run here since nothing in this code changed for this check.
+- [x] A real devnet run: generate a throwaway funded devnet wallet, click
       through the actual two-step launch flow in a browser, confirm both
-      transactions land and `/status` shows the candy machine live.
-- [ ] Deliberately introduce a delay between the two steps (e.g. pause 90+
+      transactions land and `/status` shows the candy machine live. **Done 2026-09-15** — see `docs/REBUILD_PROGRESS.md`'s dated entry for the full writeup.
+- [x] Deliberately introduce a delay between the two steps (e.g. pause 90+
       seconds between confirming the collection transaction and signing the
       candy-machine one) and confirm the second step's blockhash is still
       fresh — this is the actual regression case being fixed, not just the
-      happy path.
-- [ ] Confirm `record_candy_machine`'s existing idempotency/on-chain
+      happy path. **Done 2026-09-15**, real 95-96s gap, confirmed via backend request-log timestamps.
+- [x] Confirm `record_candy_machine`'s existing idempotency/on-chain
       re-verification (see `docs/REBUILD_PROGRESS.md`'s 2026-08-19 entry)
-      still behaves correctly against the new two-call shape.
+      still behaves correctly against the new two-call shape. **Done 2026-09-15** — `POST /api/mint/candy-machines` returned a real 201 after independently re-verifying the on-chain transaction.
