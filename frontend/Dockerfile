@@ -8,7 +8,16 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: @solana/wallet-adapter-wallets pulls in @trezor/transport,
+# which depends on `usb` — a native Node module with no prebuilt binary for
+# this platform, so its install script tries to compile it via node-gyp,
+# which needs Python/build tools this Alpine stage doesn't have (found by
+# actually running this build for the first time, 2026-09-15 — see
+# docs/REBUILD_PROGRESS.md). Safe to skip entirely: `usb` is a Node-runtime
+# USB binding for hardware-wallet communication outside a browser (Electron,
+# etc) — Trezor's actual browser integration uses WebUSB, a browser API, not
+# this native binding, so nothing Vite bundles for the browser needs it built.
+RUN npm ci --ignore-scripts
 
 COPY . .
 
