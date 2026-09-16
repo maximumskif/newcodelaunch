@@ -45,6 +45,22 @@
      standalone semantic color (that stays violet's job alone). */
   --color-accent2-400: var(--color-cyan-400);
   --color-accent2-500: var(--color-cyan-500);
+  /* A separate, deliberately darker stop for anywhere the gradient carries
+     text (button backgrounds with white labels, the headline's own
+     text-clip fill) — checked for real, not assumed: cyan-500 measures
+     only 2.37:1 against white (WCAG AA needs 4.5:1 for this text size/
+     weight), found via manual WCAG math after the design pass's own axe
+     scan couldn't evaluate a gradient background at all. This shade
+     (#047596, not a named Tailwind stop — cyan-600/700 weren't reliably
+     resolvable via CSS var lookup in this build) measures 5.38:1 against
+     white and 3.7:1 against canvas (comfortably past the 3:1 large-text
+     minimum the headline's own size qualifies for). violet-600 (already a
+     real token below) pairs with it as the other stop: 5.89:1 against
+     white, 3.37:1 against canvas. Decorative, non-text uses (the ambient
+     hero glow, soft icon-badge backgrounds) keep the brighter -500/-400
+     shades on purpose — contrast rules don't apply to pure decoration, and
+     the brighter values read better there. */
+  --color-accent2-text-safe: #047596;
 
   --color-success: var(--color-emerald-400);
   --color-success-strong: var(--color-emerald-500);
@@ -110,7 +126,14 @@
      which stays the tight per-element hover cue. */
   --shadow-glow-hero: 0 0 80px -20px color-mix(in oklab, var(--color-accent-500) 60%, transparent), 0 0 140px -40px color-mix(in oklab, var(--color-accent2-500) 40%, transparent);
 
-  --gradient-accent: linear-gradient(135deg, var(--color-accent-500), var(--color-accent2-500));
+  /* accent-600 + accent2-text-safe, not the brighter -500 pair — this
+     gradient carries white button text and the headline's own text-clip
+     fill, both of which need real contrast against it (see
+     --color-accent2-text-safe's comment above for the numbers). */
+  --gradient-accent: linear-gradient(135deg, var(--color-accent-600), var(--color-accent2-text-safe));
+  /* Icon-badge backgrounds only — no text sits directly on this one (the
+     icon glyph is its own solid --color-accent-300, not gradient-filled),
+     so the brighter -500 pair reads better here with no contrast tradeoff. */
   --gradient-accent-soft: linear-gradient(135deg, color-mix(in oklab, var(--color-accent-500) 20%, transparent), color-mix(in oklab, var(--color-accent2-500) 20%, transparent));
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
