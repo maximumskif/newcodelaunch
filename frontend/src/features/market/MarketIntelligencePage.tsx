@@ -40,10 +40,6 @@ export function MarketIntelligencePage() {
       {(isLoading || (data && data.tokens.length > 0)) && (
         <div className="animate-fade-up overflow-x-auto rounded-xl border border-border bg-surface [animation-delay:80ms]">
           <table className="w-full text-sm">
-            {/* text-ink-muted, not -faint — see DefiScannerPage.tsx's
-                identical thead for why: the same faint/surface combination
-                measured a real 4.37:1 there in an axe scan, just under
-                WCAG AA. Matched here so the two tables don't drift. */}
             <thead className="border-b border-border text-left text-xs text-ink-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">#</th>

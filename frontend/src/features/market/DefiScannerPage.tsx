@@ -43,12 +43,6 @@ export function DefiScannerPage() {
       {(isLoading || (data && data.protocols.length > 0)) && (
         <div className="animate-fade-up overflow-x-auto rounded-xl border border-border bg-surface [animation-delay:80ms]">
           <table className="w-full text-sm">
-            {/* text-ink-muted, not -faint — a real axe run caught this
-                exact thead at 4.37:1 against bg-surface on this page (just
-                under WCAG AA's 4.5:1), while the same classes measured fine
-                on Market Intelligence's identical table; not worth trusting
-                the margin either place once one of them has actually
-                failed a real scan. */}
             <thead className="border-b border-border text-left text-xs text-ink-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Protocol</th>

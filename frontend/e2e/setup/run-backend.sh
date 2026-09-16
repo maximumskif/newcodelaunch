@@ -37,6 +37,19 @@ export PINATA_JWT="e2e-fake-jwt-not-for-real-use"
 export PINATA_BASE_URL="http://127.0.0.1:5555"
 export PINATA_GATEWAY_URL="http://127.0.0.1:5555/ipfs/"
 export FLASK_APP="wsgi.py"
+# config.py calls load_dotenv() unconditionally, which — given `cd
+# "$BACKEND_DIR"` above — loads whatever's in backend/.env, including a
+# real OPENAI_API_KEY if the developer running this suite has one set up
+# for normal local dev (exactly what the root README's setup steps tell
+# everyone to do). nft-generator.spec.ts's bulk-trait-analysis test relies
+# specifically on no key being configured, to prove the batch endpoint
+# works standalone without the optional AI-vision pass — found by actually
+# profiling why that one test was intermittently timing out: it wasn't
+# slow CV code, it was making a real OpenAI network call (with real retry
+# backoff) that a "no key" test was never supposed to make. Explicitly
+# empty here so this test's behavior doesn't depend on what happens to be
+# sitting in a real .env on whichever machine runs it.
+export OPENAI_API_KEY=""
 
 .venv/bin/flask db upgrade
 exec .venv/bin/flask run

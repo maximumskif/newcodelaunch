@@ -64,8 +64,28 @@
   --color-border: color-mix(in oklab, white 10%, transparent);
   --color-border-strong: color-mix(in oklab, white 20%, transparent);
   --color-ink: var(--color-zinc-50);
-  --color-ink-muted: color-mix(in oklab, white 60%, transparent);
-  --color-ink-faint: color-mix(in oklab, white 50%, transparent);
+  /* Solid, not alpha-blended (found the hard way, 2026-10): a
+     color-mix(...,transparent) text color's *effective* contrast depends on
+     whatever's actually rendered behind it, which varies by page/element —
+     a real axe scan measured the exact same `text-ink-faint` class at
+     4.37:1 on one table and 2.31:1 on another, both under WCAG AA's 4.5:1,
+     despite the 2026-09 accessibility pass explicitly tuning the old
+     alpha-blended value to "measure violation-free." Opaque zinc shades
+     have a fixed, real contrast ratio regardless of what's behind them —
+     but "fixed" only helps if it's computed against the *lightest* real
+     surface it's ever used on, not just canvas: the first attempt here
+     (#828284, ~5.2:1 against canvas) still failed a real scan at 4.43:1
+     against `bg-surface-raised` (axe-measured as #1c1c1e), which is
+     lighter than canvas and where this token is genuinely used (small tag
+     badges). Recomputed against #1c1c1e instead: --color-ink-muted is
+     zinc-400 (6.98:1 there); --color-ink-faint is #949496 (5.61:1 there,
+     6.56:1 against canvas) rather than zinc-500 (would measure under 4.5
+     against canvas alone, let alone anything lighter). The two tiers read
+     closer together than the original alpha-blended design intended, but
+     both are now safely compliant against every real surface they sit on,
+     not just the darkest one. */
+  --color-ink-muted: var(--color-zinc-400);
+  --color-ink-faint: #949496;
 
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-display: 'Space Grotesk', var(--font-sans);
