@@ -18,6 +18,7 @@ interface Props {
 export function Dropdown({ trigger, children, align = 'left', className = '' }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -25,8 +26,19 @@ export function Dropdown({ trigger, children, align = 'left', className = '' }: 
     const handlePointerDown = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false)
     }
+    // Found via a real keyboard-only pass: tabbing into an open menu's
+    // items, then pressing Escape, closed the menu but left focus behind —
+    // the browser dropped it to <body> once the focused item unmounted, so
+    // the next Tab restarted from the top of the page instead of
+    // continuing from this trigger. Returning focus to the trigger here
+    // matches the WAI-ARIA menu-button pattern and what Dialog.tsx already
+    // does. Outside-click deliberately doesn't also refocus the trigger —
+    // the user's click already moved their attention somewhere real.
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+        triggerRef.current?.focus()
+      }
     }
     document.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
@@ -39,6 +51,7 @@ export function Dropdown({ trigger, children, align = 'left', className = '' }: 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}

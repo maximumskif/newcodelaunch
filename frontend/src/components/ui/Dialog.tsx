@@ -27,13 +27,38 @@ export function Dialog({ open, onClose, title, description, children, dismissibl
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
+  // Split from the Escape-listener effect below on purpose: `onClose` isn't
+  // memoized by any real caller, so an effect keyed on `[open, onClose,
+  // dismissible]` re-runs on every render while the dialog stays open
+  // (e.g. ConfirmDialog's own isConfirming toggling true/false mid-confirm)
+  // — its cleanup would restore focus and its next run would re-capture
+  // and re-focus the panel on every one of those renders, a real focus
+  // flicker. Keying this effect on `[open]` alone means the
+  // capture-on-open/restore-on-close pair only ever runs once per actual
+  // open/close transition.
+  useEffect(() => {
+    if (!open) return
+    // Whatever had focus right before this dialog opened (the button that
+    // triggered it, in every real usage) — found via a real keyboard-only
+    // pass: without restoring this on close, the browser dropped focus to
+    // <body> the moment the focused panel unmounted, so a keyboard user
+    // who opened then cancelled a *delete confirmation* lost their place
+    // on the page entirely and had to tab from the very top to find it
+    // again. A generic Dialog can't know its trigger ahead of time the way
+    // a specific button's own ref could, so it captures whatever was
+    // actually focused instead — the same restore-on-close behavior
+    // WAI-ARIA's dialog pattern describes.
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    panelRef.current?.focus()
+    return () => previouslyFocused?.focus()
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && dismissible) onClose()
     }
     document.addEventListener('keydown', handleKeyDown)
-    panelRef.current?.focus()
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, onClose, dismissible])
 

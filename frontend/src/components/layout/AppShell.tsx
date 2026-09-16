@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { WalletConnect } from '../../features/auth/WalletConnect'
@@ -67,6 +67,26 @@ export function AppShell() {
   // md breakpoint the sidebar is now closed by default and slides in as an
   // overlay; at md and up this state is simply never read.
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Found via a real keyboard-only pass (not caught by axe, which doesn't
+  // exercise interaction behavior): the backdrop and every nav link already
+  // closed this drawer on click, but Escape — the near-universal expected
+  // way to dismiss any open overlay, and the same convention Dialog.tsx
+  // already follows — did nothing. Also returns focus to the toggle button
+  // that opened it, so a keyboard user doesn't lose their place once the
+  // drawer closes.
+  useEffect(() => {
+    if (!isMobileOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileOpen(false)
+        menuButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isMobileOpen])
 
   const toggleCollapsed = () => {
     setIsCollapsed((prev) => {
@@ -169,6 +189,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center justify-end gap-3 border-b border-border px-4 py-3 sm:px-6">
           <button
+            ref={menuButtonRef}
             type="button"
             onClick={() => setIsMobileOpen(true)}
             aria-label="Open menu"

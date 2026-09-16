@@ -167,7 +167,24 @@ export function HomePage() {
                 </>
               )
               return path.href ? (
-                <Link key={path.title} to={path.href} className="group">
+                // aria-label keeps the link's announced name to the actual
+                // action ("Launch a Token (Live)") — without it, wrapping
+                // the whole card (badge + title + description) in one <a>
+                // makes every word of the description part of the link's
+                // accessible name, so a screen reader user has to sit
+                // through the full sentence just to identify which link
+                // they're on. Found via a real Chromium accessibility-tree
+                // dump (Accessibility.getFullAXTree), not assumed — axe's
+                // automated WCAG scan has no rule for this since a long
+                // accessible name isn't a spec violation, just bad screen-
+                // reader UX. Visual content is unchanged; sighted users
+                // still see the full card exactly as before.
+                <Link
+                  key={path.title}
+                  to={path.href}
+                  className="group"
+                  aria-label={`${path.title} (${path.badge === 'live' ? 'Live' : 'Coming soon'})`}
+                >
                   <Card interactive padding="lg" rounded="xl" className="h-full">
                     {content}
                   </Card>
