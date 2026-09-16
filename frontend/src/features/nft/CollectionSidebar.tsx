@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 
@@ -123,7 +124,7 @@ export function CollectionSidebar({
               />
             </label>
           </div>
-          {error && <p className="text-xs text-danger">{error}</p>}
+          {error && <InlineError className="text-xs text-danger">{error}</InlineError>}
           <Button variant="primary" size="sm" className="w-full" onClick={handleCreate} isLoading={isSubmitting}>
             Create
           </Button>

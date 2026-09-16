@@ -5,6 +5,7 @@ import { Card } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { IconPlus } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { nftApi, type NFTCollection, type NFTLayer } from '../../lib/nftApi'
 import { LayerCard } from './LayerCard'
 
@@ -106,7 +107,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
           </Button>
         </div>
       </div>
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      {error && <InlineError className="mt-2 text-sm text-danger">{error}</InlineError>}
 
       <div className="mt-4 space-y-2.5">
         {layers.length === 0 && <EmptyState compact title="No layers yet." description="Add one to start uploading trait images." />}

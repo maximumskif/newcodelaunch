@@ -7,6 +7,7 @@ import { Card } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { IconPlus, IconTrash } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { PROJECT_TYPES } from '../../lib/projectTypes'
 import { projectsApi, type Project, type ProjectStatus } from '../../lib/projectsApi'
@@ -119,7 +120,7 @@ export function ProjectsDashboard() {
             </Link>
           </div>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <InlineError>{error}</InlineError>}
 
           {!isLoading && projects.length === 0 ? (
             <EmptyState

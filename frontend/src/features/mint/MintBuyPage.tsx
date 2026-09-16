@@ -7,6 +7,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
 import { ApiError } from '../../lib/http'
@@ -164,7 +165,7 @@ export function MintBuyPage() {
                     />
                   )}
 
-                  {mintError && <p className="text-sm text-danger">{mintError}</p>}
+                  {mintError && <InlineError>{mintError}</InlineError>}
 
                   <Button
                     variant="primary"

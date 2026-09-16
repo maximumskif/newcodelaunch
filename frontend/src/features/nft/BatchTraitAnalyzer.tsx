@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Dropzone } from '../../components/ui/Dropzone'
 import { IconSparkles } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { aiTraitsApi, type BatchAnalysisResult } from '../../lib/nftApi'
 import { RarityBadge } from './ui/RarityBadge'
 import { COLOR_HEX } from './ui/colorHex'
@@ -65,7 +66,7 @@ export function BatchTraitAnalyzer({ token }: Props) {
         </Button>
       </div>
 
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      {error && <InlineError className="mt-2 text-sm text-danger">{error}</InlineError>}
 
       {result && (
         <div className="mt-4 space-y-4 border-t border-border pt-4">

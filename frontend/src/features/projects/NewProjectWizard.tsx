@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { Stepper } from '../../components/ui/Stepper'
 import { EVM_NETWORKS } from '../network/NetworkContext'
@@ -128,7 +129,7 @@ export function NewProjectWizard() {
             </label>
           )}
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && <InlineError>{error}</InlineError>}
 
           <Button variant="primary" className="w-full" disabled={!name.trim()} isLoading={isSubmitting} onClick={handleCreate}>
             Create draft and continue

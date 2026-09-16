@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { Dropzone } from '../../components/ui/Dropzone'
 import { IconChevronDown, IconPlus, IconSparkles, IconSpinner, IconTrash } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { aiTraitsApi, nftApi, uploadUrl, type ImageAnalysis, type NFTLayer, type NFTTrait } from '../../lib/nftApi'
 import { RarityBadge } from './ui/RarityBadge'
 import { COLOR_HEX } from './ui/colorHex'
@@ -442,7 +443,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
           )}
         </div>
       )}
-      {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
+      {error && <InlineError className="mt-1.5 text-xs text-danger">{error}</InlineError>}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Dropdown } from '../../components/ui/Dropdown'
 import { IconChevronDown } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { apiClient, type Chain } from '../../lib/apiClient'
 import { useAuth } from './AuthContext'
 
@@ -188,7 +189,7 @@ export function WalletConnect() {
           </Button>
         )}
       </div>
-      {error && <p className="max-w-xs text-right text-danger">{error}</p>}
+      {error && <InlineError className="max-w-xs text-right text-danger">{error}</InlineError>}
     </div>
   )
 }

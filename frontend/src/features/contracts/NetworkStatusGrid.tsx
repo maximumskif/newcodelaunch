@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { Card } from '../../components/ui/Card'
+import { InlineError } from '../../components/ui/InlineError'
 import { apiClient } from '../../lib/apiClient'
 
 export function NetworkStatusGrid() {
@@ -13,7 +14,7 @@ export function NetworkStatusGrid() {
     <div>
       <h2 className="text-lg font-medium text-ink">Live Chain Status</h2>
       {isLoading && <p className="mt-3 text-ink-muted">Loading networks…</p>}
-      {error && <p className="mt-3 text-danger">{(error as Error).message}</p>}
+      {error && <InlineError className="mt-3 text-danger">{(error as Error).message}</InlineError>}
       <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {data?.networks.map((network) => (
           <NetworkStatusCard key={network.id} networkId={network.id} name={network.name} />

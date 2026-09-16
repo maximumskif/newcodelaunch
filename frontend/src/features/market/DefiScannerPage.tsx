@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { EmptyState } from '../../components/ui/EmptyState'
+import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { SkeletonTableRow } from '../../components/ui/Skeleton'
 import { marketApi } from '../../lib/marketApi'
@@ -37,7 +38,7 @@ export function DefiScannerPage() {
         description="Real protocol TVL from DeFiLlama — real data, refreshed every minute, never a simulated number."
       />
 
-      {error && <p className="text-danger">{(error as Error).message}</p>}
+      {error && <InlineError className="text-danger">{(error as Error).message}</InlineError>}
       {data && data.protocols.length === 0 && <EmptyState title="No protocol data available." />}
 
       {(isLoading || (data && data.protocols.length > 0)) && (

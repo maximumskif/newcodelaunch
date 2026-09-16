@@ -6,6 +6,7 @@ import { Connection, VersionedTransaction } from '@solana/web3.js'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
@@ -356,8 +357,18 @@ export function MintLaunchPage() {
                 </p>
               )}
 
-              {error && <p className="text-sm text-danger">{error}</p>}
-              {isBusy && <p className="text-sm text-ink-muted">{progressLabel}</p>}
+              {error && <InlineError>{error}</InlineError>}
+              {/* aria-live="polite" — this label is the only real-time
+                  indication of which step a multi-transaction, real-money
+                  launch flow is on ("Sign the collection transaction in
+                  your wallet…", "Confirming…"); without it a screen reader
+                  user gets no feedback at all while a sighted user watches
+                  it update. */}
+              {isBusy && (
+                <p aria-live="polite" className="text-sm text-ink-muted">
+                  {progressLabel}
+                </p>
+              )}
 
               {result ? (
                 <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">

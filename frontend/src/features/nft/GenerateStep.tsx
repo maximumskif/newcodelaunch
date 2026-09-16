@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { IconChevronDown, IconCode, IconLink, IconSparkles, IconSpinner } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import {
   ipfsGatewayUrl,
   maxPossibleCombinations,
@@ -224,13 +225,19 @@ export function GenerateStep({ token, collection, projectId }: Props) {
       </div>
 
       {isGenerating && generationJob && (
-        <p className="mt-3 flex items-center gap-1.5 text-sm text-ink-muted">
+        // aria-live="polite" (not "alert" — this isn't urgent/interruptive,
+        // and the element stays mounted with its text updating on each
+        // 700ms poll, exactly the case aria-live is for): without it, a
+        // screen reader user got no feedback at all for however long a
+        // large batch takes, unlike a sighted user watching the number
+        // climb in real time.
+        <p aria-live="polite" className="mt-3 flex items-center gap-1.5 text-sm text-ink-muted">
           <IconSpinner className="h-3.5 w-3.5" />
           Generating {generationJob.items_generated} / {generationJob.requested_count}…
         </p>
       )}
 
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      {error && <InlineError className="mt-3 text-sm text-danger">{error}</InlineError>}
 
       {items.length > 0 && (
         <div className="mt-4">

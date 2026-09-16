@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 
 import { Button } from '../../components/ui/Button'
+import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
@@ -222,7 +223,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
               {!address && <span className="text-sm text-ink-faint">Connect an EVM wallet to estimate or deploy</span>}
             </div>
 
-            {estimateError && <p className="text-sm text-danger">{estimateError}</p>}
+            {estimateError && <InlineError>{estimateError}</InlineError>}
             {estimate && (
               <p className="text-sm text-ink-muted">
                 ~{estimate.gas_estimate.toLocaleString()} gas at {estimate.gas_price_gwei.toFixed(2)} gwei ≈{' '}
@@ -230,7 +231,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
               </p>
             )}
 
-            {error && <p className="text-sm text-danger">{error}</p>}
+            {error && <InlineError>{error}</InlineError>}
             {txHash && step !== 'error' && (
               <p className="text-sm text-ink-muted">
                 tx: <span className="font-mono">{txHash}</span> — {step}
