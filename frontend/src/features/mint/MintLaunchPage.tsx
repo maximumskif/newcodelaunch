@@ -226,7 +226,7 @@ export function MintLaunchPage() {
     return (
       <div className="space-y-5 p-8">
         <PageHero
-          eyebrow="Phase 6"
+          eyebrow="Mint"
           title="Candy Machine"
           description="Launch a real Solana mint — a Collection NFT and Candy Machine created on-chain, signed by your own wallet — from an already-published NFT collection."
         />
@@ -248,7 +248,7 @@ export function MintLaunchPage() {
   return (
     <div className="space-y-5 p-8">
       <PageHero
-        eyebrow="Phase 6"
+        eyebrow="Mint"
         title="Candy Machine"
         description="Your connected Solana wallet signs every transaction — this app never holds the keys to your collection or its mint proceeds."
       />

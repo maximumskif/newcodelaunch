@@ -90,7 +90,15 @@ export function AppShell() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-border bg-canvas transition-transform duration-200 ease-out md:static md:translate-x-0 md:transition-[width] ${
+        // bg-surface (not bg-canvas) + a shadow while the mobile drawer is
+        // open — on the desktop static layout, bg-canvas already matches
+        // the page behind it, which is correct there (no separate "panel"
+        // to distinguish); but the same flat color left the off-canvas
+        // drawer with no visible separation from its own dimmed backdrop
+        // (index.css/AppShell's bg-black/60 scrim), both reading as
+        // "near-black," so the drawer looked like the page just got darker
+        // rather than a panel sliding in on top of it.
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-border bg-surface shadow-elevated transition-transform duration-200 ease-out md:static md:translate-x-0 md:bg-canvas md:shadow-none md:transition-[width] ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${isCollapsed ? 'md:w-16' : 'md:w-60'}`}
       >

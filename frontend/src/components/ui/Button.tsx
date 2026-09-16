@@ -12,11 +12,14 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  // A close, tight glow (not an ambient background blob — see index.css's
-  // --shadow-glow-accent comment) reads as a real hover cue on the app's
-  // single highest-emphasis action without reviving the gradient/glow look
-  // this project's own design pass already corrected away from once.
-  primary: 'bg-accent-600 text-white hover:bg-accent-500 hover:shadow-glow-accent',
+  // A real violet→cyan gradient (index.css's --gradient-accent) plus a
+  // hero-scale glow on hover — the 2026-10 design pass's deliberate
+  // reversal of the earlier flat-color choice, see index.css's own comment
+  // on that reversal. bg-size-200 + hover:bg-right-bottom slides the
+  // gradient itself on hover (a cheap, real motion cue, not just a color
+  // swap) rather than a static two-stop fill.
+  primary:
+    'bg-[image:var(--gradient-accent)] bg-[length:200%_200%] bg-left-top text-white hover:bg-right-bottom hover:shadow-glow-accent',
   secondary: 'border border-border text-ink hover:border-border-strong hover:bg-surface-hover',
   ghost: 'text-ink-muted hover:text-ink hover:bg-surface-hover',
   danger: 'bg-danger-strong text-white hover:bg-danger',

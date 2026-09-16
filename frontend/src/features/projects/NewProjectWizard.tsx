@@ -49,7 +49,7 @@ export function NewProjectWizard() {
   if (!accessToken) {
     return (
       <div className="space-y-5 p-8">
-        <PageHero eyebrow="Phase 3" title="New Project" description="Connect and sign in with a wallet first." />
+        <PageHero eyebrow="Projects" title="New Project" description="Connect and sign in with a wallet first." />
       </div>
     )
   }
@@ -57,7 +57,7 @@ export function NewProjectWizard() {
   return (
     <div className="space-y-5 p-8">
       <PageHero
-        eyebrow="Phase 3"
+        eyebrow="Projects"
         title="New Project"
         description="Start something new — your progress is saved as a draft you can resume from the dashboard."
       />

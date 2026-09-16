@@ -5,6 +5,7 @@ export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 
 interface Props {
   tone?: BadgeTone
   children: ReactNode
+  className?: string
 }
 
 const TONE_CLASSES: Record<BadgeTone, string> = {
@@ -17,9 +18,11 @@ const TONE_CLASSES: Record<BadgeTone, string> = {
 }
 
 // Status pill used for anything that means "state" — never decoration.
-export function Badge({ tone = 'neutral', children }: Props) {
+export function Badge({ tone = 'neutral', children, className = '' }: Props) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${TONE_CLASSES[tone]}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${TONE_CLASSES[tone]} ${className}`}
+    >
       {children}
     </span>
   )

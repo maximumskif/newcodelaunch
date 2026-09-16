@@ -1,8 +1,15 @@
+import { EmptyState } from '../../components/ui/EmptyState'
 import type { ContractDeployment } from '../../lib/contractsApi'
 
 export function DeploymentHistory({ deployments }: { deployments: ContractDeployment[] }) {
   if (deployments.length === 0) {
-    return <p className="text-ink-faint">No deployments yet.</p>
+    return (
+      <EmptyState
+        title="No deployments yet"
+        description="A contract you deploy from this page will show up here, with a link to the explorer."
+        compact
+      />
+    )
   }
 
   return (

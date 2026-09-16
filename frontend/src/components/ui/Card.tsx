@@ -44,8 +44,13 @@ export function Card({
   ...rest
 }: Props) {
   const surface = raised ? 'bg-surface-raised' : 'bg-surface'
+  // 2026-10: hover:shadow-glow-accent (not just -elevated) on every
+  // interactive card — the same deliberate reversal described in
+  // index.css's design-refresh comment, now the app-wide identity for "this
+  // card is a click target" instead of a one-off applied to the homepage's
+  // feature cards alone.
   const hover = interactive
-    ? `transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-border-strong hover:shadow-elevated ${raised ? 'hover:bg-surface-raised-hover' : 'hover:bg-surface-hover'}`
+    ? `transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-accent-500/40 hover:shadow-glow-accent ${raised ? 'hover:bg-surface-raised-hover' : 'hover:bg-surface-hover'}`
     : ''
   return (
     <div

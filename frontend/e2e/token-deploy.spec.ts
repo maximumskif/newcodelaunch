@@ -37,9 +37,12 @@ test('a real token deploy: connect, sign in, compile, estimate, deploy, and reco
 
   // erc20_basic is pre-selected (first template the page fetches) — fill
   // its required deployment params.
-  await page.getByLabel(/^TOKEN_NAME/).fill('E2ETestToken')
-  await page.getByLabel(/^TOKEN_SYMBOL/).fill('E2E')
-  await page.getByLabel(/^TOKEN_SUPPLY/).fill('1000000')
+  // Labels are humanized for display (TOKEN_NAME -> "Token Name") — see
+  // TemplateForm.tsx's humanizeParamName, added in the 2026-10 design pass —
+  // but param.name (what's actually sent to the backend) is unchanged.
+  await page.getByLabel(/^Token Name/).fill('E2ETestToken')
+  await page.getByLabel(/^Token Symbol/).fill('E2E')
+  await page.getByLabel(/^Token Supply/).fill('1000000')
 
   await page.getByRole('button', { name: 'Estimate cost' }).click()
   // A real gas estimate from a real py-solc-x compile against a real chain,

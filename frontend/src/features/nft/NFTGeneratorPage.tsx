@@ -126,7 +126,7 @@ export function NFTGeneratorPage() {
   return (
     <div className="space-y-5 p-8">
       <PageHero
-        eyebrow="Phase 3"
+        eyebrow="NFT Generator"
         title="NFT Collection Generator"
         description="Build a layered trait system with AI-assisted rarity suggestions, composite real artwork with rarity-weighted generation, and publish straight to IPFS — no fake URLs, no round-robin trait picking."
       />

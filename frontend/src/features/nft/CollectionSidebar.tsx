@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
+import { Skeleton } from '../../components/ui/Skeleton'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 
 interface Props {
@@ -130,7 +131,12 @@ export function CollectionSidebar({
       )}
 
       <div className="flex flex-col gap-1">
-        {isLoading && <p className="px-1 py-2 text-xs text-ink-faint">Loading…</p>}
+        {isLoading && (
+          <div className="flex flex-col gap-1.5 px-1 py-1">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        )}
         {!isLoading && collections.length === 0 && (
           <p className="px-1 py-2 text-xs text-ink-faint">No collections yet — create your first one above.</p>
         )}

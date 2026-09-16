@@ -96,7 +96,7 @@ export function ProjectsDashboard() {
   return (
     <div className="space-y-5 p-8">
       <PageHero
-        eyebrow="Phase 3"
+        eyebrow="Overview"
         title="Dashboard"
         description="Every project you've started — resume a draft where you left off, or jump back into something already deployed."
       />

@@ -40,7 +40,7 @@ export function TemplateMarketplacePage() {
   return (
     <div className="space-y-5 p-8">
       <PageHero
-        eyebrow="Phase 6"
+        eyebrow="Marketplace"
         title="Template Marketplace"
         description="Every deployable template's Solidity source is real and inspectable before you deploy it — browse them here, then deploy from the Token Launchpad or Contracts Hub."
       />

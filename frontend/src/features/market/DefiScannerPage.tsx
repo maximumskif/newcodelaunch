@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
+import { SkeletonTableRow } from '../../components/ui/Skeleton'
 import { marketApi } from '../../lib/marketApi'
 
 function formatTvl(value: number | null): string {
@@ -31,19 +32,24 @@ export function DefiScannerPage() {
   return (
     <div className="space-y-5 p-8">
       <PageHero
-        eyebrow="Phase 6"
+        eyebrow="Live Data"
         title="DeFi Protocol Scanner"
         description="Real protocol TVL from DeFiLlama — real data, refreshed every minute, never a simulated number."
       />
 
-      {isLoading && <p className="text-ink-muted">Loading protocol data…</p>}
       {error && <p className="text-danger">{(error as Error).message}</p>}
       {data && data.protocols.length === 0 && <EmptyState title="No protocol data available." />}
 
-      {data && data.protocols.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+      {(isLoading || (data && data.protocols.length > 0)) && (
+        <div className="animate-fade-up overflow-x-auto rounded-xl border border-border bg-surface [animation-delay:80ms]">
           <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-xs text-ink-faint">
+            {/* text-ink-muted, not -faint — a real axe run caught this
+                exact thead at 4.37:1 against bg-surface on this page (just
+                under WCAG AA's 4.5:1), while the same classes measured fine
+                on Market Intelligence's identical table; not worth trusting
+                the margin either place once one of them has actually
+                failed a real scan. */}
+            <thead className="border-b border-border text-left text-xs text-ink-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Protocol</th>
                 <th className="px-4 py-3 font-medium">Category</th>
@@ -54,7 +60,9 @@ export function DefiScannerPage() {
               </tr>
             </thead>
             <tbody>
-              {data.protocols.map((protocol) => (
+              {isLoading &&
+                Array.from({ length: 8 }).map((_, index) => <SkeletonTableRow key={index} columns={6} />)}
+              {data?.protocols.map((protocol) => (
                 <tr key={protocol.id ?? protocol.name} className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
                   <td className="px-4 py-3">
                     {protocol.url ? (

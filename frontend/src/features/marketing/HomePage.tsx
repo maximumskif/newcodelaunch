@@ -90,25 +90,40 @@ const SUPPORTED_NETWORKS = ['Ethereum', 'Polygon', 'BSC', 'Solana']
 export function HomePage() {
   return (
     <div>
-      {/* A faint fixed dot-grid, not a moving/blurred gradient blob — texture
-          without the "giant glow" look this project's own design pass
-          already corrected away from once. Pure decoration: aria-hidden,
-          and the hero's real content underneath needs no adjustment for it. */}
+      {/* 2026-10 design refresh: an aurora of two large, very-low-opacity
+          radial gradients (violet + cyan, index.css's accent/accent2 hues)
+          slowly drifting behind the hero, plus the existing dot-grid on top
+          for texture — a deliberate reversal of the earlier "no moving/
+          blurred gradient blobs" rule (see index.css's own comment on that
+          reversal), done at low enough opacity and slow enough motion to
+          read as atmosphere, not a background that fights the real content
+          sitting on top of it. Both layers are aria-hidden and motion is
+          disabled at the animation level (index.css's global
+          prefers-reduced-motion query zeroes animation-duration). */}
       <section className="relative overflow-hidden border-b border-border px-6 py-24 sm:py-32">
+        <div
+          aria-hidden="true"
+          className="animate-gradient-pan pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(ellipse_60%_50%_at_20%_20%,color-mix(in_oklab,var(--color-accent-500)_28%,transparent),transparent_60%),radial-gradient(ellipse_50%_50%_at_80%_60%,color-mix(in_oklab,var(--color-accent2-500)_22%,transparent),transparent_60%)] [background-size:180%_180%]"
+        />
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 [background-image:radial-gradient(color-mix(in_oklab,white_10%,transparent)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,black_40%,transparent_100%)]"
         />
         <div className="relative mx-auto max-w-3xl text-center">
-          <Badge tone="neutral">Early build — see what's real below</Badge>
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-ink sm:text-5xl lg:text-6xl">
-            Launch Web3 projects without writing smart contracts.
+          <Badge tone="neutral" className="animate-fade-up">
+            Early build — see what's real below
+          </Badge>
+          <h1 className="animate-fade-up mt-6 text-4xl font-semibold tracking-tight text-ink [animation-delay:80ms] sm:text-5xl lg:text-6xl">
+            Launch Web3 projects{' '}
+            <span className="bg-[image:var(--gradient-accent)] bg-clip-text text-transparent">
+              without writing smart contracts.
+            </span>
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base text-ink-muted sm:text-lg">
+          <p className="animate-fade-up mx-auto mt-5 max-w-xl text-base text-ink-muted [animation-delay:160ms] sm:text-lg">
             Configure a token or NFT collection through a guided interface, review a real gas estimate, and deploy
             with your own connected wallet. Nothing is signed on our servers.
           </p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <div className="animate-fade-up mt-9 flex flex-wrap items-center justify-center gap-3 [animation-delay:240ms]">
             <Link to="/tokens" className={buttonClassName('primary', 'md', 'px-6 py-3 text-base')}>
               Create a Project
               <IconArrowRight className="h-4 w-4" />
@@ -117,11 +132,14 @@ export function HomePage() {
               View Live Chain Status
             </Link>
           </div>
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-ink-faint">
+          <div className="animate-fade-up mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-ink-faint [animation-delay:320ms]">
             <span className="uppercase tracking-widest">Supported networks</span>
             <div className="flex flex-wrap items-center justify-center gap-2">
               {SUPPORTED_NETWORKS.map((network) => (
-                <span key={network} className="rounded-full border border-border px-3 py-1 text-ink-muted">
+                <span
+                  key={network}
+                  className="rounded-full border border-border px-3 py-1 text-ink-muted transition-colors duration-150 hover:border-accent-500/50 hover:text-ink"
+                >
                   {network}
                 </span>
               ))}
@@ -139,7 +157,7 @@ export function HomePage() {
               const content = (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300 transition-transform duration-200 ease-out group-hover:scale-110">
                       {path.icon}
                     </span>
                     <Badge tone={path.badge === 'live' ? 'success' : 'neutral'}>{path.badge === 'live' ? 'Live' : 'Coming soon'}</Badge>
@@ -149,7 +167,7 @@ export function HomePage() {
                 </>
               )
               return path.href ? (
-                <Link key={path.title} to={path.href}>
+                <Link key={path.title} to={path.href} className="group">
                   <Card interactive padding="lg" rounded="xl" className="h-full">
                     {content}
                   </Card>
@@ -171,10 +189,10 @@ export function HomePage() {
             {/* A connecting line behind the numbered steps — desktop only
                 (sm:grid-cols-5 already stacks to one column below that
                 breakpoint, where a horizontal line wouldn't track the steps). */}
-            <div className="absolute top-4 right-0 left-0 hidden h-px bg-border sm:block" aria-hidden="true" />
+            <div className="absolute top-4 right-0 left-0 hidden h-px bg-[image:var(--gradient-accent-soft)] sm:block" aria-hidden="true" />
             {HOW_IT_WORKS.map((step, index) => (
-              <div key={step.title} className="relative">
-                <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-accent-600 text-xs font-semibold text-white ring-4 ring-canvas">
+              <div key={step.title} className="animate-fade-up relative" style={{ animationDelay: `${index * 80}ms` }}>
+                <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-accent)] text-xs font-semibold text-white ring-4 ring-canvas">
                   {index + 1}
                 </span>
                 <h3 className="mt-3 text-sm font-medium text-ink">{step.title}</h3>
@@ -190,8 +208,8 @@ export function HomePage() {
           <h2 className="text-2xl font-semibold text-ink">Security & transparency</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {SECURITY_POINTS.map((point) => (
-              <Card key={point.title} padding="md" className="flex gap-3.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
+              <Card key={point.title} interactive padding="md" className="flex gap-3.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
                   {point.icon}
                 </span>
                 <div>

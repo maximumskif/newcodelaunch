@@ -11,20 +11,24 @@
 @import '@fontsource/space-grotesk/700.css';
 
 /*
- * Design tokens. One accent hue (violet) for primary actions/links/focus —
- * never a gradient, never decorative. Status colors are semantic only (they
- * mean success/warning/danger/info, they don't compete with the accent for
- * attention). Neutral surfaces are named by role (canvas/surface/border/ink)
- * so the whole app's depth can be retuned from here instead of grepping for
+ * Design tokens. One accent hue (violet) for primary actions/links/focus,
+ * paired with a second hue (cyan) used only for gradients/glow accents —
+ * never as a second independent "meaning" color competing with violet for
+ * attention. Status colors are semantic only (success/warning/danger/info).
+ * Neutral surfaces are named by role (canvas/surface/border/ink) so the
+ * whole app's depth can be retuned from here instead of grepping for
  * `bg-white/[0.03]` across every component.
  *
- * 2026-09 design refresh: kept every rule above — still one accent hue,
- * still no gradient/glow backgrounds (the spec's own prior "no giant glows"
- * correction stands) — while adding a second surface tier for real depth on
- * bento-style card grids, a richer shadow/glow pair used only on the
- * primary CTA and elevated cards (not ambient), and a wider radius scale so
- * feature/marketing cards read as more contemporary than the tight
- * form-control radii, which stay small on purpose.
+ * 2026-10 design refresh: an explicit, deliberate reversal of the 2026-09
+ * pass's "no gradient/glow backgrounds" rule, at the user's own request —
+ * that restraint was the right call for an early build proving every
+ * feature was real; now that every flow is real and verified end to end,
+ * the ask is to read as a modern, alive product on the level of top-tier
+ * DEX/CEX UIs (Jupiter, Uniswap, Hyperliquid), not to relitigate whether
+ * gradients exist at all. Added: a violet→cyan gradient pair (background +
+ * text-clip), a motion/animation token set (fade-up entrances, a skeleton
+ * shimmer, a live-indicator pulse), and a stronger hero-scale glow — all
+ * additive to the existing tokens below, nothing removed.
  */
 @theme {
   --color-accent-50: var(--color-violet-50);
@@ -36,6 +40,11 @@
   --color-accent-600: var(--color-violet-600);
   --color-accent-700: var(--color-violet-700);
   --color-accent-800: var(--color-violet-800);
+
+  /* The gradient-pairing hue — used only inside gradients/glow, never as a
+     standalone semantic color (that stays violet's job alone). */
+  --color-accent2-400: var(--color-cyan-400);
+  --color-accent2-500: var(--color-cyan-500);
 
   --color-success: var(--color-emerald-400);
   --color-success-strong: var(--color-emerald-500);
@@ -76,12 +85,90 @@
      decoration (the thing this project's own design pass already corrected
      away from once). */
   --shadow-glow-accent: 0 0 0 1px var(--color-accent-500), 0 8px 24px -10px color-mix(in oklab, var(--color-accent-500) 55%, transparent);
+  /* Hero-scale only (the homepage's headline glow, the primary CTA's
+     resting-state halo) — a wider, softer falloff than --shadow-glow-accent,
+     which stays the tight per-element hover cue. */
+  --shadow-glow-hero: 0 0 80px -20px color-mix(in oklab, var(--color-accent-500) 60%, transparent), 0 0 140px -40px color-mix(in oklab, var(--color-accent2-500) 40%, transparent);
+
+  --gradient-accent: linear-gradient(135deg, var(--color-accent-500), var(--color-accent2-500));
+  --gradient-accent-soft: linear-gradient(135deg, color-mix(in oklab, var(--color-accent-500) 20%, transparent), color-mix(in oklab, var(--color-accent2-500) 20%, transparent));
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 400ms;
+
+  /* Registering these as --animate-* theme values (Tailwind v4's own
+     mechanism) generates real `animate-fade-up`/`animate-shimmer`/
+     `animate-pulse-glow` utility classes — no separate utility-class layer
+     to hand-maintain alongside the keyframes below. */
+  --animate-fade-up: fade-up var(--duration-slow) var(--ease-out-expo) both;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 2.4s var(--ease-standard) infinite;
+  --animate-gradient-pan: gradient-pan 8s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 60%, transparent);
+    }
+    50% {
+      opacity: 0.85;
+      box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-success) 0%, transparent);
+    }
+  }
+
+  @keyframes gradient-pan {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+}
+
+/* Skeleton loading blocks — replaces plain "Loading…" text app-wide (see
+   components/ui/Skeleton.tsx). A moving highlight band over a flat base,
+   not a full-block pulse — reads as "content is arriving" rather than
+   "something is wrong," and the shimmer is purely decorative opacity/
+   position, so prefers-reduced-motion's global transition/animation kill
+   below still leaves the base color visible instead of a frozen flash. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-surface-raised);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(90deg, transparent, color-mix(in oklab, white 8%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
 }
 
 body {
