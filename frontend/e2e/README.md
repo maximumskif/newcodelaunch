@@ -70,6 +70,30 @@ faked is global IPFS availability itself — nothing outside this one process
 can resolve these hashes, which nothing in this app's own tests or UI checks
 for anyway.
 
+## Why a local OpenAI stub
+
+Same reasoning as Pinata, applied to the AI Trait Identifier's optional
+vision pass (`backend/app/services/ai_traits.py`'s `_analyze_with_ai_vision`,
+gated on `OPENAI_API_KEY`): `OPENAI_BASE_URL` points the real `openai` v1
+client at `e2e/setup/openai_stub.py`'s `/v1/chat/completions` instead of a
+real, paid OpenAI account. Unlike Pinata's stub, which really stores and
+serves back byte-for-byte what it's given, there's no local equivalent of
+"really classify this image" — the stub's response content is a fixed,
+deterministic payload. What's real on both sides of that: a real network
+round trip, real client-library request construction (including a real
+`Authorization` header the stub doesn't bother checking, same as Pinata's
+unchecked JWT), and real JSON parsing of the response back in
+`ai_traits.py`. `run-backend.sh` sets a fake, obviously-not-real
+`OPENAI_API_KEY` for exactly this reason — with the stub in place there's no
+more reason to run any test with the AI-vision pass disabled, and this used
+to be a real footgun: a "no key configured" test was once silently making a
+real OpenAI network call (with real retry backoff) because a developer's own
+`backend/.env` had a real key sitting in it, which looked like a slow-CV-code
+flake until profiled. The no-key code path itself (`if openai_api_key:`
+false) is still covered at the unit level
+(`backend/tests/test_ai_traits_service.py`), so nothing is lost by no longer
+exercising it here too.
+
 ## One-time setup
 
 ```bash
@@ -138,7 +162,11 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   test covers real edit/delete of a trait, a layer, and a collection through
   the same UI (rename, reweight, and the actual DELETE/cascade round trips —
   not just that the button exists). A third covers the bulk AI trait
-  analyzer independent of any collection.
+  analyzer independent of any collection, including a real AI-vision round
+  trip (against the local OpenAI stub, see above) on every image in the
+  batch. A fourth covers the AI Trait Identifier's other entry point —
+  `LayerCard.tsx`'s inline "AI" suggest button during a single trait's
+  upload — through the actual upload UI, not just the API in isolation.
 - `accessibility.spec.ts` — a real `@axe-core/playwright` scan (WCAG 2 A/AA)
   of the marketing homepage and every authenticated app-shell route, in the
   same real Chromium instance every other spec here uses. Closes a gap this
@@ -157,5 +185,12 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   blockhash-expiry fix specifically, not something a local validator run
   substitutes for (the fix needs to be proven against real network latency
   between wallet approvals, which a fast local validator can't reproduce).
-- AI Trait Identifier (optional OpenAI-backed rarity suggestions) — hits a
-  real paid third-party API this suite has no reason to depend on.
+- ~~AI Trait Identifier (optional OpenAI-backed rarity suggestions) — hits a
+  real paid third-party API this suite has no reason to depend on.~~ Closed:
+  now covered via a local OpenAI stub, same pattern as Pinata — see "Why a
+  local OpenAI stub" above and the two AI-vision assertions under "What's
+  covered so far". What's still genuinely unverified by this suite: the real
+  OpenAI model's actual judgment quality (style/mood/rarity classification
+  of real artwork) — the stub proves the integration is real, not that
+  `gpt-4o-mini`'s opinions are good ones. That's a product/prompt-quality
+  question, not something browser automation can check.

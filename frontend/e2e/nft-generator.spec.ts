@@ -160,13 +160,46 @@ test('bulk trait analysis: a real batch CV analysis round trip, no collection re
   await page.getByRole('button', { name: 'Analyze 2 images' }).click()
 
   // Real ai_traits.analyze_single_image runs (color/composition/technical
-  // CV analysis on real pixel data) for both images with no OpenAI key
-  // configured in this e2e environment — proving the batch endpoint works
-  // standalone, without requiring the optional AI-vision pass.
+  // CV analysis on real pixel data) for both images. The optional AI-vision
+  // pass also runs for real here — a real openai client call, real request/
+  // response shape, real JSON parsing on the backend — against the local
+  // stub (run-openai-stub.sh) rather than a paid OpenAI account (see
+  // frontend/e2e/README.md). BatchTraitAnalyzer only surfaces that path's
+  // failure state in the UI ("AI vision unavailable" on ai_error), so its
+  // absence here is this test's confirmation the vision call succeeded.
   await expect(page.getByText('2 images analyzed')).toBeVisible({ timeout: 10_000 })
   await expect(page.getByText('blue.png')).toBeVisible()
   await expect(page.getByText('blue2.png')).toBeVisible()
+  await expect(page.getByText('AI vision unavailable')).not.toBeVisible()
   // Both images are identical 1x1 transparent pixels, so the real diversity
   // math over that trait_frequency correctly finds zero diversity.
   await expect(page.getByText('Diversity score: 0.00')).toBeVisible()
+})
+
+test('AI Trait Identifier: the inline per-trait rarity suggestion during upload uses a real AI-vision call', async ({
+  page,
+}) => {
+  await signIn(page)
+
+  await page.getByRole('button', { name: 'New collection' }).click()
+  await page.getByLabel('Collection name').fill('E2E AI Trait Collection')
+  await page.getByRole('button', { name: 'Create' }).click()
+
+  await page.getByLabel('New layer name').fill('Background')
+  await page.getByRole('button', { name: 'Add layer' }).click()
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'blue.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(PNG_1X1_BASE64, 'base64'),
+  })
+
+  // LayerCard.tsx's "AI" sparkle button (aiTraitsApi.analyzeSingle ->
+  // POST /api/nft/analyze) — this exact click-through was previously
+  // untested end to end; component-level tests never drove a real upload
+  // + real backend round trip through it. Real CV analysis runs regardless
+  // of a key; ai_style_classification only renders once the real AI-vision
+  // call (against the local stub) actually returns a result.
+  await page.getByTitle('Suggest rarity from AI image analysis').click()
+  await expect(page.getByText(/· digital art/)).toBeVisible({ timeout: 10_000 })
 })

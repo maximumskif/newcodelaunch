@@ -24,6 +24,7 @@ import colorsys
 import hashlib
 import io
 import json
+import os
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -32,6 +33,14 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageStat
 
 AI_VISION_MODEL = "gpt-4o-mini"  # check for a current vision-capable model before relying on this
+
+# Overridable so the e2e suite (frontend/e2e/) can point this at a tiny local
+# stub instead of real OpenAI — same seam and same reasoning as ipfs.py's
+# PINATA_BASE_URL: real vision-model call semantics (a real openai client,
+# real request/response shape), just against a local stub instead of a paid
+# third-party account. Empty string (the default) leaves the OpenAI SDK's own
+# default base URL in place. See frontend/e2e/README.md.
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "")
 
 
 def analyze_single_image(image_bytes: bytes, filename: str, openai_api_key: str = "") -> dict[str, Any]:
@@ -93,7 +102,7 @@ def batch_analyze_images(images: list[dict[str, Any]], openai_api_key: str = "")
 def _analyze_with_ai_vision(image_bytes: bytes, api_key: str) -> dict[str, Any]:
     from openai import OpenAI  # imported lazily so the package is only required when a key is set
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url=OPENAI_BASE_URL or None)
     encoded = base64.b64encode(image_bytes).decode("utf-8")
 
     response = client.chat.completions.create(

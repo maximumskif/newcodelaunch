@@ -41,15 +41,19 @@ export FLASK_APP="wsgi.py"
 # "$BACKEND_DIR"` above — loads whatever's in backend/.env, including a
 # real OPENAI_API_KEY if the developer running this suite has one set up
 # for normal local dev (exactly what the root README's setup steps tell
-# everyone to do). nft-generator.spec.ts's bulk-trait-analysis test relies
-# specifically on no key being configured, to prove the batch endpoint
-# works standalone without the optional AI-vision pass — found by actually
-# profiling why that one test was intermittently timing out: it wasn't
-# slow CV code, it was making a real OpenAI network call (with real retry
-# backoff) that a "no key" test was never supposed to make. Explicitly
-# empty here so this test's behavior doesn't depend on what happens to be
-# sitting in a real .env on whichever machine runs it.
-export OPENAI_API_KEY=""
+# everyone to do). A real key here once caused a real bug: a "no key
+# configured" test was silently making a real OpenAI network call, with
+# real retry backoff, which looked like a slow-CV-code flake until it was
+# actually profiled. Explicitly set to a fake, obviously-not-real value
+# here, paired with OPENAI_BASE_URL pointed at the local stub
+# (run-openai-stub.sh, see frontend/e2e/README.md) — same fix as
+# PINATA_BASE_URL/PINATA_GATEWAY_URL below: this suite's behavior no
+# longer depends on what happens to be sitting in a real .env on whichever
+# machine runs it, AND the AI-vision pass itself (previously never
+# exercised in e2e at all, key or no key) now gets real request/response
+# coverage on every run, for free, with no real account or network access.
+export OPENAI_API_KEY="sk-e2e-test-not-for-real-use"
+export OPENAI_BASE_URL="http://127.0.0.1:5556/v1"
 
 .venv/bin/flask db upgrade
 exec .venv/bin/flask run

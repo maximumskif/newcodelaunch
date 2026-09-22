@@ -4,9 +4,9 @@ import { defineConfig, devices } from '@playwright/test'
 // real anvil chain, a real local Solana validator (with the real Metaplex
 // Core/Core Candy Machine programs cloned onto it), a real frontend build —
 // not mocked at any layer except the wallet extensions themselves (see
-// e2e/fixtures/injected*Wallet.ts) and the third-party Pinata pinning call
-// (see e2e/setup/pinata_stub.py). Full rationale in e2e/README.md. See
-// docs/REBUILD_PROGRESS.md's "Testing & CI" entry.
+// e2e/fixtures/injected*Wallet.ts) and the third-party Pinata/OpenAI calls
+// (see e2e/setup/pinata_stub.py, e2e/setup/openai_stub.py). Full rationale
+// in e2e/README.md. See docs/REBUILD_PROGRESS.md's "Testing & CI" entry.
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
@@ -43,6 +43,12 @@ export default defineConfig({
     {
       command: 'bash ./e2e/setup/run-pinata-stub.sh',
       url: 'http://127.0.0.1:5555/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
+      command: 'bash ./e2e/setup/run-openai-stub.sh',
+      url: 'http://127.0.0.1:5556/health',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
