@@ -46,7 +46,11 @@ def get_collection(collection_id):
         collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
     except nft_collections.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
-    return jsonify(collection=collection.to_dict(include_layers=True))
+    data = collection.to_dict(include_layers=True)
+    # Counts only combinations that satisfy the collection's trait rules —
+    # what the editor shows as the most that can be generated.
+    data["max_combinations"] = nft_generation.max_possible_combinations(collection)
+    return jsonify(collection=data)
 
 
 @nft_bp.delete("/collections/<collection_id>")
@@ -321,3 +325,38 @@ def analyze_batch():
     images = [{"filename": f.filename or f"image_{i + 1}.png", "data": f.read()} for i, f in enumerate(files)]
     result = ai_traits.batch_analyze_images(images, current_app.config["OPENAI_API_KEY"])
     return jsonify(result)
+
+
+@nft_bp.get("/collections/<collection_id>/rules")
+@jwt_required()
+def list_trait_rules(collection_id):
+    try:
+        collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    return jsonify(rules=[rule.to_dict() for rule in collection.trait_rules])
+
+
+@nft_bp.post("/collections/<collection_id>/rules")
+@jwt_required()
+def add_trait_rule(collection_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
+        rule = nft_collections.add_trait_rule(collection, data.get("kind"), data.get("trait_id"), data.get("other_trait_id"))
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except nft_collections.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    return jsonify(rule=rule.to_dict()), 201
+
+
+@nft_bp.delete("/rules/<rule_id>")
+@jwt_required()
+def delete_trait_rule(rule_id):
+    try:
+        rule = nft_collections.get_owned_rule(rule_id, get_jwt_identity())
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    nft_collections.delete_trait_rule(rule)
+    return "", 204

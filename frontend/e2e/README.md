@@ -244,7 +244,10 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   trip (against the local OpenAI stub, see above) on every image in the
   batch. A fourth covers the AI Trait Identifier's other entry point —
   `LayerCard.tsx`'s inline "AI" suggest button during a single trait's
-  upload — through the actual upload UI, not just the API in isolation.
+  upload — through the actual upload UI, not just the API in isolation. A
+  fifth adds a trait rule through the real editor on a seeded 3 × 3
+  collection, sees the possible count drop from 9 to 8, generates all 8,
+  and checks none pairs the two excluded traits.
 - `accessibility.spec.ts` — a real `@axe-core/playwright` scan (WCAG 2 A/AA)
   of the marketing homepage and every authenticated app-shell route, in the
   same real Chromium instance every other spec here uses. Closes a gap this

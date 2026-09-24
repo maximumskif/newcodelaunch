@@ -25,6 +25,18 @@ export interface NFTCollection {
   status: NFTCollectionStatus
   created_at: string
   layers?: NFTLayer[]
+  rules?: NFTTraitRule[]
+  // Distinct items possible given the trait rules (from the server).
+  max_combinations?: number
+}
+
+// exclude: the two traits never appear together. require: whenever
+// trait_id appears, other_trait_id does too.
+export interface NFTTraitRule {
+  id: string
+  kind: 'exclude' | 'require'
+  trait_id: string
+  other_trait_id: string
 }
 
 export interface NFTGeneratedItem {
@@ -63,6 +75,11 @@ export function maxPossibleCombinations(layers: NFTLayer[]): number {
 }
 
 export const nftApi = {
+  addRule: (token: string, collectionId: string, rule: Omit<NFTTraitRule, 'id'>) =>
+    request<{ rule: NFTTraitRule }>(`/nft/collections/${collectionId}/rules`, { method: 'POST', body: JSON.stringify(rule) }, token),
+
+  deleteRule: (token: string, ruleId: string) => request<void>(`/nft/rules/${ruleId}`, { method: 'DELETE' }, token),
+
   createCollection: (
     token: string,
     payload: { name: string; description: string; collection_size: number; image_size: number; project_id?: string },

@@ -50,6 +50,9 @@ class NFTCollection(db.Model):
     # job is just a historical record of a run, safe to delete along with
     # the collection it describes.
     generation_jobs = db.relationship("NFTGenerationJob", backref="collection", cascade="all, delete-orphan")
+    trait_rules = db.relationship(
+        "NFTTraitRule", backref="collection", cascade="all, delete-orphan", order_by="NFTTraitRule.created_at"
+    )
 
     def to_dict(self, include_layers: bool = False) -> dict:
         data = {
@@ -63,6 +66,7 @@ class NFTCollection(db.Model):
         }
         if include_layers:
             data["layers"] = [layer.to_dict() for layer in self.layers]
+            data["rules"] = [rule.to_dict() for rule in self.trait_rules]
         return data
 
 
@@ -156,3 +160,30 @@ class NFTGenerationJob(db.Model):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+
+
+class NFTTraitRuleKind:
+    # The two traits never appear in the same item (either way round).
+    EXCLUDE = "exclude"
+    # Whenever `trait` appears, `other_trait` must appear too.
+    REQUIRE = "require"
+
+    ALL = (EXCLUDE, REQUIRE)
+
+
+class NFTTraitRule(db.Model):
+    """A constraint the generator honors between two traits on different
+    layers of one collection (nft_generation.py). Deleted along with either
+    trait (nft_collections.delete_trait/delete_layer) or the collection."""
+
+    __tablename__ = "nft_trait_rules"
+
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
+    collection_id = db.Column(db.String(36), db.ForeignKey("nft_collections.id"), nullable=False, index=True)
+    kind = db.Column(db.String(16), nullable=False)
+    trait_id = db.Column(db.String(36), db.ForeignKey("nft_traits.id"), nullable=False, index=True)
+    other_trait_id = db.Column(db.String(36), db.ForeignKey("nft_traits.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "kind": self.kind, "trait_id": self.trait_id, "other_trait_id": self.other_trait_id}

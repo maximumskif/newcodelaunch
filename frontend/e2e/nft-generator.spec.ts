@@ -209,3 +209,50 @@ test('AI Trait Identifier: the inline per-trait rarity suggestion during upload 
   await page.getByTitle('Suggest rarity from AI image analysis').click()
   await expect(page.getByText(/· digital art/)).toBeVisible({ timeout: 10_000 })
 })
+
+test('trait rules: a rule added in the editor is honored by generation, and the possible count reflects it', async ({ page, request }) => {
+  await signIn(page)
+  const accessToken = await page.evaluate(() => JSON.parse(localStorage.getItem('nocode-launchpad.auth') ?? '{}').accessToken as string)
+  const headers = { Authorization: `Bearer ${accessToken}` }
+  const api = 'http://localhost:5000/api'
+
+  // Two layers of three traits (9 combinations), seeded through the API —
+  // the upload UI itself is covered by the tests above.
+  const { collection } = await (await request.post(`${api}/nft/collections`, { headers, data: { name: 'E2E Rules Collection' } })).json()
+  for (const [layerName, traits] of [
+    ['Background', ['Red', 'Blue', 'Green']],
+    ['Hat', ['Crown', 'Cap', 'Beanie']],
+  ] as const) {
+    const { layer } = await (await request.post(`${api}/nft/collections/${collection.id}/layers`, { headers, data: { name: layerName } })).json()
+    for (const traitName of traits) {
+      const res = await request.post(`${api}/nft/layers/${layer.id}/traits`, {
+        headers,
+        multipart: { name: traitName, rarity_weight: '10', image: { name: `${traitName}.png`, mimeType: 'image/png', buffer: Buffer.from(PNG_1X1_BASE64, 'base64') } },
+      })
+      expect(res.ok()).toBe(true)
+    }
+  }
+
+  await page.reload()
+  await page.getByRole('button', { name: 'E2E Rules Collection', exact: true }).click()
+  await expect(page.getByText('Up to 9 unique combinations possible')).toBeVisible()
+
+  // Add "Crown never appears with Red" through the real editor.
+  await page.getByRole('combobox', { name: 'Trait', exact: true }).selectOption({ label: 'Crown' })
+  await page.getByRole('combobox', { name: 'Rule', exact: true }).selectOption('exclude')
+  await page.getByRole('combobox', { name: 'Other trait' }).selectOption({ label: 'Red' })
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  await expect(page.getByText('Crown (Hat) never appears with Red (Background)')).toBeVisible()
+  // The server's rule-aware count, not the plain 3 x 3.
+  await expect(page.getByText('Up to 8 unique combinations possible')).toBeVisible()
+
+  await page.getByLabel('Number of items to generate').fill('8')
+  await page.getByRole('button', { name: 'Generate' }).click()
+  await expect(page.getByRole('button', { name: 'Publish' }).first()).toBeVisible({ timeout: 20_000 })
+
+  const { items } = await (await request.get(`${api}/nft/collections/${collection.id}/items`, { headers })).json()
+  const combos = items.map((item: { attributes: { value: string }[] }) => item.attributes.map((a) => a.value).join('+'))
+  expect(combos).toHaveLength(8)
+  expect(combos).not.toContain('Red+Crown')
+  expect(new Set(combos).size).toBe(8)
+})

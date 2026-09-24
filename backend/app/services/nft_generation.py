@@ -18,7 +18,7 @@ import random
 from typing import Any, Callable, Optional
 
 from ..extensions import db
-from ..models.nft import NFTCollection, NFTCollectionStatus, NFTGeneratedItem
+from ..models.nft import NFTCollection, NFTCollectionStatus, NFTGeneratedItem, NFTLayer, NFTTrait, NFTTraitRuleKind
 from . import nft_compositing
 
 # A hard sanity cap, not a "must fit in one HTTP request/response" limit —
@@ -35,13 +35,93 @@ class GenerationError(ValueError):
     pass
 
 
+# Above this many raw combinations, counting only the rule-abiding ones
+# (a full enumeration) isn't worth it — the plain product is used as an
+# upper bound instead, and the per-item attempt limit catches the rest.
+MAX_ENUMERATED_COMBINATIONS = 200_000
+
+
+class _Rules:
+    """A collection's trait rules, indexed for sampling."""
+
+    def __init__(self, collection: NFTCollection):
+        self.layer_of = {trait.id: position for position, layer in enumerate(collection.layers) for trait in layer.traits}
+        self.excludes: dict[str, set[str]] = {}
+        self.requires: dict[str, set[str]] = {}
+        for rule in collection.trait_rules:
+            if rule.kind == NFTTraitRuleKind.EXCLUDE:
+                self.excludes.setdefault(rule.trait_id, set()).add(rule.other_trait_id)
+                self.excludes.setdefault(rule.other_trait_id, set()).add(rule.trait_id)
+            else:
+                self.requires.setdefault(rule.trait_id, set()).add(rule.other_trait_id)
+
+    def allowed(self, layer: NFTLayer, position: int, chosen_ids: set[str]) -> list[NFTTrait]:
+        """This layer's traits that keep the item valid given the traits
+        already picked on earlier layers."""
+        # A trait picked earlier that requires one on this layer forces it.
+        forced = {
+            required
+            for chosen in chosen_ids
+            for required in self.requires.get(chosen, ())
+            if self.layer_of.get(required) == position
+        }
+        if len(forced) > 1:
+            return []  # two different traits required on one layer: impossible
+        allowed = []
+        for trait in layer.traits:
+            if forced and trait.id not in forced:
+                continue
+            if self.excludes.get(trait.id, set()) & chosen_ids:
+                continue
+            # It requires a trait on an earlier layer that wasn't picked.
+            if any(
+                required not in chosen_ids and self.layer_of.get(required, position + 1) < position
+                for required in self.requires.get(trait.id, ())
+            ):
+                continue
+            allowed.append(trait)
+        return allowed
+
+
+def _sample(collection: NFTCollection, rules: _Rules) -> list[NFTTrait] | None:
+    """One rarity-weighted combination that satisfies every rule, built
+    layer by layer from only the traits still allowed — or None if this
+    attempt ran into a dead end (the caller retries)."""
+    chosen: list[NFTTrait] = []
+    chosen_ids: set[str] = set()
+    for position, layer in enumerate(collection.layers):
+        allowed = rules.allowed(layer, position, chosen_ids)
+        if not allowed:
+            return None
+        pick = random.choices(allowed, weights=[trait.rarity_weight for trait in allowed], k=1)[0]
+        chosen.append(pick)
+        chosen_ids.add(pick.id)
+    return chosen
+
+
 def max_possible_combinations(collection: NFTCollection) -> int:
+    """How many distinct items the collection can produce — counting only
+    combinations that satisfy its trait rules, when that's cheap enough to
+    enumerate (otherwise the plain product, an upper bound)."""
     combinations = 1
     for layer in collection.layers:
         if not layer.traits:
             return 0
         combinations *= len(layer.traits)
-    return combinations
+    if not collection.trait_rules or combinations > MAX_ENUMERATED_COMBINATIONS:
+        return combinations
+
+    rules = _Rules(collection)
+
+    def count(position: int, chosen_ids: set[str]) -> int:
+        if position == len(collection.layers):
+            return 1
+        return sum(
+            count(position + 1, chosen_ids | {trait.id})
+            for trait in rules.allowed(collection.layers[position], position, chosen_ids)
+        )
+
+    return count(0, set())
 
 
 def generate_collection(
@@ -84,14 +164,14 @@ def generate_collection(
     }
     items: list[NFTGeneratedItem] = []
 
+    rules = _Rules(collection)
     for offset in range(1, count + 1):
         token_index = start_index + offset
         selection = None
         for _ in range(MAX_UNIQUE_ATTEMPTS_PER_ITEM):
-            candidate = [
-                random.choices(layer.traits, weights=[t.rarity_weight for t in layer.traits], k=1)[0]
-                for layer in collection.layers
-            ]
+            candidate = _sample(collection, rules)
+            if candidate is None:
+                continue
             signature = tuple((layer.name, trait.name) for layer, trait in zip(collection.layers, candidate))
             if signature not in used_combinations:
                 selection = candidate
@@ -101,7 +181,7 @@ def generate_collection(
         if selection is None:
             raise GenerationError(
                 f"Couldn't find a unique trait combination for item {token_index} after "
-                f"{MAX_UNIQUE_ATTEMPTS_PER_ITEM} attempts — try a smaller collection size"
+                f"{MAX_UNIQUE_ATTEMPTS_PER_ITEM} attempts — try a smaller collection size, or loosen its trait rules"
             )
 
         image_bytes = nft_compositing.composite_layers(

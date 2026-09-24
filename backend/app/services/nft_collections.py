@@ -16,12 +16,22 @@ import uuid
 from typing import Any, Optional
 
 import requests
+from sqlalchemy import or_
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models.candy_machine import CandyMachineDeployment
-from ..models.nft import NFTCollection, NFTGeneratedItem, NFTGenerationJob, NFTGenerationJobStatus, NFTLayer, NFTTrait
+from ..models.nft import (
+    NFTCollection,
+    NFTGeneratedItem,
+    NFTGenerationJob,
+    NFTGenerationJobStatus,
+    NFTLayer,
+    NFTTrait,
+    NFTTraitRule,
+    NFTTraitRuleKind,
+)
 from ..models.project import Project
 from . import ipfs
 
@@ -147,6 +157,9 @@ def delete_layer(layer: NFTLayer, upload_folder: str) -> None:
     # layer itself is gone.
     relative_dir = os.path.join("traits", layer.collection_id, layer.id)
     shutil.rmtree(os.path.join(upload_folder, relative_dir), ignore_errors=True)
+    # Rules that mention any of its traits go too — a rule half about a
+    # deleted trait would otherwise dangle (and still steer generation).
+    _delete_rules_for_traits([trait.id for trait in layer.traits])
     db.session.delete(layer)  # cascades to traits (see NFTLayer.traits' delete-orphan)
     db.session.commit()
 
@@ -167,6 +180,7 @@ def delete_trait(trait: NFTTrait, upload_folder: str) -> None:
     absolute_path = os.path.join(upload_folder, trait.image_path)
     if os.path.exists(absolute_path):
         os.remove(absolute_path)
+    _delete_rules_for_traits([trait.id])
     db.session.delete(trait)
     db.session.commit()
 
@@ -349,3 +363,63 @@ def publish_metadata_folder(collection: NFTCollection) -> dict[str, Any]:
     folder = secure_filename(collection.name) or "collection"
     result = ipfs.upload_directory(files, f"{folder}_metadata")
     return {"base_uri": result["url"], "gateway_url": result["gateway_url"], "item_count": len(published)}
+
+
+
+# --- trait rules ------------------------------------------------------------
+
+
+def _rule_trait(collection: NFTCollection, trait_id: Any) -> NFTTrait:
+    for layer in collection.layers:
+        for trait in layer.traits:
+            if trait.id == trait_id:
+                return trait
+    raise ValidationError("Both traits must belong to this collection")
+
+
+def add_trait_rule(collection: NFTCollection, kind: Any, trait_id: Any, other_trait_id: Any) -> NFTTraitRule:
+    """A constraint the generator honors: `exclude` — the two traits never
+    appear in the same item; `require` — whenever `trait` appears,
+    `other_trait` does too. Rules that can't mean anything (same layer),
+    repeat an existing one, or contradict one are refused."""
+    if kind not in NFTTraitRuleKind.ALL:
+        raise ValidationError(f"kind must be one of: {', '.join(NFTTraitRuleKind.ALL)}")
+    trait = _rule_trait(collection, trait_id)
+    other = _rule_trait(collection, other_trait_id)
+    if trait.layer_id == other.layer_id:
+        # Only one trait per layer is ever picked: "never together" is always
+        # true and "requires" is always impossible.
+        raise ValidationError("A rule has to connect traits on two different layers")
+
+    pair = {trait.id, other.id}
+    for rule in collection.trait_rules:
+        if {rule.trait_id, rule.other_trait_id} != pair:
+            continue
+        if rule.kind == kind and (kind == NFTTraitRuleKind.EXCLUDE or rule.trait_id == trait.id):
+            raise ValidationError("That rule already exists")
+        if rule.kind != kind:
+            raise ValidationError("That contradicts an existing rule between these two traits")
+
+    rule = NFTTraitRule(collection_id=collection.id, kind=kind, trait_id=trait.id, other_trait_id=other.id)
+    db.session.add(rule)
+    db.session.commit()
+    return rule
+
+
+def get_owned_rule(rule_id: str, user_id: str) -> NFTTraitRule:
+    rule = db.session.get(NFTTraitRule, rule_id)
+    if rule is None or rule.collection.user_id != user_id:
+        raise NotFoundError(f"Rule not found: {rule_id}")
+    return rule
+
+
+def delete_trait_rule(rule: NFTTraitRule) -> None:
+    db.session.delete(rule)
+    db.session.commit()
+
+
+def _delete_rules_for_traits(trait_ids: list[str]) -> None:
+    if trait_ids:
+        NFTTraitRule.query.filter(
+            or_(NFTTraitRule.trait_id.in_(trait_ids), NFTTraitRule.other_trait_id.in_(trait_ids))
+        ).delete(synchronize_session=False)

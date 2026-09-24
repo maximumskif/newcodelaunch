@@ -15,6 +15,7 @@ import { BatchTraitAnalyzer } from './BatchTraitAnalyzer'
 import { CollectionSidebar } from './CollectionSidebar'
 import { GenerateStep } from './GenerateStep'
 import { LayerEditor } from './LayerEditor'
+import { TraitRules } from './TraitRules'
 
 export function NFTGeneratorPage() {
   const { accessToken } = useAuth()
@@ -203,6 +204,12 @@ export function NFTGeneratorPage() {
                   </Card>
 
                   <LayerEditor
+                    token={accessToken}
+                    collection={collection}
+                    onChange={() => void refreshCollection(accessToken, collection.id)}
+                  />
+
+                  <TraitRules
                     token={accessToken}
                     collection={collection}
                     onChange={() => void refreshCollection(accessToken, collection.id)}

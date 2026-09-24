@@ -50,7 +50,9 @@ function downloadJson(filename: string, data: unknown) {
 export function GenerateStep({ token, collection, projectId }: Props) {
   const layers = collection.layers ?? []
   const ready = layers.length > 0 && layers.every((layer) => layer.traits.length > 0)
-  const maxCombinations = maxPossibleCombinations(layers)
+  // The server's count honors trait rules; the local product is only the
+  // fallback before it's loaded.
+  const maxCombinations = collection.max_combinations ?? maxPossibleCombinations(layers)
 
   const [items, setItems] = useState<NFTGeneratedItem[]>([])
   const [isLoadingItems, setIsLoadingItems] = useState(false)
