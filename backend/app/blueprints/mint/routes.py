@@ -160,6 +160,12 @@ def create_candy_machine():
     return jsonify(candy_machine=deployment.to_dict()), 201
 
 
+@mint_bp.get("/dashboard")
+@jwt_required()
+def creator_dashboard():
+    return jsonify(candy_machine.get_creator_dashboard(get_jwt_identity()))
+
+
 @mint_bp.get("/candy-machines")
 @jwt_required()
 def list_candy_machines():

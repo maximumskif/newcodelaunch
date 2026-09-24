@@ -192,4 +192,19 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   await page.getByRole('button', { name: /^Mint for/ }).click()
 
   await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
+
+  // The creator's dashboard (/mint with no collection) reads that sale back
+  // live from the chain: 1 of 1 minted, sold out, revenue = 1 x the 0.1 SOL
+  // default price. Same propagation caveat as the storefront above, so the
+  // row is re-checked via reload rather than trusted on first paint.
+  await page.goto('/mint')
+  const row = page.getByRole('row', { name: /E2E Candy Collection/ })
+  for (let attempt = 0; !(await row.getByText('1 / 1').isVisible().catch(() => false)) && attempt < 8; attempt++) {
+    await page.waitForTimeout(2_000)
+    await page.reload()
+  }
+  await expect(row).toContainText('1 / 1')
+  await expect(row).toContainText('Sold out')
+  await expect(row).toContainText('0.1 SOL')
+  await expect(page.getByText('1 minted across 1 drop')).toBeVisible()
 })

@@ -319,6 +319,61 @@ def get_user_candy_machines(user_id: str) -> list[CandyMachineDeployment]:
     )
 
 
+def _as_utc(value: datetime) -> datetime:
+    # SQLite hands back naive datetimes from timezone-aware columns — see
+    # get_public_candy_machine_status's comment; every value here was
+    # written as UTC.
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _live_counts(deployment: CandyMachineDeployment) -> dict[str, Any] | None:
+    """On-chain minted/remaining for one drop, or None if the read failed —
+    one unreachable drop mustn't take the whole dashboard down."""
+    try:
+        on_chain = _sidecar_request(
+            "GET",
+            f"/internal/candy-machine/{deployment.candy_machine}/status",
+            params={"network": _sidecar_network(deployment.network)},
+            timeout=15,
+        )
+    except CandyMachineServiceError:
+        return None
+    if not {"items_available", "items_redeemed", "items_remaining"} <= on_chain.keys():
+        return None
+    return on_chain
+
+
+def get_creator_dashboard(user_id: str) -> dict[str, Any]:
+    """Every drop the user launched, with live on-chain sales. Revenue is
+    minted x price: the solPayment guard sends exactly price_sol to the
+    creator's wallet per mint, and there's no update-guard feature, so the
+    recorded price is the price every mint paid. Totals are per network —
+    devnet SOL and mainnet SOL aren't the same money."""
+    now = datetime.now(timezone.utc)
+    drops = []
+    totals: dict[str, dict[str, Any]] = {}
+    for deployment in get_user_candy_machines(user_id):
+        collection = db.session.get(NFTCollection, deployment.nft_collection_id)
+        live = _live_counts(deployment)
+        go_live = _as_utc(deployment.go_live_date)
+        drop = {
+            **deployment.to_dict(),
+            "collection_name": collection.name if collection else None,
+            "is_live": now >= go_live,
+            "live_status_available": live is not None,
+            "items_redeemed": live["items_redeemed"] if live else None,
+            "items_remaining": live["items_remaining"] if live else None,
+            "revenue_sol": round(live["items_redeemed"] * deployment.price_sol, 9) if live else None,
+        }
+        drops.append(drop)
+        if live:
+            network_totals = totals.setdefault(deployment.network, {"drops": 0, "items_redeemed": 0, "revenue_sol": 0.0})
+            network_totals["drops"] += 1
+            network_totals["items_redeemed"] += live["items_redeemed"]
+            network_totals["revenue_sol"] = round(network_totals["revenue_sol"] + drop["revenue_sol"], 9)
+    return {"drops": drops, "totals_by_network": totals}
+
+
 def _get_deployment_by_address(candy_machine_address: str) -> CandyMachineDeployment:
     deployment = CandyMachineDeployment.query.filter_by(candy_machine=candy_machine_address).first()
     if deployment is None:

@@ -15,6 +15,7 @@ import { projectsApi, type Project } from '../../lib/projectsApi'
 import { signSendAndConfirm } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
+import { DropsDashboard } from './DropsDashboard'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
@@ -206,19 +207,9 @@ export function MintLaunchPage() {
         <PageHero
           eyebrow="Mint"
           title="Candy Machine"
-          description="Launch a real Solana mint — a Collection NFT and Candy Machine created on-chain, signed by your own wallet — from an already-published NFT collection."
+          description="Your Solana drops and how they're selling — each one a real Collection NFT and Candy Machine, created and owned by your own wallet. Launch a new one from a published collection in the NFT Generator."
         />
-        <EmptyState
-          title="Pick a collection to launch from"
-          description={'Publish at least one item to IPFS in the NFT Generator, then use "Launch Mint Site" there.'}
-          action={
-            <Link to="/nft" className="mt-2 inline-flex">
-              <Button variant="secondary" size="sm">
-                Go to NFT Generator
-              </Button>
-            </Link>
-          }
-        />
+        <DropsDashboard />
       </div>
     )
   }

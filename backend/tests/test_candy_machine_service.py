@@ -522,3 +522,71 @@ def test_prepare_mint_sends_the_creator_wallet_as_sol_payment_destination(app, m
         assert captured["creatorPublicKey"] == VALID_ADDRESS
         assert captured["collectionMint"] == deployment.collection_mint
         assert result["nft_mint"] == OTHER_ADDRESS
+
+
+def test_creator_dashboard_reports_live_sales_and_per_network_totals(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        collection = _make_collection(user.id)
+        live = _make_deployment(collection)  # price 0.25, go-live an hour ago, solana_devnet
+        upcoming = CandyMachineDeployment(
+            user_id=user.id,
+            nft_collection_id=collection.id,
+            network="solana",
+            collection_mint=OTHER_ADDRESS,
+            candy_machine=OTHER_ADDRESS,
+            price_sol=1.5,
+            items_available=10,
+            go_live_date=datetime.now(timezone.utc) + timedelta(days=1),
+            creator_wallet=VALID_ADDRESS,
+            transaction_signatures=["6" * 88],
+        )
+        _db.session.add(upcoming)
+        _db.session.commit()
+
+        def fake_status(address):
+            if address == live.candy_machine:
+                return {"items_available": 1, "items_redeemed": 1, "items_remaining": 0}
+            raise candy_machine.CandyMachineServiceError("RPC down")
+
+        monkeypatch.setattr(
+            candy_machine,
+            "_sidecar_request",
+            lambda method, path, *, json=None, params=None, timeout: fake_status(path.split("/")[3]),
+        )
+
+        dashboard = candy_machine.get_creator_dashboard(user.id)
+        drops = {d["candy_machine"]: d for d in dashboard["drops"]}
+
+        assert drops[live.candy_machine]["items_redeemed"] == 1
+        assert drops[live.candy_machine]["revenue_sol"] == 0.25
+        assert drops[live.candy_machine]["is_live"] is True
+        assert drops[live.candy_machine]["collection_name"] == "Test Collection"
+        # One unreachable drop is reported as such — it doesn't fail the rest.
+        assert drops[OTHER_ADDRESS]["live_status_available"] is False
+        assert drops[OTHER_ADDRESS]["revenue_sol"] is None
+        assert drops[OTHER_ADDRESS]["is_live"] is False
+        # Mainnet and devnet revenue are never summed together.
+        assert dashboard["totals_by_network"] == {"solana_devnet": {"drops": 1, "items_redeemed": 1, "revenue_sol": 0.25}}
+
+
+def test_creator_dashboard_only_shows_your_own_drops(app, client, monkeypatch):
+    from flask_jwt_extended import create_access_token
+
+    with app.app_context():
+        owner = _make_user()
+        _make_deployment(_make_collection(owner.id))
+        stranger = User(wallet_address="0xabc000000000000000000000000000000000000b", chain=Chain.EVM)
+        _db.session.add(stranger)
+        _db.session.commit()
+        monkeypatch.setattr(
+            candy_machine,
+            "_sidecar_request",
+            lambda method, path, *, json=None, params=None, timeout: {"items_available": 1, "items_redeemed": 0, "items_remaining": 1},
+        )
+
+        mine = client.get("/api/mint/dashboard", headers={"Authorization": f"Bearer {create_access_token(identity=owner.id)}"})
+        theirs = client.get("/api/mint/dashboard", headers={"Authorization": f"Bearer {create_access_token(identity=stranger.id)}"})
+        assert len(mine.get_json()["drops"]) == 1
+        assert theirs.get_json() == {"drops": [], "totals_by_network": {}}
+        assert client.get("/api/mint/dashboard").status_code == 401

@@ -77,6 +77,23 @@ export interface PublicCandyMachineStatus {
   items_remaining: number
 }
 
+// A creator's drop with live on-chain sales (GET /mint/dashboard). The
+// live fields are null when that drop's on-chain status couldn't be read.
+export interface CreatorDrop extends CandyMachineDeployment {
+  collection_name: string | null
+  is_live: boolean
+  live_status_available: boolean
+  items_redeemed: number | null
+  items_remaining: number | null
+  revenue_sol: number | null
+}
+
+export interface CreatorDashboard {
+  drops: CreatorDrop[]
+  // Per network — devnet and mainnet SOL are never summed together.
+  totals_by_network: Partial<Record<SolanaNetworkId, { drops: number; items_redeemed: number; revenue_sol: number }>>
+}
+
 export interface PreparedMint {
   transaction: string
   nft_mint: string
@@ -135,6 +152,8 @@ export const candyMachineApi = {
     ),
 
   list: (token: string) => request<{ candy_machines: CandyMachineDeployment[] }>('/mint/candy-machines', {}, token),
+
+  dashboard: (token: string) => request<CreatorDashboard>('/mint/dashboard', {}, token),
 
   // Public storefront — no token, no account. Anyone with a shared drop
   // link can view status and mint.
