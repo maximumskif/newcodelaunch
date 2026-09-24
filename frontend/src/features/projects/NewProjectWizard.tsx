@@ -7,7 +7,8 @@ import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { Stepper } from '../../components/ui/Stepper'
 import { EVM_NETWORKS } from '../network/NetworkContext'
-import { PROJECT_TYPES, WIZARD_PROJECT_TYPES } from '../../lib/projectTypes'
+import { SOLANA_NETWORKS } from '../../lib/candyMachineApi'
+import { PROJECT_TYPES, projectHref, WIZARD_PROJECT_TYPES } from '../../lib/projectTypes'
 import { projectsApi, type ProjectType } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 
@@ -23,6 +24,14 @@ export function NewProjectWizard() {
   const [projectType, setProjectType] = useState<ProjectType | null>(null)
   const [name, setName] = useState('')
   const [network, setNetwork] = useState('sepolia')
+  // Only a token project offers a choice of chain family (ERC-20 on EVM, or
+  // an SPL token on Solana); every other creatable type is EVM.
+  const [chain, setChain] = useState<'evm' | 'solana'>('evm')
+  const networks = chain === 'solana' ? SOLANA_NETWORKS : EVM_NETWORKS
+  const selectChain = (next: 'evm' | 'solana') => {
+    setChain(next)
+    setNetwork(next === 'solana' ? 'solana_devnet' : 'sepolia')
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,10 +46,10 @@ export function NewProjectWizard() {
       const { project } = await projectsApi.create(accessToken, {
         name: name.trim(),
         project_type: projectType,
-        chain: 'evm',
+        chain: projectType === 'token' ? chain : 'evm',
         network: meta?.needsNetwork ? network : undefined,
       })
-      navigate(`${PROJECT_TYPES[project.project_type].path}?project=${project.id}`)
+      navigate(projectHref(project))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create project')
       setIsSubmitting(false)
@@ -109,14 +118,41 @@ export function NewProjectWizard() {
             />
           </label>
 
+          {projectType === 'token' && (
+            <div className="text-sm text-ink-muted">
+              <span id="wizard-chain-label">Chain</span>
+              <div className="mt-1 flex gap-1.5" role="group" aria-labelledby="wizard-chain-label">
+                {(
+                  [
+                    ['evm', 'Ethereum, Polygon & BSC'],
+                    ['solana', 'Solana'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={chain === id}
+                    onClick={() => selectChain(id)}
+                    className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors duration-150 ${
+                      chain === id ? 'border-accent-500 bg-accent-500/10 text-ink' : 'border-border text-ink-muted hover:bg-surface-hover'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {meta!.needsNetwork && (
-            <label className="block text-sm text-ink-muted">
-              Network
-              <div className="mt-1 flex gap-1.5">
-                {EVM_NETWORKS.map((item) => (
+            <div className="block text-sm text-ink-muted">
+              <span id="wizard-network-label">Network</span>
+              <div className="mt-1 flex gap-1.5" role="group" aria-labelledby="wizard-network-label">
+                {networks.map((item) => (
                   <button
                     key={item.id}
                     type="button"
+                    aria-pressed={network === item.id}
                     onClick={() => setNetwork(item.id)}
                     className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors duration-150 ${
                       network === item.id ? 'border-accent-500 bg-accent-500/10 text-ink' : 'border-border text-ink-muted hover:bg-surface-hover'
@@ -126,7 +162,7 @@ export function NewProjectWizard() {
                   </button>
                 ))}
               </div>
-            </label>
+            </div>
           )}
 
           {error && <InlineError>{error}</InlineError>}

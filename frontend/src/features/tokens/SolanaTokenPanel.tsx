@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Connection } from '@solana/web3.js'
 
@@ -12,13 +12,28 @@ import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckb
 import { isSolanaMainnet, SOLANA_NETWORKS, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { signSendAndConfirm } from '../../lib/solana'
 import { formatTokenAmount, solanaTokensApi, validateTokenForm, type SolanaTokenLaunch } from '../../lib/solanaTokensApi'
+import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
+import { ProjectContextBar } from '../projects/ProjectContextBar'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
+const DRAFT_SAVE_DEBOUNCE_MS = 800
+
+// What a Solana token project's draft_data holds — the form as last left.
+interface SolanaTokenDraft {
+  name?: string
+  symbol?: string
+  decimals?: string
+  supply?: string
+  description?: string
+  revoke_mint_authority?: boolean
+  revoke_freeze_authority?: boolean
+}
+
 const inputClass = 'mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink'
 
-export function SolanaTokenPanel() {
+export function SolanaTokenPanel({ projectId = null }: { projectId?: string | null }) {
   const { accessToken } = useAuth()
   const { publicKey, sendTransaction } = useWallet()
 
@@ -37,6 +52,8 @@ export function SolanaTokenPanel() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SolanaTokenLaunch | null>(null)
   const [history, setHistory] = useState<SolanaTokenLaunch[]>([])
+  const [project, setProject] = useState<Project | null>(null)
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(!projectId)
 
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
   // Re-arm the mainnet confirmation on every network change — same
@@ -62,6 +79,51 @@ export function SolanaTokenPanel() {
   useEffect(() => {
     refreshHistory()
   }, [refreshHistory])
+
+  // Resume: restore the form (and network) from the project's draft, once,
+  // when arriving via ?project= — same pattern as DeployPanel on the EVM side.
+  useEffect(() => {
+    if (!accessToken || !projectId) return
+    let cancelled = false
+    projectsApi.get(accessToken, projectId).then(({ project: fetched }) => {
+      if (cancelled) return
+      setProject(fetched)
+      const draft = fetched.draft_data as SolanaTokenDraft
+      if (draft.name !== undefined) setName(draft.name)
+      if (draft.symbol !== undefined) setSymbol(draft.symbol)
+      if (draft.decimals !== undefined) setDecimals(draft.decimals)
+      if (draft.supply !== undefined) setSupply(draft.supply)
+      if (draft.description !== undefined) setDescription(draft.description)
+      if (draft.revoke_mint_authority !== undefined) setRevokeMintAuthority(draft.revoke_mint_authority)
+      if (draft.revoke_freeze_authority !== undefined) setRevokeFreezeAuthority(draft.revoke_freeze_authority)
+      if (SOLANA_NETWORKS.some((item) => item.id === fetched.network)) setNetwork(fetched.network as SolanaNetworkId)
+      setHasRestoredDraft(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, projectId])
+
+  // Autosave the in-progress form into the project's draft, so resuming it
+  // later lands exactly where it was left.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => {
+    if (!accessToken || !projectId || !hasRestoredDraft) return
+    clearTimeout(saveTimer.current)
+    const draft: SolanaTokenDraft = {
+      name,
+      symbol,
+      decimals,
+      supply,
+      description,
+      revoke_mint_authority: revokeMintAuthority,
+      revoke_freeze_authority: revokeFreezeAuthority,
+    }
+    saveTimer.current = setTimeout(() => {
+      void projectsApi.update(accessToken, projectId, { draft_data: { ...draft }, network })
+    }, DRAFT_SAVE_DEBOUNCE_MS)
+    return () => clearTimeout(saveTimer.current)
+  }, [accessToken, projectId, hasRestoredDraft, name, symbol, decimals, supply, description, revokeMintAuthority, revokeFreezeAuthority, network])
 
   const formProblem = validateTokenForm(name, symbol, decimals, supply)
   const isBusy = step === 'preparing' || step === 'signing' || step === 'recording'
@@ -110,11 +172,14 @@ export function SolanaTokenPanel() {
         name: name.trim(),
         symbol: symbol.trim(),
         metadata_uri: prepared.metadata_uri,
+        project_id: projectId ?? undefined,
       })
 
       setResult(recorded)
       setStep('done')
       refreshHistory()
+      // Re-read the project so its context bar flips to "Deployed".
+      if (projectId) projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Launch failed')
       setStep('error')
@@ -123,6 +188,9 @@ export function SolanaTokenPanel() {
 
   return (
     <div className="space-y-6">
+      {project && (
+        <ProjectContextBar project={project} currentStepLabel="Configuring token" isLinked={Boolean(project.solana_token_launch)} />
+      )}
       <Card padding="lg" rounded="xl" className="max-w-xl space-y-4">
         <div>
           <h2 className="text-lg font-medium text-ink">Launch an SPL token</h2>

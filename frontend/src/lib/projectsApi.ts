@@ -2,6 +2,7 @@ import type { CandyMachineDeployment } from './candyMachineApi'
 import type { ContractDeployment } from './contractsApi'
 import type { NFTCollection } from './nftApi'
 import { request } from './http'
+import type { SolanaTokenLaunch } from './solanaTokensApi'
 
 export type ProjectType = 'token' | 'nft_collection' | 'contract' | 'candy_machine'
 export type ProjectStatus = 'draft' | 'active' | 'archived'
@@ -17,6 +18,8 @@ export interface Project {
   contract_deployment: ContractDeployment | null
   nft_collection: NFTCollection | null
   candy_machine_deployment: CandyMachineDeployment | null
+  // A token project on Solana links here instead of contract_deployment.
+  solana_token_launch: SolanaTokenLaunch | null
   created_at: string
   updated_at: string
 }

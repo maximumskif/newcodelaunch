@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { IconPlus, IconTrash } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
-import { PROJECT_TYPES } from '../../lib/projectTypes'
+import { PROJECT_TYPES, projectHref } from '../../lib/projectTypes'
 import { projectsApi, type Project, type ProjectStatus } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 
@@ -29,6 +29,7 @@ function linkedRecordLabel(project: Project): string | null {
   if (project.contract_deployment) return `${project.contract_deployment.contract_address.slice(0, 10)}…`
   if (project.nft_collection) return project.nft_collection.name
   if (project.candy_machine_deployment) return `${project.candy_machine_deployment.candy_machine.slice(0, 10)}…`
+  if (project.solana_token_launch) return `${project.solana_token_launch.symbol} · ${project.solana_token_launch.mint_address.slice(0, 10)}…`
   return null
 }
 
@@ -160,7 +161,7 @@ export function ProjectsDashboard() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => navigate(`${meta.path}?project=${project.id}`)}
+                        onClick={() => navigate(projectHref(project))}
                       >
                         {project.status === 'draft' ? 'Resume' : 'View'}
                       </Button>

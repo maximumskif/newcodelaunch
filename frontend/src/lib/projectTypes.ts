@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 
 import { IconCandy, IconCode, IconCoin, IconLayers } from '../components/ui/icons'
-import type { ProjectType } from './projectsApi'
+import type { Project, ProjectType } from './projectsApi'
 
 interface ProjectTypeMeta {
   label: string
@@ -34,7 +34,7 @@ interface ProjectTypeMeta {
 export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   token: {
     label: 'Token',
-    description: 'Deploy an ERC-20 token from a compiled Solidity template.',
+    description: 'An ERC-20 on Ethereum, Polygon or BSC, or an SPL token on Solana.',
     path: '/tokens',
     icon: IconCoin,
     needsNetwork: true,
@@ -69,3 +69,10 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
 export const WIZARD_PROJECT_TYPES = Object.fromEntries(
   Object.entries(PROJECT_TYPES).filter(([, meta]) => meta.creatableViaWizard),
 ) as Partial<Record<ProjectType, ProjectTypeMeta>>
+
+// Where a project's Resume/View goes. A token project can be on either chain
+// family, and the Token Launchpad opens on the matching tab (?chain=solana).
+export function projectHref(project: Pick<Project, 'id' | 'project_type' | 'chain'>): string {
+  const base = `${PROJECT_TYPES[project.project_type].path}?project=${project.id}`
+  return project.project_type === 'token' && project.chain === 'solana' ? `${base}&chain=solana` : base
+}

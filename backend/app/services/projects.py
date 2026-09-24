@@ -19,6 +19,9 @@ from ..models.candy_machine import CandyMachineDeployment
 from ..models.deployment import ContractDeployment
 from ..models.nft import NFTCollection
 from ..models.project import Project, ProjectStatus, ProjectType
+from ..models.solana_token import SolanaTokenLaunch
+from ..models.user import Chain
+from . import blockchain
 
 _UPDATABLE_FIELDS = {"name", "draft_data", "network", "status"}
 
@@ -31,6 +34,17 @@ class ValidationError(ValueError):
     pass
 
 
+def _validate_network(chain: str, network: Optional[str]) -> None:
+    """A project's network must belong to its chain — e.g. a Solana token
+    project can't be saved with an EVM network by an autosave. Both used to
+    be accepted as any string."""
+    if network is None:
+        return
+    networks = blockchain.EVM_NETWORKS if chain == Chain.EVM else blockchain.SOLANA_NETWORKS
+    if network not in networks:
+        raise ValidationError(f"network must be one of: {', '.join(networks)} for a {chain} project")
+
+
 def create_project(
     user_id: str,
     name: str,
@@ -41,6 +55,9 @@ def create_project(
 ) -> Project:
     if project_type not in ProjectType.ALL:
         raise ValidationError(f"Unknown project_type: {project_type}")
+    if chain not in Chain.ALL:
+        raise ValidationError(f"chain must be one of: {', '.join(Chain.ALL)}")
+    _validate_network(chain, network)
 
     project = Project(
         user_id=user_id,
@@ -75,6 +92,8 @@ def update_project(project: Project, **fields: Any) -> Project:
             continue
         if key == "status" and value not in ProjectStatus.ALL:
             raise ValidationError(f"Unknown status: {value}")
+        if key == "network":
+            _validate_network(project.chain, value)
         setattr(project, key, value)
     db.session.commit()
     return project
@@ -112,6 +131,16 @@ def link_candy_machine(project: Project, deployment: CandyMachineDeployment) -> 
     if project.candy_machine_deployment_id and project.candy_machine_deployment_id != deployment.id:
         return project
     project.candy_machine_deployment_id = deployment.id
+    project.status = ProjectStatus.ACTIVE
+    db.session.commit()
+    return project
+
+
+def link_solana_token(project: Project, launch: SolanaTokenLaunch) -> Project:
+    # Same first-link-wins rule as the other link_* helpers.
+    if project.solana_token_launch_id and project.solana_token_launch_id != launch.id:
+        return project
+    project.solana_token_launch_id = launch.id
     project.status = ProjectStatus.ACTIVE
     db.session.commit()
     return project

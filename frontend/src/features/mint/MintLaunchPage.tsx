@@ -272,14 +272,17 @@ export function MintLaunchPage() {
             <>
               {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to launch.</p>}
 
-              <label className="block text-sm text-ink-muted">
-                Network
-                <div className="mt-1 flex gap-1.5">
+              {/* A group, not a label element: a label wrapping buttons names the
+                  first button with the whole label text for screen readers. */}
+              <div className="block text-sm text-ink-muted">
+                <span id="candy-network-label">Network</span>
+                <div className="mt-1 flex gap-1.5" role="group" aria-labelledby="candy-network-label">
                   {SOLANA_NETWORKS.map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       disabled={isBusy}
+                      aria-pressed={network === item.id}
                       onClick={() => setNetwork(item.id)}
                       className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors duration-150 ${
                         network === item.id ? 'border-accent-500 bg-accent-500/10 text-ink' : 'border-border text-ink-muted hover:bg-surface-hover'
@@ -289,7 +292,7 @@ export function MintLaunchPage() {
                     </button>
                   ))}
                 </div>
-              </label>
+              </div>
 
               <label className="block text-sm text-ink-muted">
                 Price per mint (SOL)

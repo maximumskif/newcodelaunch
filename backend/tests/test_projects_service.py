@@ -89,3 +89,38 @@ def test_link_if_owned_swallows_not_found_without_raising(app):
         # stale/foreign project_id must never block recording a deployment
         # that already succeeded on-chain.
         projects.link_if_owned("nonexistent-project-id", user.id, lambda p: projects.link_deployment(p, deployment))
+
+
+def test_a_token_project_can_be_on_solana_with_a_solana_network(app):
+    user = User(wallet_address="SoLProj1111111111111111111111111111111111111", chain=Chain.SOLANA)
+    _db.session.add(user)
+    _db.session.commit()
+    project = projects.create_project(user.id, "SPL", "token", "solana", network="solana_devnet")
+    assert (project.chain, project.network) == ("solana", "solana_devnet")
+
+
+@pytest.mark.parametrize(
+    "chain, network, message",
+    [
+        ("bitcoin", None, "chain must be one of"),
+        ("evm", "solana_devnet", "network must be one of"),
+        ("solana", "sepolia", "network must be one of"),
+    ],
+)
+def test_create_rejects_a_chain_network_mismatch(app, chain, network, message):
+    user = User(wallet_address="0xabc0000000000000000000000000000000000c", chain=Chain.EVM)
+    _db.session.add(user)
+    _db.session.commit()
+    with pytest.raises(projects.ValidationError, match=message):
+        projects.create_project(user.id, "P", "token", chain, network=network)
+
+
+def test_update_keeps_the_network_on_the_projects_chain(app):
+    user = User(wallet_address="0xabc0000000000000000000000000000000000d", chain=Chain.EVM)
+    _db.session.add(user)
+    _db.session.commit()
+    project = projects.create_project(user.id, "P", "token", "solana", network="solana_devnet")
+    projects.update_project(project, network="solana")
+    assert project.network == "solana"
+    with pytest.raises(projects.ValidationError, match="network must be one of"):
+        projects.update_project(project, network="sepolia")

@@ -108,6 +108,8 @@ export const solanaTokensApi = {
       name: string
       symbol: string
       metadata_uri: string
+      // Best-effort link to the token project this launch came from.
+      project_id?: string
     },
   ) =>
     request<{ token: SolanaTokenLaunch }>('/solana-tokens', { method: 'POST', body: JSON.stringify(payload) }, token),

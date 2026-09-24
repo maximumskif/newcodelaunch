@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { projectsApi, type Project } from '../../lib/projectsApi'
 import { solanaTokensApi, type SolanaTokenLaunch } from '../../lib/solanaTokensApi'
 import { SolanaTokenPanel } from './SolanaTokenPanel'
 
@@ -23,6 +25,14 @@ vi.mock('../../lib/solanaTokensApi', async (importOriginal) => {
   return {
     ...actual,
     solanaTokensApi: { prepare: vi.fn(), record: vi.fn(), list: vi.fn() },
+  }
+})
+
+vi.mock('../../lib/projectsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/projectsApi')>()
+  return {
+    ...actual,
+    projectsApi: { ...actual.projectsApi, get: vi.fn(), update: vi.fn(), list: vi.fn().mockResolvedValue({ projects: [] }) },
   }
 })
 
@@ -165,4 +175,60 @@ describe('SolanaTokenPanel', () => {
     expect(screen.getByText('Freezable')).toBeInTheDocument()
     expect(screen.getByText('1,000')).toBeInTheDocument()
   })
+
+  describe('in a project', () => {
+    const project: Project = {
+      id: 'proj-sol',
+      name: 'My SPL project',
+      project_type: 'token',
+      chain: 'solana',
+      network: 'solana',
+      status: 'draft',
+      draft_data: { name: 'Saved Token', symbol: 'SAV', decimals: '4', supply: '777', revoke_freeze_authority: false },
+      contract_deployment: null,
+      nft_collection: null,
+      solana_token_launch: null,
+      candy_machine_deployment: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+
+    it('restores the draft and network, autosaves edits, and launches linked to the project', async () => {
+      mockWallet(true)
+      vi.mocked(projectsApi.get).mockResolvedValue({ project })
+      vi.mocked(projectsApi.update).mockResolvedValue({ project })
+      const user = userEvent.setup()
+      render(
+        <MemoryRouter>
+          <SolanaTokenPanel projectId="proj-sol" />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByText('My SPL project')).toBeInTheDocument()
+      expect(screen.getByLabelText('Token name')).toHaveValue('Saved Token')
+      expect(screen.getByLabelText('Initial supply (whole tokens)')).toHaveValue('777')
+      expect(screen.getByLabelText(/Revoke freeze authority/)).not.toBeChecked()
+      expect(screen.getByRole('button', { name: 'Solana Mainnet' })).toHaveAttribute('aria-pressed', 'true')
+
+      await user.clear(screen.getByLabelText('Token name'))
+      await user.type(screen.getByLabelText('Token name'), 'Renamed')
+      await waitFor(
+        () =>
+          expect(projectsApi.update).toHaveBeenLastCalledWith(
+            'tok',
+            'proj-sol',
+            expect.objectContaining({ draft_data: expect.objectContaining({ name: 'Renamed', supply: '777' }), network: 'solana' }),
+          ),
+        { timeout: 3_000 },
+      )
+
+      // Back to devnet (no mainnet confirmation needed) and launch.
+      await user.click(screen.getByRole('button', { name: 'Solana Devnet' }))
+      await user.click(screen.getByRole('button', { name: 'Launch token' }))
+      await waitFor(() =>
+        expect(solanaTokensApi.record).toHaveBeenCalledWith('tok', expect.objectContaining({ project_id: 'proj-sol' })),
+      )
+    })
+  })
 })
+

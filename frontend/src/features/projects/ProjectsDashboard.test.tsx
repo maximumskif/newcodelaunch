@@ -39,6 +39,7 @@ const baseProject: Project = {
   draft_data: {},
   contract_deployment: null,
   nft_collection: null,
+  solana_token_launch: null,
   candy_machine_deployment: {
     id: 'cm-1',
     nft_collection_id: 'col-1',

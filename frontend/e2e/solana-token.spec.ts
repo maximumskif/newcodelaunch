@@ -34,7 +34,9 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
 }) => {
   test.setTimeout(90_000)
 
-  await page.goto('/tokens?chain=solana')
+  // Start from the project wizard: a Token project on Solana should land on
+  // the Launchpad's Solana tab, and the launch should link back to it.
+  await page.goto('/projects/new')
 
   // Same connect fallback as candy-machine.spec.ts: autoConnect usually has
   // the fake Phantom connected already.
@@ -45,6 +47,13 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   }
   await page.getByRole('button', { name: /^Sign in with/ }).click()
   await expect(page.getByText(new RegExp(`SOLANA · ${CREATOR_PUBLIC_KEY.slice(0, 6)}`))).toBeVisible({ timeout: 15_000 })
+
+  await page.getByText('Token', { exact: true }).click()
+  await page.getByRole('button', { name: 'Solana', exact: true }).click()
+  await page.getByPlaceholder('My token').fill('E2E SPL Project')
+  await page.getByRole('button', { name: 'Create draft and continue' }).click()
+  await expect(page).toHaveURL(/\/tokens\?project=[^&]+&chain=solana/)
+  await expect(page.getByText('E2E SPL Project')).toBeVisible()
 
   await page.getByLabel('Token name').fill('E2E Test Token')
   await page.getByLabel('Symbol').fill('e2et')
@@ -102,4 +111,9 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   const metadataAccount = await connection.getAccountInfo(metadataPda)
   expect(metadataAccount?.owner.toBase58()).toBe(TOKEN_METADATA_PROGRAM_ID.toBase58())
   expect(metadataAccount?.data.includes(Buffer.from('E2E Test Token'))).toBe(true)
+
+  // The project it was launched from is now linked to it.
+  await page.goto('/dashboard')
+  const card = page.locator('li, article, div').filter({ hasText: 'E2E SPL Project' }).filter({ hasText: 'E2ET' }).last()
+  await expect(card).toContainText(`E2ET · ${mintAddress!.slice(0, 10)}`)
 })

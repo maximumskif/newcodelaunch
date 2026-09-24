@@ -188,15 +188,17 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   mint the storefront shows the limit reached and the mint API refuses the
   wallet (403); the edit raises it to 2, and the final public mint succeeds
   — the counter is shared across phases.
-- `solana-token.spec.ts` — sign in with Solana → fill the Token
-  Launchpad's Solana form through the actual UI, including a real logo file
+- `solana-token.spec.ts` — sign in with Solana → create a Token project
+  on Solana through the project wizard (lands on the Launchpad's Solana tab
+  with the project's context bar) → fill the Solana form through the actual UI, including a real logo file
   upload → launch (real Pillow logo check, logo + metadata JSON pinned
   through the Pinata stub, real sidecar-built Token Metadata transaction,
   real signature, real on-chain confirmation, real backend re-verification)
   → then read the chain directly, independent of anything the app reports:
   the mint's decimals/supply, mint and freeze authority both revoked, the
   creator holding the full supply, and a real Token Metadata account
-  carrying the token's name.
+  carrying the token's name — and the project dashboard shows the project
+  linked to that mint.
 - `nft-evm-deploy.spec.ts` — seed a published two-item collection via the
   API → deploy it as an ERC-721 through the actual `/nft/deploy-evm` page
   (metadata folder pinned through the Pinata stub's directory support, real

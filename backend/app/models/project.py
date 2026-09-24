@@ -51,6 +51,10 @@ class Project(db.Model):
         db.String(36), db.ForeignKey("contract_deployments.id"), nullable=True
     )
     nft_collection_id = db.Column(db.String(36), db.ForeignKey("nft_collections.id"), nullable=True)
+    # A token project on Solana links here instead of contract_deployment.
+    solana_token_launch_id = db.Column(
+        db.String(36), db.ForeignKey("solana_token_launches.id", name="fk_projects_solana_token_launch_id"), nullable=True
+    )
     candy_machine_deployment_id = db.Column(
         db.String(36), db.ForeignKey("candy_machine_deployments.id"), nullable=True
     )
@@ -61,6 +65,7 @@ class Project(db.Model):
     contract_deployment = db.relationship("ContractDeployment")
     nft_collection = db.relationship("NFTCollection")
     candy_machine_deployment = db.relationship("CandyMachineDeployment")
+    solana_token_launch = db.relationship("SolanaTokenLaunch")
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +79,7 @@ class Project(db.Model):
             "contract_deployment": self.contract_deployment.to_dict() if self.contract_deployment else None,
             "nft_collection": self.nft_collection.to_dict() if self.nft_collection else None,
             "candy_machine_deployment": self.candy_machine_deployment.to_dict() if self.candy_machine_deployment else None,
+            "solana_token_launch": self.solana_token_launch.to_dict() if self.solana_token_launch else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

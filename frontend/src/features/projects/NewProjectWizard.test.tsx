@@ -102,6 +102,7 @@ describe('NewProjectWizard', () => {
         draft_data: {},
         contract_deployment: null,
         nft_collection: null,
+        solana_token_launch: null,
         candy_machine_deployment: null,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -125,4 +126,46 @@ describe('NewProjectWizard', () => {
     )
     expect(navigateMock).toHaveBeenCalledWith('/tokens?project=proj-1')
   })
+
+  it('creates a Solana token project and opens the Launchpad on its Solana tab', async () => {
+    mockSignedIn()
+    vi.mocked(projectsApi.create).mockResolvedValue({
+      project: {
+        id: 'proj-sol',
+        name: 'My SPL',
+        project_type: 'token',
+        chain: 'solana',
+        network: 'solana_devnet',
+        status: 'draft',
+        draft_data: {},
+        contract_deployment: null,
+        nft_collection: null,
+        solana_token_launch: null,
+        candy_machine_deployment: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+    const user = userEvent.setup()
+    renderWizard()
+
+    await user.click(screen.getByText('Token'))
+    await user.click(screen.getByRole('button', { name: 'Solana' }))
+    // The network list follows the chain.
+    expect(screen.getByRole('button', { name: 'Solana Devnet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sepolia' })).not.toBeInTheDocument()
+    await user.type(screen.getByPlaceholderText('My token'), 'My SPL')
+    await user.click(screen.getByText('Create draft and continue'))
+
+    await waitFor(() =>
+      expect(projectsApi.create).toHaveBeenCalledWith('tok', {
+        name: 'My SPL',
+        project_type: 'token',
+        chain: 'solana',
+        network: 'solana_devnet',
+      }),
+    )
+    expect(navigateMock).toHaveBeenCalledWith('/tokens?project=proj-sol&chain=solana')
+  })
 })
+

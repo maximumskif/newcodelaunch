@@ -56,7 +56,7 @@ export function TokenLaunchpadPage() {
       </div>
 
       {chain === 'solana' ? (
-        <SolanaTokenPanel />
+        <SolanaTokenPanel projectId={projectId} />
       ) : (
         <DeployPanel
           title="Deploy Your Token"

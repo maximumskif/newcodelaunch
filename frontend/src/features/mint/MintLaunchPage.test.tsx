@@ -91,6 +91,7 @@ const project: Project = {
   draft_data: {},
   contract_deployment: null,
   nft_collection: null,
+  solana_token_launch: null,
   candy_machine_deployment: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',

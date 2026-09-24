@@ -353,3 +353,62 @@ def test_record_route_rejects_non_string_fields(app, client):
         },
     )
     assert response.status_code == 400
+
+
+def _record_via_route(client, user, **extra):
+    body = {
+        "network": "solana_devnet",
+        "mint_address": MINT,
+        "transaction_signature": SIGNATURE,
+        "creator_wallet": CREATOR,
+        "name": "Test Token",
+        "symbol": "TST",
+        **extra,
+    }
+    return client.post("/api/solana-tokens", headers=_auth(user), json=body)
+
+
+def test_recording_links_an_owned_token_project(app, client, monkeypatch):
+    from app.services import projects
+
+    _chain(monkeypatch)
+    user = _make_user()
+    project = projects.create_project(user.id, "My Solana Token", "token", "solana", network="solana_devnet")
+
+    assert _record_via_route(client, user, project_id=project.id).status_code == 201
+
+    linked = project.to_dict()["solana_token_launch"]
+    assert linked["mint_address"] == MINT
+    assert project.status == "active"
+
+
+def test_recording_never_links_someone_elses_project(app, client, monkeypatch):
+    from app.services import projects
+
+    _chain(monkeypatch)
+    owner = _make_user()
+    stranger = _make_user(wallet="SoLOther11111111111111111111111111111111111")
+    theirs = projects.create_project(stranger.id, "Not yours", "token", "solana")
+
+    # The launch still records — linking is best-effort — but their project is untouched.
+    assert _record_via_route(client, owner, project_id=theirs.id).status_code == 201
+    assert theirs.solana_token_launch_id is None
+
+
+def test_first_linked_launch_wins(app, monkeypatch):
+    from app.services import projects
+
+    _chain(monkeypatch)
+    user = _make_user()
+    project = projects.create_project(user.id, "P", "token", "solana")
+    first = _record(user)
+    projects.link_solana_token(project, first)
+    other = SolanaTokenLaunch(
+        user_id=user.id, network="solana_devnet", mint_address="Other1111111111111111111111111111111111111",
+        transaction_signature="7" * 88, creator_wallet=CREATOR, name="B", symbol="B", decimals=0, supply_raw="1",
+        mint_authority_revoked=True, freeze_authority_revoked=True,
+    )
+    _db.session.add(other)
+    _db.session.commit()
+    projects.link_solana_token(project, other)
+    assert project.solana_token_launch_id == first.id

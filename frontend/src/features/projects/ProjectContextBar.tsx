@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Dropdown } from '../../components/ui/Dropdown'
 import { IconChevronDown } from '../../components/ui/icons'
-import { PROJECT_TYPES } from '../../lib/projectTypes'
+import { PROJECT_TYPES, projectHref } from '../../lib/projectTypes'
 import { projectsApi, type Project, type ProjectStatus } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 
@@ -63,7 +63,7 @@ export function ProjectContextBar({ project, currentStepLabel, isLinked }: Props
   }, [accessToken, project.id])
 
   const goToProject = (target: Project) => {
-    navigate(`${PROJECT_TYPES[target.project_type].path}?project=${target.id}`)
+    navigate(projectHref(target))
   }
 
   return (

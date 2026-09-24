@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import candy_machine, ipfs, solana_tokens
+from ...services import candy_machine, ipfs, projects, solana_tokens
 
 solana_tokens_bp = Blueprint("solana_tokens", __name__)
 
@@ -86,6 +86,12 @@ def record_token_launch():
         )
     except solana_tokens.ValidationError as exc:
         return jsonify(error=str(exc)), 422
+
+    project_id = data.get("project_id")
+    if isinstance(project_id, str) and project_id:
+        # Best-effort, like every other deployment type: the token already
+        # exists on-chain, so a stale/foreign project_id mustn't fail this.
+        projects.link_if_owned(project_id, get_jwt_identity(), lambda p: projects.link_solana_token(p, launch))
 
     return jsonify(token=launch.to_dict()), 201
 
