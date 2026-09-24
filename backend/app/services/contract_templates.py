@@ -17,8 +17,11 @@ string). Dropped here; ABI/bytecode always come from a real compile.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Optional
+
+from eth_utils import is_hex_address, to_checksum_address
 
 _CONTRACT_NAME_PATTERN = re.compile(r"\bcontract\s+([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -27,7 +30,16 @@ class UnknownTemplateError(ValueError):
     pass
 
 
-class MissingParametersError(ValueError):
+class TemplateParameterError(ValueError):
+    """Base for anything wrong with a template's parameters — routes map it
+    to a 400 without needing to know which specific problem it was."""
+
+
+class MissingParametersError(TemplateParameterError):
+    pass
+
+
+class InvalidParametersError(TemplateParameterError):
     pass
 
 
@@ -73,7 +85,7 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-contract {{TOKEN_NAME}} is IERC20 {
+contract {{CONTRACT_NAME}} is IERC20 {
     string public name = "{{TOKEN_NAME}}";
     string public symbol = "{{TOKEN_SYMBOL}}";
     uint8 public decimals = {{TOKEN_DECIMALS}};
@@ -166,7 +178,7 @@ _ERC20_ADVANCED_SOURCE = '''
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-contract {{TOKEN_NAME}} {
+contract {{CONTRACT_NAME}} {
     string public name = "{{TOKEN_NAME}}";
     string public symbol = "{{TOKEN_SYMBOL}}";
     uint8 public decimals = {{TOKEN_DECIMALS}};
@@ -350,7 +362,7 @@ interface IERC721 {
     function isApprovedForAll(address owner, address operator) external view returns (bool);
 }
 
-contract {{COLLECTION_NAME}} is IERC721, IERC165 {
+contract {{CONTRACT_NAME}} is IERC721, IERC165 {
     string public name = "{{COLLECTION_NAME}}";
     string public symbol = "{{COLLECTION_SYMBOL}}";
     uint256 public totalSupply = 0;
@@ -573,7 +585,7 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         description="Standard ERC-20 token with mint and burn functionality",
         solidity_code=_ERC20_BASIC_SOURCE,
         deployment_params=[
-            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": "Token name (must be a valid Solidity identifier — letters/digits/underscore, no spaces)"},
+            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": "Token name, e.g. My Token"},
             {"name": "TOKEN_SYMBOL", "type": "string", "required": True, "description": "Token symbol"},
             {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18, "description": "Token decimals"},
             {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True, "description": "Initial token supply"},
@@ -588,7 +600,7 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         description="Advanced ERC-20 with tax system, limits, and anti-whale protection",
         solidity_code=_ERC20_ADVANCED_SOURCE,
         deployment_params=[
-            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": "Token name (must be a valid Solidity identifier)"},
+            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": "Token name, e.g. My Token"},
             {"name": "TOKEN_SYMBOL", "type": "string", "required": True},
             {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18},
             {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True},
@@ -611,7 +623,7 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         description="Standard ERC-721 NFT collection with minting functionality",
         solidity_code=_ERC721_BASIC_SOURCE,
         deployment_params=[
-            {"name": "COLLECTION_NAME", "type": "string", "required": True, "description": "NFT collection name (must be a valid Solidity identifier)"},
+            {"name": "COLLECTION_NAME", "type": "string", "required": True, "description": "NFT collection name, e.g. My Collection"},
             {"name": "COLLECTION_SYMBOL", "type": "string", "required": True, "description": "NFT collection symbol"},
             {"name": "MAX_SUPPLY", "type": "uint256", "required": True, "description": "Maximum NFT supply"},
             {"name": "MINT_PRICE", "type": "uint256", "required": True, "description": "Mint price in wei"},
@@ -635,8 +647,95 @@ def get_all_templates(contract_type: Optional[str] = None) -> list[ContractTempl
     return templates
 
 
+# Which display-name parameter each template's {{CONTRACT_NAME}} identifier
+# is derived from.
+_DISPLAY_NAME_PARAM = {"erc20": "TOKEN_NAME", "erc721": "COLLECTION_NAME"}
+
+# Identifiers a derived contract name must not collide with: the interfaces
+# these templates declare themselves, plus Solidity keywords/reserved words
+# that are plausible as a one-word token name.
+_RESERVED_IDENTIFIERS = {
+    "IERC20", "IERC721", "IERC165", "contract", "interface", "library", "function", "event", "error",
+    "modifier", "mapping", "struct", "enum", "address", "string", "bytes", "bool", "public", "private",
+    "internal", "external", "return", "returns", "if", "else", "for", "while", "do", "break",
+    "continue", "new", "delete", "true", "false", "this", "super", "import", "pragma", "constant",
+    "immutable", "payable", "view", "pure", "virtual", "override", "abstract", "emit", "type",
+    "unchecked", "assembly", "try", "catch", "revert", "require", "assert", "constructor", "fallback",
+    "receive", "wei", "gwei", "ether", "seconds", "minutes", "hours", "days", "weeks", "years",
+}
+
+_UINT_BITS = {"uint8": 8, "uint256": 256}
+_MAX_STRING_LENGTH = 256
+
+
+def contract_identifier(display_name: str, fallback: str) -> str:
+    """"My Cool Apes" -> "MyCoolApes": a valid, non-reserved Solidity
+    identifier derived from a human display name, so the name itself can
+    contain spaces/punctuation. Accents are folded to ASCII first
+    ("Café" -> "Cafe"); anything left that isn't [A-Za-z0-9_] is dropped."""
+    ascii_name = unicodedata.normalize("NFKD", display_name).encode("ascii", "ignore").decode("ascii")
+    words = re.findall(r"[A-Za-z0-9_]+", ascii_name)
+    identifier = "".join(word[:1].upper() + word[1:] for word in words)
+    if not identifier:
+        identifier = fallback
+    if identifier[0].isdigit():
+        identifier = f"{fallback}{identifier}"
+    if identifier in _RESERVED_IDENTIFIERS:
+        identifier = f"{identifier}{fallback}"
+    return identifier
+
+
+def _solidity_string_literal(value: str) -> str:
+    """A complete, safely-escaped Solidity string literal (quotes included).
+    Plain "..." for printable ASCII; unicode"..." when the value has any
+    non-ASCII character (a plain literal can't hold one)."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    prefix = "" if escaped.isascii() else "unicode"
+    return f'{prefix}"{escaped}"'
+
+
+def _coerce_parameter(param: dict[str, Any], value: Any) -> str:
+    """Validates one parameter against its declared type and returns the
+    Solidity source text to substitute for it. Values are never pasted into
+    the source raw: before this, a `"` in a string parameter closed the
+    literal early and whatever followed compiled as contract code, and a
+    space in a name broke the contract declaration outright."""
+    name, param_type = param["name"], param["type"]
+
+    if param_type == "string":
+        if not isinstance(value, str) or not value.strip():
+            raise InvalidParametersError(f"{name} must be a non-empty string")
+        value = value.strip()
+        if len(value) > _MAX_STRING_LENGTH:
+            raise InvalidParametersError(f"{name} must be at most {_MAX_STRING_LENGTH} characters")
+        if any(unicodedata.category(ch).startswith("C") for ch in value):
+            raise InvalidParametersError(f"{name} must not contain control characters or line breaks")
+        return _solidity_string_literal(value)
+
+    if param_type in _UINT_BITS:
+        # bool is an int subclass — True must not silently become 1.
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise InvalidParametersError(f"{name} must be a whole number")
+        text = str(value).strip()
+        if not text.isdigit():
+            raise InvalidParametersError(f"{name} must be a whole number")
+        if int(text) >= 2 ** _UINT_BITS[param_type]:
+            raise InvalidParametersError(f"{name} is too large for a {param_type}")
+        return str(int(text))
+
+    if param_type == "address":
+        if not isinstance(value, str) or not is_hex_address(value.strip()):
+            raise InvalidParametersError(f"{name} must be a 0x-prefixed, 40-hex-character address")
+        # Solidity rejects a non-checksummed address literal outright — a
+        # lowercase address pasted from anywhere used to fail compilation.
+        return to_checksum_address(value.strip())
+
+    raise InvalidParametersError(f"{name} has an unsupported type: {param_type}")
+
+
 def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, Any]:
-    """Substitute {{PARAM}} placeholders and return the ready-to-compile source."""
+    """Validate parameters against the template's declared types, fill in
+    defaults, and return the ready-to-compile source."""
     template = get_template(template_id)
     if template is None:
         raise UnknownTemplateError(f"Unknown template: {template_id}")
@@ -650,20 +749,31 @@ def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, A
     if not isinstance(parameters, dict):
         raise MissingParametersError("parameters must be an object of PARAM_NAME -> value")
 
-    required = [p["name"] for p in template.deployment_params if p.get("required")]
-    missing = [name for name in required if name not in parameters]
+    # A required parameter with a declared default (e.g. erc721_basic's
+    # MAX_MINTS_PER_WALLET) falls back to it rather than counting as missing.
+    required = [p["name"] for p in template.deployment_params if p.get("required") and p.get("default") is None]
+    missing = [name for name in required if parameters.get(name) in (None, "")]
     if missing:
         raise MissingParametersError(f"Missing required parameters: {', '.join(missing)}")
 
     contract_code = template.solidity_code
-    for name, value in parameters.items():
-        contract_code = contract_code.replace(f"{{{{{name}}}}}", str(value))
+    # Only declared parameters are substituted — an extra key (e.g. a
+    # caller-supplied CONTRACT_NAME) is ignored, never pasted in.
+    for param in template.deployment_params:
+        value = parameters.get(param["name"])
+        if value in (None, ""):
+            value = param.get("default")
+        if value is None:
+            raise MissingParametersError(f"Missing required parameters: {param['name']}")
+        rendered = _coerce_parameter(param, value)
+        if param["type"] == "string":
+            # String placeholders sit inside quotes in the template source;
+            # replace the whole quoted placeholder with a complete literal.
+            contract_code = contract_code.replace(f'"{{{{{param["name"]}}}}}"', rendered)
+        contract_code = contract_code.replace(f"{{{{{param['name']}}}}}", rendered)
 
-    # Read the real contract name back out of the rendered source instead of
-    # guessing from the template's display name — the old code guessed and
-    # only worked because of a `next(iter(...))` fallback when the guess
-    # didn't match; this is correct without needing that fallback.
-    match = _CONTRACT_NAME_PATTERN.search(contract_code)
-    contract_name = match.group(1) if match else template.name.replace(" ", "")
+    display_param = _DISPLAY_NAME_PARAM[template.type]
+    contract_name = contract_identifier(str(parameters[display_param]), fallback=template.type.upper())
+    contract_code = contract_code.replace("{{CONTRACT_NAME}}", contract_name)
 
     return {"contract_code": contract_code, "contract_name": contract_name, "template": template}

@@ -45,6 +45,7 @@ export interface ContractDeployment {
   contract_address: string
   transaction_hash: string
   deployer_address: string
+  nft_collection_id: string | null
   parameters: Record<string, unknown>
   gas_used: number | null
   deployment_cost_native: number | null
@@ -60,6 +61,8 @@ export interface CreateDeploymentPayload {
   deployer_address: string
   parameters: Record<string, unknown>
   project_id?: string
+  // Set when an ERC-721 is deployed from an NFT Generator collection.
+  nft_collection_id?: string
 }
 
 export const contractsApi = {

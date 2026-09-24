@@ -30,6 +30,11 @@ class ContractDeployment(db.Model):
     transaction_hash = db.Column(db.String(128), nullable=False, unique=True, index=True)
     deployer_address = db.Column(db.String(128), nullable=False)
 
+    # Set when an ERC-721 was deployed from an NFT Generator collection
+    # (nft/routes.py's evm-metadata flow) — lets that collection list the
+    # contracts it's live on.
+    nft_collection_id = db.Column(db.String(36), db.ForeignKey("nft_collections.id"), nullable=True, index=True)
+
     parameters = db.Column(db.JSON, nullable=False, default=dict)
     gas_used = db.Column(db.BigInteger, nullable=True)
     deployment_cost_native = db.Column(db.Float, nullable=True)
@@ -47,6 +52,7 @@ class ContractDeployment(db.Model):
             "contract_address": self.contract_address,
             "transaction_hash": self.transaction_hash,
             "deployer_address": self.deployer_address,
+            "nft_collection_id": self.nft_collection_id,
             "parameters": self.parameters,
             "gas_used": self.gas_used,
             "deployment_cost_native": self.deployment_cost_native,

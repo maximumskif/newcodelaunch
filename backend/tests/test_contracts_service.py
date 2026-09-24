@@ -1,5 +1,8 @@
+import pytest
+
 from app.extensions import db as _db
 from app.models.deployment import ContractDeployment
+from app.models.nft import NFTCollection
 from app.models.user import Chain, User
 from app.services import blockchain, contracts
 
@@ -24,7 +27,13 @@ def test_record_deployment_is_idempotent_for_the_same_transaction_hash(app, monk
         monkeypatch.setattr(
             blockchain,
             "get_transaction_status",
-            lambda network, tx_hash: {"status": "success", "gas_used": 21000, "gas_price": 1_000_000_000},
+            lambda network, tx_hash: {
+                "status": "success",
+                "gas_used": 21000,
+                "gas_price": 1_000_000_000,
+                "contract_address": "0xContractAddress",
+                "from": "0xDeployerAddress",
+            },
         )
 
         kwargs = dict(
@@ -83,7 +92,13 @@ def test_record_deployment_rejects_a_transaction_hash_already_recorded_by_a_diff
         monkeypatch.setattr(
             blockchain,
             "get_transaction_status",
-            lambda network, tx_hash: {"status": "success", "gas_used": 21000, "gas_price": 1_000_000_000},
+            lambda network, tx_hash: {
+                "status": "success",
+                "gas_used": 21000,
+                "gas_price": 1_000_000_000,
+                "contract_address": "0xContractAddress",
+                "from": "0xDeployerAddress",
+            },
         )
 
         shared_kwargs = dict(
@@ -110,3 +125,68 @@ def test_record_deployment_rejects_a_transaction_hash_already_recorded_by_a_diff
             transaction_hash="0xObservedPubliclyOnAnExplorer"
         ).one()
         assert deployment.user_id == user_a.id
+
+
+def _successful_receipt(contract_address="0xContractAddress", sender="0xDeployerAddress"):
+    return lambda network, tx_hash: {
+        "status": "success",
+        "gas_used": 21000,
+        "gas_price": 1_000_000_000,
+        "contract_address": contract_address,
+        "from": sender,
+    }
+
+
+def _record(user, **overrides):
+    kwargs = dict(
+        user_id=user.id,
+        template_id="erc20_basic",
+        network="sepolia",
+        contract_address="0xcontractaddress",  # case-insensitive match
+        transaction_hash="0xTx",
+        deployer_address="0xDeployerAddress",
+        parameters={},
+    )
+    kwargs.update(overrides)
+    return contracts.record_deployment(**kwargs)
+
+
+def test_record_deployment_rejects_a_receipt_that_created_a_different_contract(app, monkeypatch):
+    # Regression: only the transaction's success used to be checked, so any
+    # successful hash could be recorded next to an arbitrary contract address.
+    with app.app_context():
+        user = _make_user()
+        monkeypatch.setattr(blockchain, "get_transaction_status", _successful_receipt(contract_address="0xSomethingElse"))
+        with pytest.raises(ValueError, match="did not create"):
+            _record(user)
+
+        monkeypatch.setattr(blockchain, "get_transaction_status", _successful_receipt(contract_address=None))
+        with pytest.raises(ValueError, match="did not create"):
+            _record(user)
+
+
+def test_record_deployment_rejects_a_receipt_from_a_different_sender(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        monkeypatch.setattr(blockchain, "get_transaction_status", _successful_receipt(sender="0xSomeoneElse"))
+        with pytest.raises(ValueError, match="not sent by"):
+            _record(user)
+
+
+def test_record_deployment_links_an_owned_nft_collection_to_an_erc721_only(app, monkeypatch):
+    with app.app_context():
+        user = _make_user()
+        collection = NFTCollection(user_id=user.id, name="Apes", description="", collection_size=3, image_size=64)
+        _db.session.add(collection)
+        _db.session.commit()
+        monkeypatch.setattr(blockchain, "get_transaction_status", _successful_receipt())
+
+        with pytest.raises(ValueError, match="only applies to an ERC-721"):
+            _record(user, nft_collection_id=collection.id)
+
+        stranger = _make_user("0xabc000000000000000000000000000000000000b")
+        with pytest.raises(ValueError, match="not found"):
+            _record(stranger, template_id="erc721_basic", nft_collection_id=collection.id, transaction_hash="0xOther")
+
+        deployment = _record(user, template_id="erc721_basic", nft_collection_id=collection.id)
+        assert deployment.to_dict()["nft_collection_id"] == collection.id

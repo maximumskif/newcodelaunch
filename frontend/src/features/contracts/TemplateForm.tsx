@@ -35,8 +35,8 @@ export function TemplateForm({ params, values, onChange }: Props) {
             className="rounded-md border border-border bg-surface px-3 py-1.5 text-ink transition-colors duration-150 placeholder:text-ink-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
           />
           {/* A permanent hint, not a placeholder — placeholder text
-              disappears on focus/input, exactly when a Solidity-identifier
-              constraint like TOKEN_NAME's is most useful to still see. */}
+              disappears on focus/input, exactly when a format hint like
+              MINT_PRICE's "in wei" is most useful to still see. */}
           {param.description && <span className="text-xs text-ink-faint">{param.description}</span>}
         </label>
       ))}

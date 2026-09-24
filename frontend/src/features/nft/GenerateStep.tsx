@@ -343,12 +343,19 @@ export function GenerateStep({ token, collection, projectId }: Props) {
 
         {items.some((item) => item.ipfs_image_hash) && (
           <div className="mt-5 flex items-center justify-between rounded-md border border-border bg-canvas p-3">
-            <p className="text-sm text-ink-muted">Ready to sell this collection as a real Solana mint?</p>
-            <Link to={`/mint?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
-              <Button variant="secondary" size="sm">
-                Launch Mint Site
-              </Button>
-            </Link>
+            <p className="text-sm text-ink-muted">Ready to sell this collection?</p>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/mint?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
+                <Button variant="secondary" size="sm">
+                  Launch Mint Site (Solana)
+                </Button>
+              </Link>
+              <Link to={`/nft/deploy-evm?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
+                <Button variant="secondary" size="sm">
+                  Deploy on EVM
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
       </div>

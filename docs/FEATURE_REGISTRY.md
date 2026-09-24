@@ -41,7 +41,7 @@ Last updated 2026-09-15 (NFT Generator's "Generate collection" row corrected for
 | Action | Status | Notes |
 |---|---|---|
 | Live chain status grid (Contracts Hub only) | Real | Live RPC calls per network — actually reachable or not, not a static "connected" badge. |
-| Template selection | Real | 3 real, complete Solidity templates (`erc20_basic`, `erc20_advanced`, `erc721_basic`) — not the legacy app's 7 dead stub templates. |
+| Template selection | Real | 3 real, complete Solidity templates (`erc20_basic`, `erc20_advanced`, `erc721_basic`) — not the legacy app's 7 dead stub templates. Parameters are validated against their declared types and rendered safely (escaped string literals, checksummed addresses, defaults filled in); names can contain spaces — the contract identifier is derived (2026-09-24). |
 | Estimate cost | Real | Live gas estimate against the compiled bytecode via the selected network's RPC. |
 | Mainnet confirmation checkbox | Real | Required before Deploy is enabled on any mainnet network; re-arms on every network switch. This is a frontend-only gate by architecture, not a backend one — the backend never holds signing authority to gate (see `docs/REBUILD_PROGRESS.md`'s Phase 4 note). |
 | Deploy | Real | Backend compiles via `py-solc-x`; your connected wallet signs and broadcasts client-side — no private key ever reaches the server. |
@@ -59,6 +59,7 @@ Last updated 2026-09-15 (NFT Generator's "Generate collection" row corrected for
 | Preview metadata | Real | Published items fetch the literal JSON already pinned to IPFS; unpublished items show an honest preview with `image`/`created_at` left `null` rather than guessed. |
 | Download metadata JSON | Real | Real browser download of exactly what's previewed. |
 | Publish to IPFS | Real (optional config) | Real Pinata upload; returns a clear 503 if `PINATA_JWT`/keys aren't configured, never a fake hash. |
+| Deploy on EVM (`/nft/deploy-evm`, from "Deploy on EVM" beside "Launch Mint Site") | Real (optional config) | Added 2026-09-24. Pins every published item's metadata as one IPFS directory (`1.json`…`N.json`, token ids in generation order), then deploys `erc721_basic` with that base URI through the ordinary compile → your-wallet-deploys → verify+record flow, on whichever EVM network the top bar has selected. Mint price is entered in the network's native token, not wei. Public minting starts off; "Enable public minting" sends the real owner-only `setMintingEnabled(true)`. The recorded deployment is linked to the collection, which lists where it's deployed. Needs Pinata (same as publishing). |
 
 ## Market Intelligence (`/market`)
 

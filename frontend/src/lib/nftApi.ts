@@ -128,6 +128,15 @@ export const nftApi = {
   listItems: (token: string, collectionId: string) =>
     request<{ items: NFTGeneratedItem[] }>(`/nft/collections/${collectionId}/items`, {}, token),
 
+  // Pins every published item's metadata as one IPFS directory for an
+  // ERC-721 deploy — base_uri is what the contract's baseURI is set to.
+  publishEvmMetadata: (token: string, collectionId: string) =>
+    request<{ base_uri: string; gateway_url: string; item_count: number }>(
+      `/nft/collections/${collectionId}/evm-metadata`,
+      { method: 'POST' },
+      token,
+    ),
+
   publishItem: (token: string, itemId: string) =>
     request<{ item: NFTGeneratedItem }>(`/nft/items/${itemId}/publish`, { method: 'POST' }, token),
 

@@ -110,6 +110,31 @@ def upload_json(data: dict[str, Any], filename: str) -> dict[str, Any]:
     }
 
 
+def upload_directory(files: dict[str, bytes], folder_name: str) -> dict[str, Any]:
+    """Pins several files as ONE IPFS directory and returns the directory's
+    CID — so `<cid>/<filename>` resolves each file. Pinata treats a
+    multi-file pinFileToIPFS upload as a directory when every part's
+    filename shares a leading folder, which is what this sends. Needed for
+    an ERC-721 whose tokenURI is baseURI + tokenId + ".json"."""
+    if not files:
+        raise ValueError("upload_directory needs at least one file")
+    parts = [("file", (f"{folder_name}/{name}", data)) for name, data in files.items()]
+    try:
+        response = requests.post(
+            f"{PINATA_BASE_URL}/pinning/pinFileToIPFS",
+            files=parts,
+            headers=_auth_headers(),
+            timeout=120,
+        )
+    except requests.RequestException as exc:
+        raise IPFSUploadError(f"Pinata directory upload request failed: {exc}") from exc
+    if response.status_code != 200:
+        raise IPFSUploadError(f"Pinata directory upload failed ({response.status_code}): {response.text}")
+
+    ipfs_hash = response.json()["IpfsHash"]
+    return {"hash": ipfs_hash, "url": f"ipfs://{ipfs_hash}/", "gateway_url": f"{PINATA_GATEWAY}{ipfs_hash}/"}
+
+
 def upload_nft_metadata(
     name: str,
     description: str,

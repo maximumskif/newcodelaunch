@@ -253,6 +253,9 @@ def _get_evm_transaction_status(network: str, tx_hash: str) -> dict:
         "gas_price": tx["gasPrice"],
         "from": receipt["from"],
         "to": receipt["to"],
+        # Set only on a contract-creation receipt — contracts.record_deployment
+        # checks it against the address the client claims it deployed.
+        "contract_address": receipt.get("contractAddress"),
         "value": tx["value"],
         "confirmations": w3.eth.block_number - receipt["blockNumber"],
     }

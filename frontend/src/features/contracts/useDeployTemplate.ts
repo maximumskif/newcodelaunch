@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 // the recording effect below had a real bug that first real run caught:
 // see hasStartedRecordingRef's comment.
 
-const NETWORK_TO_CHAIN_ID: Record<string, number> = {
+export const NETWORK_TO_CHAIN_ID: Record<string, number> = {
   sepolia: 11155111,
   ethereum: 1,
   polygon_amoy: 80002,
@@ -26,6 +26,7 @@ interface PendingRecord {
   network: string
   parameters: Record<string, unknown>
   projectId?: string
+  nftCollectionId?: string
 }
 
 // Shared by both the Smart Contracts Hub and Token Launchpad pages — the deploy flow
@@ -96,6 +97,7 @@ export function useDeployTemplate() {
         deployer_address: address,
         parameters: pendingRecord.parameters,
         project_id: pendingRecord.projectId,
+        nft_collection_id: pendingRecord.nftCollectionId,
       })
       .then(({ deployment: recorded }) => {
         if (cancelled) return
@@ -114,7 +116,13 @@ export function useDeployTemplate() {
   }, [receipt, pendingRecord, accessToken, address])
 
   const deploy = useCallback(
-    async (templateId: string, parameters: Record<string, unknown>, network: string, projectId?: string) => {
+    async (
+      templateId: string,
+      parameters: Record<string, unknown>,
+      network: string,
+      projectId?: string,
+      nftCollectionId?: string,
+    ) => {
       if (!address) {
         setError('Connect an EVM wallet first')
         return
@@ -139,7 +147,7 @@ export function useDeployTemplate() {
         }
 
         setStep('deploying')
-        setPendingRecord({ templateId, network, parameters, projectId })
+        setPendingRecord({ templateId, network, parameters, projectId, nftCollectionId })
         const hash = await deployContractAsync({
           abi: compiled.abi as Abi,
           bytecode: compiled.bytecode as `0x${string}`,

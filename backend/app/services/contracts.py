@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from ..extensions import db
 from ..models.deployment import ContractDeployment
+from ..models.nft import NFTCollection
 from . import blockchain, contract_templates, solidity
 
 NATIVE_TOKENS = {
@@ -75,12 +76,24 @@ def record_deployment(
     transaction_hash: str,
     deployer_address: str,
     parameters: dict[str, Any],
+    nft_collection_id: Optional[str] = None,
 ) -> ContractDeployment:
     """Persist a deployment the frontend's own wallet already broadcast, after
-    independently confirming it actually landed on-chain."""
+    independently confirming it actually landed on-chain — and that it's
+    the deployment claimed: the receipt must have created `contract_address`
+    and been sent by `deployer_address`. Before, only the transaction's
+    success was checked, so any successful hash could be recorded next to
+    an arbitrary contract address."""
     template = contract_templates.get_template(template_id)
     if template is None:
         raise contract_templates.UnknownTemplateError(f"Unknown template: {template_id}")
+
+    if nft_collection_id is not None:
+        if template.type != "erc721":
+            raise ValueError("nft_collection_id only applies to an ERC-721 deployment")
+        collection = db.session.get(NFTCollection, nft_collection_id)
+        if collection is None or collection.user_id != user_id:
+            raise ValueError(f"NFT collection not found: {nft_collection_id}")
 
     # Idempotent: a client retry after a slow/dropped response to a request
     # that actually succeeded server-side must not create a second row for
@@ -105,6 +118,12 @@ def record_deployment(
     tx_status = blockchain.get_transaction_status(network, transaction_hash)
     if tx_status.get("status") != "success":
         raise ValueError(f"Transaction is not a confirmed success on-chain (status: {tx_status.get('status')})")
+    created = tx_status.get("contract_address")
+    if not created or created.lower() != contract_address.lower():
+        raise ValueError("The confirmed transaction did not create the given contract_address")
+    sender = tx_status.get("from")
+    if not sender or sender.lower() != deployer_address.lower():
+        raise ValueError("The confirmed transaction was not sent by the given deployer_address")
 
     deployment = ContractDeployment(
         user_id=user_id,
@@ -116,6 +135,7 @@ def record_deployment(
         transaction_hash=transaction_hash,
         deployer_address=deployer_address,
         parameters=parameters,
+        nft_collection_id=nft_collection_id,
         gas_used=tx_status.get("gas_used"),
         deployment_cost_native=_native_cost_from_status(tx_status),
         explorer_url=blockchain.EVM_NETWORKS.get(network, {}).get("explorer_url", "") + f"/address/{contract_address}",

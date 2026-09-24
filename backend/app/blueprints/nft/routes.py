@@ -255,6 +255,28 @@ def publish_item(item_id):
     return jsonify(item=item.to_dict())
 
 
+@nft_bp.post("/collections/<collection_id>/evm-metadata")
+@jwt_required()
+def publish_evm_metadata(collection_id):
+    # Step 1 of deploying a collection as an ERC-721: pin every published
+    # item's metadata as one IPFS directory and hand back the base URI the
+    # contract is deployed with (step 2, via the ordinary contracts deploy
+    # flow with nft_collection_id set).
+    try:
+        collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
+        result = nft_collections.publish_evm_metadata_folder(collection)
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except nft_collections.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except ipfs.IPFSNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
+    except ipfs.IPFSUploadError as exc:
+        return jsonify(error=str(exc)), 502
+
+    return jsonify(result)
+
+
 @nft_bp.get("/items/<item_id>/metadata")
 @jwt_required()
 def get_item_metadata(item_id):

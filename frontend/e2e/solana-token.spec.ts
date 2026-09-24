@@ -83,7 +83,8 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   const connection = new Connection(VALIDATOR_RPC_URL, 'confirmed')
   const mint = new PublicKey(mintAddress!)
   const mintInfo = (await connection.getParsedAccountInfo(mint)).value
-  const parsed = (mintInfo?.data as { parsed: { info: Record<string, unknown> } }).parsed.info
+  expect(mintInfo).not.toBeNull()
+  const parsed = (mintInfo!.data as { parsed: { info: Record<string, unknown> } }).parsed.info
   expect(parsed.decimals).toBe(6)
   expect(parsed.supply).toBe('1000000000000')
   expect(parsed.mintAuthority).toBeNull()

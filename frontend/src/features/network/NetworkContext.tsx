@@ -6,18 +6,20 @@ export interface EvmNetwork {
   id: string
   label: string
   isTestnet: boolean
+  // Same symbols as backend/app/services/blockchain.py's native_token.
+  nativeToken: string
 }
 
 // Testnets listed (and defaulted to) first — Phase 4's testnet-first
 // requirement. Mainnet entries still work, they're just not the default and
 // DeployPanel requires an explicit confirmation before deploying to one.
 export const EVM_NETWORKS: EvmNetwork[] = [
-  { id: 'sepolia', label: 'Sepolia', isTestnet: true },
-  { id: 'ethereum', label: 'Ethereum', isTestnet: false },
-  { id: 'polygon_amoy', label: 'Amoy', isTestnet: true },
-  { id: 'polygon', label: 'Polygon', isTestnet: false },
-  { id: 'bsc_testnet', label: 'BSC Testnet', isTestnet: true },
-  { id: 'bsc', label: 'BNB Smart Chain', isTestnet: false },
+  { id: 'sepolia', label: 'Sepolia', isTestnet: true, nativeToken: 'ETH' },
+  { id: 'ethereum', label: 'Ethereum', isTestnet: false, nativeToken: 'ETH' },
+  { id: 'polygon_amoy', label: 'Amoy', isTestnet: true, nativeToken: 'POL' },
+  { id: 'polygon', label: 'Polygon', isTestnet: false, nativeToken: 'POL' },
+  { id: 'bsc_testnet', label: 'BSC Testnet', isTestnet: true, nativeToken: 'tBNB' },
+  { id: 'bsc', label: 'BNB Smart Chain', isTestnet: false, nativeToken: 'BNB' },
 ]
 
 // Fails closed on an unrecognized network id (bad data, future rename) —

@@ -264,7 +264,7 @@ describe('GenerateStep "Launch Mint Site" link', () => {
       </MemoryRouter>,
     )
 
-    const link = await screen.findByText('Launch Mint Site')
+    const link = await screen.findByText('Launch Mint Site (Solana)')
     expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}&project=proj-1`)
   })
 
@@ -275,7 +275,7 @@ describe('GenerateStep "Launch Mint Site" link', () => {
       </MemoryRouter>,
     )
 
-    const link = await screen.findByText('Launch Mint Site')
+    const link = await screen.findByText('Launch Mint Site (Solana)')
     expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}`)
   })
 })

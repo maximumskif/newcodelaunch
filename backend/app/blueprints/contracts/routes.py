@@ -34,7 +34,7 @@ def compile_template():
         result = contracts.compile_template(template_id, parameters)
     except contract_templates.UnknownTemplateError as exc:
         return jsonify(error=str(exc)), 404
-    except contract_templates.MissingParametersError as exc:
+    except contract_templates.TemplateParameterError as exc:
         return jsonify(error=str(exc)), 400
     except contracts.CompilationFailedError as exc:
         return jsonify(error=f"Compilation failed: {exc}"), 422
@@ -57,7 +57,7 @@ def estimate():
         result = contracts.estimate_deployment(template_id, parameters, network, deployer_address)
     except contract_templates.UnknownTemplateError as exc:
         return jsonify(error=str(exc)), 404
-    except contract_templates.MissingParametersError as exc:
+    except contract_templates.TemplateParameterError as exc:
         return jsonify(error=str(exc)), 400
     except contracts.CompilationFailedError as exc:
         return jsonify(error=f"Compilation failed: {exc}"), 422
@@ -85,6 +85,7 @@ def create_deployment():
             transaction_hash=data["transaction_hash"],
             deployer_address=data["deployer_address"],
             parameters=data.get("parameters") or {},
+            nft_collection_id=data.get("nft_collection_id") or None,
         )
     except contract_templates.UnknownTemplateError as exc:
         return jsonify(error=str(exc)), 404

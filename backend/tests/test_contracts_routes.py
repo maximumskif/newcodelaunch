@@ -89,7 +89,13 @@ def test_create_deployment_with_a_foreign_project_id_does_not_hijack_it(app, cli
         monkeypatch.setattr(
             blockchain,
             "get_transaction_status",
-            lambda network, tx_hash: {"status": "success", "gas_used": 21000, "gas_price": 1_000_000_000},
+            lambda network, tx_hash: {
+                "status": "success",
+                "gas_used": 21000,
+                "gas_price": 1_000_000_000,
+                "contract_address": "0xAttackerContract",
+                "from": "0xAttackerWallet",
+            },
         )
 
         response = client.post(

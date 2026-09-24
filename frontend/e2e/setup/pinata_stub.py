@@ -40,7 +40,22 @@ def health():
 
 @app.post("/pinning/pinFileToIPFS")
 def pin_file():
-    file = request.files["file"]
+    files = request.files.getlist("file")
+    # Real Pinata semantics: several parts whose filenames share a leading
+    # folder ("folder/1.json", "folder/2.json") pin as ONE directory, and
+    # the returned hash is the directory's — `<hash>/1.json` resolves each
+    # file. That's what ipfs.upload_directory sends for an ERC-721's
+    # metadata folder.
+    if len(files) > 1 or "/" in (files[0].filename or ""):
+        entries = [(file.filename.split("/", 1)[-1], file.read(), file.mimetype) for file in files]
+        ipfs_hash = _fake_hash(b"".join(name.encode() + data for name, data, _ in entries))
+        for name, data, mimetype in entries:
+            content_type = "application/json" if name.endswith(".json") else (mimetype or "application/octet-stream")
+            _PINNED[f"{ipfs_hash}/{name}"] = (data, content_type)
+        size = sum(len(data) for _, data, _ in entries)
+        return jsonify(IpfsHash=ipfs_hash, PinSize=size, Timestamp="2026-01-01T00:00:00.000Z")
+
+    file = files[0]
     data = file.read()
     ipfs_hash = _fake_hash(data)
     _PINNED[ipfs_hash] = (data, file.mimetype or "application/octet-stream")
@@ -55,9 +70,9 @@ def pin_json():
     return jsonify(IpfsHash=ipfs_hash, PinSize=len(data), Timestamp="2026-01-01T00:00:00.000Z")
 
 
-@app.get("/ipfs/<ipfs_hash>")
-def get_pinned(ipfs_hash: str):
-    pinned = _PINNED.get(ipfs_hash)
+@app.get("/ipfs/<path:ipfs_path>")
+def get_pinned(ipfs_path: str):
+    pinned = _PINNED.get(ipfs_path)
     if pinned is None:
         return jsonify(error="not found"), 404
     data, content_type = pinned

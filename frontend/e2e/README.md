@@ -162,6 +162,15 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   the mint's decimals/supply, mint and freeze authority both revoked, the
   creator holding the full supply, and a real Token Metadata account
   carrying the token's name.
+- `nft-evm-deploy.spec.ts` — seed a published two-item collection via the
+  API → deploy it as an ERC-721 through the actual `/nft/deploy-evm` page
+  (metadata folder pinned through the Pinata stub's directory support, real
+  compile, real signature, anvil receipt re-verified by the backend) → read
+  the contract back on-chain (name, symbol, owner, supply, price, base URI)
+  → switch public minting on through the page (a real owner transaction) →
+  a second anvil account mints both tokens, paying the real price → each
+  `tokenURI` resolves through the stub gateway to the right item's
+  metadata (token 1 → first item, token 2 → second).
 - `nft-generator.spec.ts` — sign in with EVM (auth only; nothing here is
   chain-specific) → create a collection, add a layer, and upload a real
   trait image, all through the actual multi-step upload UI (not seeded via

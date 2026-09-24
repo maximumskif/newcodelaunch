@@ -9,6 +9,7 @@ with a batch.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import uuid
@@ -317,3 +318,32 @@ def get_item_metadata(item: NFTGeneratedItem, collection: NFTCollection) -> dict
             "attributes": item.attributes,
         },
     }
+
+
+def publish_evm_metadata_folder(collection: NFTCollection) -> dict[str, Any]:
+    """Pins the collection's metadata as ONE IPFS directory for an ERC-721
+    deploy (contract_templates' erc721_basic: tokenURI = baseURI + tokenId +
+    ".json", token ids starting at 1). Token ids 1..N map to the collection's
+    published items in generation order; each file is the same metadata
+    shape publish_item_to_ipfs pins per item, named by token id so a
+    marketplace's "#3" is token 3. Unpublished items are left out — their
+    images aren't on IPFS yet, so there's nothing for tokenURI to point at.
+    Re-running after publishing more items pins a new folder (new CID) with
+    the larger set; an already-deployed contract keeps its original baseURI."""
+    published = sorted((item for item in collection.items if item.ipfs_image_hash), key=lambda item: item.token_index)
+    if not published:
+        raise ValidationError("Publish at least one item to IPFS before deploying on an EVM chain")
+
+    files: dict[str, bytes] = {}
+    for token_id, item in enumerate(published, start=1):
+        metadata = {
+            "name": f"{collection.name} #{token_id}",
+            "description": collection.description,
+            "image": f"ipfs://{item.ipfs_image_hash}",
+            "attributes": item.attributes,
+        }
+        files[f"{token_id}.json"] = json.dumps(metadata).encode("utf-8")
+
+    folder = secure_filename(collection.name) or "collection"
+    result = ipfs.upload_directory(files, f"{folder}_metadata")
+    return {"base_uri": result["url"], "gateway_url": result["gateway_url"], "item_count": len(published)}
