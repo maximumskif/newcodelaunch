@@ -36,3 +36,26 @@ def test_rate_limiting_can_be_disabled_for_the_e2e_harness():
         statuses = [client.post("/api/auth/nonce", json=payload).status_code for _ in range(15)]
         db.drop_all()
     assert statuses == [200] * 15
+
+
+def test_rpc_url_env_falls_back_on_unset_or_blank_values(monkeypatch):
+    # `NAME=` in an env file sets "", not unset — must still mean "use the
+    # public default", not hand web3/solana-py an empty URL.
+    from app.config import _rpc_url_env
+
+    monkeypatch.delenv("PROBE_RPC_URL", raising=False)
+    assert _rpc_url_env("PROBE_RPC_URL", "https://default.example") == "https://default.example"
+    monkeypatch.setenv("PROBE_RPC_URL", "  ")
+    assert _rpc_url_env("PROBE_RPC_URL", "https://default.example") == "https://default.example"
+    monkeypatch.setenv("PROBE_RPC_URL", "https://provider.example/key")
+    assert _rpc_url_env("PROBE_RPC_URL", "https://default.example") == "https://provider.example/key"
+
+
+def test_every_supported_network_has_a_configured_rpc_url():
+    # Every network blockchain.py can route to reads its URL from config —
+    # so every one can be pointed at a paid provider by env var alone.
+    from app.services.blockchain import _RPC_CONFIG_KEYS, EVM_NETWORKS, SOLANA_NETWORKS
+
+    assert set(_RPC_CONFIG_KEYS) == set(EVM_NETWORKS) | set(SOLANA_NETWORKS)
+    for config_key in _RPC_CONFIG_KEYS.values():
+        assert getattr(TestConfig, config_key).startswith("http")

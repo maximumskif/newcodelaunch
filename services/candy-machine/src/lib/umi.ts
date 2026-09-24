@@ -16,9 +16,21 @@ import { mplCore } from "@metaplex-foundation/mpl-core";
 // Public RPC endpoints are the default, same trade-off as the EVM side: fine
 // for dev, override with a dedicated provider (Helius/QuickNode/etc) via env
 // before doing anything at real volume.
+//
+// `||`, not `??`: this service's own .env.example ships both overrides as
+// `SOLANA_DEVNET_RPC_URL=` (empty), and dotenv — like docker-compose's
+// env_file — sets an empty line to "", not unset. With `??`, copying
+// .env.example verbatim (exactly what README's setup says to do) left both
+// networks' RPC URL as "" (found by loading that file and printing this
+// object, 2026-09-24), so every Umi call would fail. Same normalization the
+// frontend does for its own RPC overrides (frontend/src/lib/rpcUrls.ts).
+function rpcOverride(value: string | undefined): string | undefined {
+  return value?.trim() || undefined;
+}
+
 export const SOLANA_NETWORKS = {
-  devnet: process.env.SOLANA_DEVNET_RPC_URL ?? "https://api.devnet.solana.com",
-  "mainnet-beta": process.env.SOLANA_MAINNET_RPC_URL ?? "https://api.mainnet-beta.solana.com",
+  devnet: rpcOverride(process.env.SOLANA_DEVNET_RPC_URL) ?? "https://api.devnet.solana.com",
+  "mainnet-beta": rpcOverride(process.env.SOLANA_MAINNET_RPC_URL) ?? "https://api.mainnet-beta.solana.com",
 } as const;
 
 export type SolanaNetwork = keyof typeof SOLANA_NETWORKS;
