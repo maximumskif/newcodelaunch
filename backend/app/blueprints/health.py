@@ -2,7 +2,7 @@ import requests
 from flask import Blueprint, current_app, jsonify
 from sqlalchemy import text
 
-from ..extensions import db
+from ..extensions import db, limiter
 
 health_bp = Blueprint("health", __name__)
 
@@ -50,6 +50,10 @@ def _check_candy_machine() -> dict:
 
 
 @health_bp.get("/health/ready")
+# Unauthenticated, and each call makes an outbound request to the sidecar
+# plus a database query — limited like the other public routes so it can't
+# be used to hammer either. Generous enough for any real probe interval.
+@limiter.limit("60/minute")
 def ready():
     """Readiness: can this instance actually serve traffic that needs its
     dependencies? 200 with every check's result when all pass, 503 naming

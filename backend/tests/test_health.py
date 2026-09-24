@@ -106,3 +106,11 @@ def test_reports_every_failed_check_at_once(monkeypatch):
 
     assert response.status_code == 503
     assert response.get_json()["failed"] == ["database", "candy_machine"]
+
+
+def test_readiness_is_rate_limited(app, client, monkeypatch):
+    # Public and fans out to the database and the sidecar — see health.py.
+    monkeypatch.setattr(health.requests, "get", lambda url, timeout: type("R", (), {"status_code": 200})())
+    statuses = [client.get("/api/health/ready").status_code for _ in range(61)]
+    assert statuses[:60] == [200] * 60
+    assert statuses[60] == 429
