@@ -10,6 +10,7 @@ import { isSolanaMainnet, SOLANA_NETWORKS } from '../../lib/candyMachineApi'
 import { signSendAndConfirm } from '../../lib/solana'
 import { formatTokenAmount, solanaTokensApi, type LiveTokenState, type SolanaTokenLaunch, type TokenAction } from '../../lib/solanaTokensApi'
 import { useAuth } from '../auth/AuthContext'
+import { SolanaTokenDetails } from './SolanaTokenDetails'
 
 const REVOKE_COPY: Record<'revokeMint' | 'revokeFreeze', { title: string; description: string; confirm: string; done: string }> = {
   revokeMint: {
@@ -102,7 +103,7 @@ export function SolanaTokenManage({ launch, onUpdated }: { launch: SolanaTokenLa
       </p>
 
       {live.mint_authority === null && live.freeze_authority === null && (
-        <p className="text-ink-muted">Both authorities are revoked — there's nothing left to manage.</p>
+        <p className="text-ink-muted">Mint and freeze authority are both revoked.</p>
       )}
 
       {isMainnet && (live.mint_authority || live.freeze_authority) && (
@@ -163,6 +164,8 @@ export function SolanaTokenManage({ launch, onUpdated }: { launch: SolanaTokenLa
       )}
       {done && <p className="text-success">{done}</p>}
       {error && <InlineError>{error}</InlineError>}
+
+      <SolanaTokenDetails launch={token} onUpdated={onUpdated} />
 
       <ConfirmDialog
         open={confirming !== null}

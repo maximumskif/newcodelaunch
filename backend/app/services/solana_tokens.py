@@ -15,12 +15,13 @@ from __future__ import annotations
 import io
 from typing import Any, Optional
 
+import requests
 from PIL import Image, UnidentifiedImageError
 
 from ..extensions import db
 from ..models.solana_token import SolanaTokenLaunch
 from . import blockchain, ipfs
-from .candy_machine import SOLANA_NETWORKS, _sidecar_network, _sidecar_request
+from .candy_machine import SOLANA_NETWORKS, CandyMachineServiceError, _sidecar_network, _sidecar_request
 
 # Token Metadata's on-chain limits, mirrored in the sidecar — checked here
 # first so bad input fails before anything is pinned to IPFS.
@@ -245,6 +246,18 @@ def refresh_token_launch(launch: SolanaTokenLaunch) -> dict[str, Any]:
     launch.supply_raw = mint["supply"]
     launch.mint_authority_revoked = mint["mint_authority"] is None
     launch.freeze_authority_revoked = mint["freeze_authority"] is None
+    # Metadata too — name/symbol/URI can change after launch (see
+    # prepare_metadata_update). Best-effort: a sidecar hiccup mustn't stop
+    # the mint's own state from refreshing.
+    try:
+        metadata = _on_chain_metadata(launch)
+    except CandyMachineServiceError:
+        metadata = None
+    if metadata and {"name", "symbol", "uri", "is_mutable"} <= metadata.keys():
+        launch.name = metadata["name"][:64]
+        launch.symbol = metadata["symbol"][:16]
+        launch.metadata_uri = metadata["uri"] or None
+        launch.metadata_locked = not metadata["is_mutable"]
     db.session.commit()
     return {"token": launch.to_dict(), "mint_authority": mint["mint_authority"], "freeze_authority": mint["freeze_authority"]}
 
@@ -277,3 +290,109 @@ def prepare_token_action(launch: SolanaTokenLaunch, action: str, amount: Optiona
         "POST", f"/internal/token/{launch.mint_address}/prepare-action", json=payload, timeout=30
     )
     return {"transaction": result["transaction"], "authority": authority}
+
+
+# --- metadata after launch ------------------------------------------------------
+
+
+def _on_chain_metadata(launch: SolanaTokenLaunch) -> dict[str, Any]:
+    return _sidecar_request(
+        "GET",
+        f"/internal/token/{launch.mint_address}/metadata",
+        params={"network": _sidecar_network(launch.network)},
+        timeout=15,
+    )
+
+
+def _off_chain_metadata(uri: str) -> dict[str, Any]:
+    """The description/logo JSON a token's URI points at — but only fetched
+    when it's on this app's own IPFS gateway. The URI is creator-controlled
+    (and can be changed with tools outside this app), so fetching whatever
+    it says server-side would let anyone point this backend at internal
+    addresses (SSRF). Anything else, or any failure, reads as empty."""
+    if not uri or not uri.startswith(ipfs.PINATA_GATEWAY):
+        return {}
+    try:
+        response = requests.get(uri, timeout=5, allow_redirects=False)
+        body = response.json() if response.status_code == 200 else {}
+    except (requests.RequestException, ValueError):
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def get_token_metadata(launch: SolanaTokenLaunch) -> dict[str, Any]:
+    """What the metadata editor starts from: the on-chain fields, plus the
+    description and logo from the off-chain JSON when it can be read."""
+    on_chain = _on_chain_metadata(launch)
+    off_chain = _off_chain_metadata(on_chain.get("uri", ""))
+    description = off_chain.get("description")
+    image = off_chain.get("image")
+    return {
+        "name": on_chain["name"],
+        "symbol": on_chain["symbol"],
+        "uri": on_chain["uri"],
+        "update_authority": on_chain["update_authority"],
+        "is_mutable": on_chain["is_mutable"],
+        "description": description if isinstance(description, str) else "",
+        "image": image if isinstance(image, str) else None,
+    }
+
+
+def prepare_metadata_update(
+    launch: SolanaTokenLaunch,
+    name: str,
+    symbol: str,
+    description: str = "",
+    logo: Optional[bytes] = None,
+    lock: bool = False,
+) -> dict[str, Any]:
+    """Builds the update-authority-signed transaction that changes a token's
+    name/symbol/description/logo and/or locks its metadata for good. The
+    description and logo live in the off-chain JSON, so a change to any of
+    them re-pins that JSON (keeping the current logo unless a new one is
+    given) and points the token at the new URI."""
+    current = get_token_metadata(launch)
+    if not current["is_mutable"]:
+        raise ValidationError("This token's metadata is locked — it can't be changed")
+
+    name = (name or "").strip()
+    symbol = (symbol or "").strip()
+    description = (description or "").strip()
+    if not name or _utf8_len(name) > MAX_NAME_BYTES:
+        raise ValidationError(f"name is required and must be at most {MAX_NAME_BYTES} bytes")
+    if not symbol or _utf8_len(symbol) > MAX_SYMBOL_BYTES:
+        raise ValidationError(f"symbol is required and must be at most {MAX_SYMBOL_BYTES} bytes")
+    if logo is not None:
+        _validate_logo(logo)
+
+    changed = (
+        name != current["name"] or symbol != current["symbol"] or description != current["description"] or logo is not None
+    )
+    if not changed and not lock:
+        raise ValidationError("Nothing to change")
+
+    payload: dict[str, Any] = {
+        "network": _sidecar_network(launch.network),
+        "authorityPublicKey": current["update_authority"],
+        "name": name,
+        "symbol": symbol,
+    }
+    if lock:
+        payload["lock"] = True
+
+    has_off_chain = bool(description or logo is not None or current["image"] or current["description"])
+    metadata_uri = current["uri"]
+    if changed and has_off_chain:
+        metadata: dict[str, Any] = {"name": name, "symbol": symbol, "description": description}
+        slug = "".join(ch for ch in symbol if ch.isalnum()) or "token"
+        if logo is not None:
+            metadata["image"] = ipfs.upload_file(logo, f"{slug}_logo.{_validate_logo(logo)}")["gateway_url"]
+        elif current["image"]:
+            metadata["image"] = current["image"]
+        metadata_uri = ipfs.upload_json(metadata, f"{slug}_token_metadata.json")["gateway_url"]
+        payload["metadataUri"] = metadata_uri
+
+    result = _sidecar_request(
+        "POST", f"/internal/token/{launch.mint_address}/prepare-metadata-update", json=payload, timeout=30
+    )
+    return {"transaction": result["transaction"], "authority": current["update_authority"], "metadata_uri": metadata_uri}

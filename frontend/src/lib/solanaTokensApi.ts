@@ -15,11 +15,25 @@ export interface SolanaTokenLaunch {
   metadata_uri: string | null
   mint_authority_revoked: boolean
   freeze_authority_revoked: boolean
+  // Token Metadata made immutable — name/symbol/logo can never change again.
+  metadata_locked: boolean
   explorer_url: string | null
   created_at: string
 }
 
 export type TokenAction = 'mint' | 'revokeMint' | 'revokeFreeze'
+
+// A token's current metadata: on-chain name/symbol/URI + update authority,
+// and the description/logo from its off-chain JSON when readable.
+export interface TokenMetadata {
+  name: string
+  symbol: string
+  uri: string
+  update_authority: string
+  is_mutable: boolean
+  description: string
+  image: string | null
+}
 
 export interface LiveTokenState {
   token: SolanaTokenLaunch
@@ -134,6 +148,28 @@ export const solanaTokensApi = {
       { method: 'POST', body: JSON.stringify(payload) },
       token,
     ),
+
+  getMetadata: (token: string, launchId: string) =>
+    request<TokenMetadata>(`/solana-tokens/${launchId}/metadata`, {}, token),
+
+  // Signed by `authority` (the token's update authority); then refresh.
+  prepareMetadataUpdate: (
+    token: string,
+    launchId: string,
+    input: { name: string; symbol: string; description: string; logo: File | null; lock: boolean },
+  ) => {
+    const formData = new FormData()
+    formData.append('name', input.name)
+    formData.append('symbol', input.symbol)
+    formData.append('description', input.description)
+    formData.append('lock', String(input.lock))
+    if (input.logo) formData.append('logo', input.logo)
+    return requestMultipart<{ transaction: string; authority: string; metadata_uri: string }>(
+      `/solana-tokens/${launchId}/prepare-metadata-update`,
+      formData,
+      token,
+    )
+  },
 
   refresh: (token: string, launchId: string) =>
     request<LiveTokenState>(`/solana-tokens/${launchId}/refresh`, { method: 'POST' }, token),

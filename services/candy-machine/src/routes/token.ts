@@ -1,6 +1,13 @@
 import { Router } from "express";
-import { generateSigner, none, percentAmount, publicKey } from "@metaplex-foundation/umi";
-import { createAndMint, mplTokenMetadata, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { generateSigner, none, percentAmount, publicKey, some } from "@metaplex-foundation/umi";
+import {
+  createAndMint,
+  fetchMetadataFromSeeds,
+  mplTokenMetadata,
+  TokenStandard,
+  updateV1,
+} from "@metaplex-foundation/mpl-token-metadata";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import {
   AuthorityType,
   createIdempotentAssociatedToken,
@@ -9,7 +16,7 @@ import {
   setAuthority,
 } from "@metaplex-foundation/mpl-toolbox";
 
-import { createUmiForWallet, isSolanaNetwork } from "../lib/umi.js";
+import { createUmiForWallet, isSolanaNetwork, SOLANA_NETWORKS } from "../lib/umi.js";
 import { serializeSigned } from "../lib/transactions.js";
 
 export const tokenRouter = Router();
@@ -204,5 +211,100 @@ tokenRouter.post("/:mint/prepare-action", async (req, res) => {
     res.json({ transaction });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build token action transaction" });
+  }
+});
+
+// Token Metadata pads name/symbol/uri with NUL bytes on-chain; strip them
+// so what the app shows (and compares) is the real value.
+function unpad(value: string): string {
+  return value.replace(/\0+$/, "");
+}
+
+// The token's on-chain metadata as it is now. Read-only, at "confirmed"
+// (see READ_COMMITMENT in candyMachine.ts for why not the default).
+tokenRouter.get("/:mint/metadata", async (req, res) => {
+  const network = req.query.network;
+  if (typeof network !== "string" || !isSolanaNetwork(network)) {
+    res.status(400).json({ error: "network must be one of: devnet, mainnet-beta" });
+    return;
+  }
+  try {
+    const umi = createUmi(SOLANA_NETWORKS[network], "confirmed").use(mplTokenMetadata());
+    const metadata = await fetchMetadataFromSeeds(umi, { mint: publicKey(req.params.mint) });
+    res.json({
+      name: unpad(metadata.name),
+      symbol: unpad(metadata.symbol),
+      uri: unpad(metadata.uri),
+      update_authority: metadata.updateAuthority,
+      is_mutable: metadata.isMutable,
+    });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Token metadata not found on-chain" });
+  }
+});
+
+interface MetadataUpdateBody {
+  network?: string;
+  authorityPublicKey?: string;
+  name?: string;
+  symbol?: string;
+  metadataUri?: string;
+  // Make the metadata immutable — permanently, like revoking mint authority.
+  lock?: boolean;
+}
+
+// Change a launched token's name / symbol / metadata URI, and/or lock its
+// metadata for good. Starts from the metadata currently on-chain and changes
+// only what's given — seller fee and creators are carried over untouched.
+// Signed client-side by the update authority (a noop signer here); the
+// program rejects anyone else, and any change at all once it's locked.
+tokenRouter.post("/:mint/prepare-metadata-update", async (req, res) => {
+  const body = req.body as MetadataUpdateBody;
+
+  if (!body.network || !isSolanaNetwork(body.network)) {
+    res.status(400).json({ error: "network must be one of: devnet, mainnet-beta" });
+    return;
+  }
+  if (!body.authorityPublicKey) {
+    res.status(400).json({ error: "authorityPublicKey is required" });
+    return;
+  }
+  if (body.name !== undefined && (!body.name || utf8Length(body.name) > MAX_NAME_BYTES)) {
+    res.status(400).json({ error: `name must be 1-${MAX_NAME_BYTES} bytes` });
+    return;
+  }
+  if (body.symbol !== undefined && (!body.symbol || utf8Length(body.symbol) > MAX_SYMBOL_BYTES)) {
+    res.status(400).json({ error: `symbol must be 1-${MAX_SYMBOL_BYTES} bytes` });
+    return;
+  }
+  if (body.metadataUri !== undefined && utf8Length(body.metadataUri) > MAX_URI_BYTES) {
+    res.status(400).json({ error: `metadataUri must be at most ${MAX_URI_BYTES} bytes` });
+    return;
+  }
+  if (body.name === undefined && body.symbol === undefined && body.metadataUri === undefined && !body.lock) {
+    res.status(400).json({ error: "nothing to update" });
+    return;
+  }
+
+  try {
+    const umi = createUmiForWallet(body.network, body.authorityPublicKey).use(mplTokenMetadata());
+    const mint = publicKey(req.params.mint);
+    const current = await fetchMetadataFromSeeds(umi, { mint }, { commitment: "confirmed" });
+    const builder = updateV1(umi, {
+      mint,
+      authority: umi.identity,
+      data: some({
+        name: body.name ?? unpad(current.name),
+        symbol: body.symbol ?? unpad(current.symbol),
+        uri: body.metadataUri ?? unpad(current.uri),
+        sellerFeeBasisPoints: current.sellerFeeBasisPoints,
+        creators: current.creators,
+      }),
+      ...(body.lock ? { isMutable: false } : {}),
+    });
+    const transaction = await serializeSigned(umi, builder);
+    res.json({ transaction });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build metadata update transaction" });
   }
 });

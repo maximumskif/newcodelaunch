@@ -55,6 +55,7 @@ const launched: SolanaTokenLaunch = {
   metadata_uri: null,
   mint_authority_revoked: true,
   freeze_authority_revoked: true,
+  metadata_locked: false,
   explorer_url: 'https://explorer.solana.com/address/Mint111?cluster=devnet',
   created_at: '2026-09-24T00:00:00Z',
 }

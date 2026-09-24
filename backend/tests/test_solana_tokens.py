@@ -486,3 +486,138 @@ def test_owner_tool_routes_are_owner_only(app, client, monkeypatch, sidecar_call
     assert client.post(
         f"/api/solana-tokens/{launch.id}/prepare-action", headers=_auth(owner), json={"action": "mint", "amount": 5}
     ).status_code == 400
+
+
+# --- metadata after launch -------------------------------------------------------
+
+GATEWAY_JSON = f"{ipfs.PINATA_GATEWAY}QmCurrent"
+
+
+@pytest.fixture
+def token_metadata(monkeypatch):
+    """A fake sidecar that also serves on-chain metadata, plus whatever the
+    off-chain JSON fetch would return."""
+    state = {
+        "on_chain": {"name": "Test Token", "symbol": "TST", "uri": GATEWAY_JSON, "update_authority": CREATOR, "is_mutable": True},
+        "off_chain": {"description": "Old words", "image": "https://gw.example/ipfs/QmOldLogo"},
+        "calls": [],
+        "fetched": [],
+    }
+
+    def fake_sidecar(method, path, *, json=None, params=None, timeout):
+        state["calls"].append({"path": path, "json": json})
+        if path.endswith("/metadata"):
+            return state["on_chain"]
+        return {"transaction": "dHg="}
+
+    class _Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return state["off_chain"]
+
+    def fake_get(url, timeout, allow_redirects):
+        state["fetched"].append(url)
+        return _Response()
+
+    monkeypatch.setattr(solana_tokens, "_sidecar_request", fake_sidecar)
+    monkeypatch.setattr(solana_tokens.requests, "get", fake_get)
+    return state
+
+
+def test_metadata_reads_off_chain_json_only_from_this_apps_gateway(app, monkeypatch, token_metadata):
+    _chain(monkeypatch)
+    launch = _record(_make_user())
+    current = solana_tokens.get_token_metadata(launch)
+    assert (current["description"], current["image"]) == ("Old words", "https://gw.example/ipfs/QmOldLogo")
+
+    # A URI anywhere else is never fetched server-side (SSRF guard).
+    token_metadata["on_chain"]["uri"] = "http://169.254.169.254/latest/meta-data"
+    token_metadata["fetched"].clear()
+    current = solana_tokens.get_token_metadata(launch)
+    assert token_metadata["fetched"] == []
+    assert (current["description"], current["image"]) == ("", None)
+
+
+def test_editing_the_description_re_pins_json_keeping_the_current_logo(app, monkeypatch, token_metadata, ipfs_calls):
+    _chain(monkeypatch)
+    launch = _record(_make_user())
+    result = solana_tokens.prepare_metadata_update(launch, "Renamed", "NEW", "New words")
+
+    assert ipfs_calls == [
+        ("json", {"name": "Renamed", "symbol": "NEW", "description": "New words", "image": "https://gw.example/ipfs/QmOldLogo"})
+    ]
+    payload = token_metadata["calls"][-1]["json"]
+    assert token_metadata["calls"][-1]["path"] == f"/internal/token/{MINT}/prepare-metadata-update"
+    assert payload == {
+        "network": "devnet",
+        "authorityPublicKey": CREATOR,
+        "name": "Renamed",
+        "symbol": "NEW",
+        "metadataUri": "https://gw.example/ipfs/QmMeta",
+    }
+    assert result["authority"] == CREATOR
+
+
+def test_a_new_logo_replaces_the_old_one(app, monkeypatch, token_metadata, ipfs_calls):
+    _chain(monkeypatch)
+    launch = _record(_make_user())
+    solana_tokens.prepare_metadata_update(launch, "Test Token", "TST", "Old words", logo=_png_bytes())
+    assert [kind for kind, _ in ipfs_calls] == ["file", "json"]
+    assert ipfs_calls[1][1]["image"] == "https://gw.example/ipfs/QmLogo"
+
+
+def test_lock_only_changes_nothing_else_and_pins_nothing(app, monkeypatch, token_metadata, ipfs_calls):
+    _chain(monkeypatch)
+    launch = _record(_make_user())
+    solana_tokens.prepare_metadata_update(launch, "Test Token", "TST", "Old words", lock=True)
+    assert ipfs_calls == []
+    payload = token_metadata["calls"][-1]["json"]
+    assert payload["lock"] is True
+    assert "metadataUri" not in payload
+
+
+def test_a_token_without_off_chain_metadata_renames_without_pinning(app, monkeypatch, token_metadata, ipfs_calls):
+    _chain(monkeypatch)
+    token_metadata["on_chain"]["uri"] = ""
+    launch = _record(_make_user())
+    solana_tokens.prepare_metadata_update(launch, "Renamed", "TST")
+    assert ipfs_calls == []
+    assert "metadataUri" not in token_metadata["calls"][-1]["json"]
+
+
+def test_locked_or_unchanged_metadata_is_refused_before_building(app, monkeypatch, token_metadata, ipfs_calls):
+    _chain(monkeypatch)
+    launch = _record(_make_user())
+    with pytest.raises(solana_tokens.ValidationError, match="Nothing to change"):
+        solana_tokens.prepare_metadata_update(launch, "Test Token", "TST", "Old words")
+    token_metadata["on_chain"]["is_mutable"] = False
+    with pytest.raises(solana_tokens.ValidationError, match="locked"):
+        solana_tokens.prepare_metadata_update(launch, "Renamed", "TST")
+    assert not any(c["path"].endswith("prepare-metadata-update") for c in token_metadata["calls"])
+    assert ipfs_calls == []
+
+
+def test_refresh_picks_up_changed_metadata(app, monkeypatch, token_metadata):
+    _chain(monkeypatch)
+    launch = _record(_make_user())
+    token_metadata["on_chain"].update(name="Renamed", symbol="NEW", uri="https://x/new.json", is_mutable=False)
+    token = solana_tokens.refresh_token_launch(launch)["token"]
+    assert (token["name"], token["symbol"], token["metadata_uri"], token["metadata_locked"]) == (
+        "Renamed", "NEW", "https://x/new.json", True
+    )
+
+
+def test_metadata_routes_are_owner_only(app, client, monkeypatch, token_metadata, ipfs_calls):
+    _chain(monkeypatch)
+    owner = _make_user()
+    launch = _record(owner)
+    stranger = _make_user(wallet="SoLOther11111111111111111111111111111111111")
+    assert client.get(f"/api/solana-tokens/{launch.id}/metadata", headers=_auth(stranger)).status_code == 404
+    assert client.get(f"/api/solana-tokens/{launch.id}/metadata", headers=_auth(owner)).get_json()["description"] == "Old words"
+    form = {"name": "Renamed", "symbol": "TST", "description": "Old words", "lock": "true"}
+    assert client.post(f"/api/solana-tokens/{launch.id}/prepare-metadata-update", headers=_auth(stranger), data=form).status_code == 404
+    response = client.post(f"/api/solana-tokens/{launch.id}/prepare-metadata-update", headers=_auth(owner), data=form)
+    assert response.status_code == 200
+    assert token_metadata["calls"][-1]["json"]["lock"] is True

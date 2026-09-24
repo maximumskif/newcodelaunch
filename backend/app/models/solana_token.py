@@ -38,6 +38,9 @@ class SolanaTokenLaunch(db.Model):
     metadata_uri = db.Column(db.String(256), nullable=True)
     mint_authority_revoked = db.Column(db.Boolean, nullable=False)
     freeze_authority_revoked = db.Column(db.Boolean, nullable=False)
+    # Token Metadata's is_mutable, inverted: once locked, name/symbol/URI can
+    # never change again. Read from the chain (refresh_token_launch).
+    metadata_locked = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     explorer_url = db.Column(db.String(256), nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
@@ -56,6 +59,7 @@ class SolanaTokenLaunch(db.Model):
             "metadata_uri": self.metadata_uri,
             "mint_authority_revoked": self.mint_authority_revoked,
             "freeze_authority_revoked": self.freeze_authority_revoked,
+            "metadata_locked": self.metadata_locked,
             "explorer_url": self.explorer_url,
             "created_at": self.created_at.isoformat(),
         }

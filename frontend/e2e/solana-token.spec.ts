@@ -118,7 +118,7 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   await expect(card).toContainText(`E2ET · ${mintAddress!.slice(0, 10)}`)
 })
 
-test('owner tools on a token that kept its authorities: mint more, then revoke freeze and mint — each checked on-chain', async ({ page }) => {
+test('owner tools on a token that kept its authorities: mint more, revoke freeze and mint, then rename and lock its metadata — each checked on-chain', async ({ page }) => {
   test.setTimeout(90_000)
   const connection = new Connection(VALIDATOR_RPC_URL, 'confirmed')
   const readMint = async (mint: PublicKey) =>
@@ -144,7 +144,9 @@ test('owner tools on a token that kept its authorities: mint more, then revoke f
   await expect(page.getByText(/Keeper Token \(KEEP\) launched/)).toBeVisible({ timeout: 45_000 })
   const mint = new PublicKey((await page.locator('p.font-mono').first().textContent())!.trim())
 
-  const row = page.getByRole('row', { name: /Keeper Token/ })
+  // .first(): once Manage is open, the expanded panel's row mentions the
+  // token too; the token's own row always comes first.
+  const row = page.getByRole('row', { name: /Keeper Token/ }).first()
   await expect(row).toContainText('Mintable')
   await row.getByRole('button', { name: 'Manage KEEP' }).click()
   const panel = page.getByTestId('token-manage')
@@ -171,4 +173,33 @@ test('owner tools on a token that kept its authorities: mint more, then revoke f
   await expect(row).toContainText('Fixed')
   await expect(row).not.toContainText('Freezable')
   await expect(row).toContainText('1,500')
+
+  // Details: rename it and add a description (re-pinned through the Pinata
+  // stub), then lock the metadata — each signed by the update authority.
+  const details = panel.getByTestId('token-details')
+  await details.getByLabel('Name').fill('Keeper Renamed')
+  await details.getByLabel('Description').fill('Now with a description')
+  await details.getByRole('button', { name: 'Save details' }).click()
+  await expect(details.getByText('Details updated.')).toBeVisible({ timeout: 30_000 })
+
+  const [metadataPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_PROGRAM_ID,
+  )
+  const metadataAccount = await connection.getAccountInfo(metadataPda)
+  expect(metadataAccount?.data.includes(Buffer.from('Keeper Renamed'))).toBe(true)
+  await expect(page.getByRole('row', { name: /Keeper Renamed/ }).first()).toBeVisible()
+  await expect(details.getByLabel('Description')).toHaveValue('Now with a description')
+
+  await details.getByRole('button', { name: 'Lock metadata…' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Lock metadata' }).click()
+  await expect(details.getByText(/Metadata is locked/)).toBeVisible({ timeout: 30_000 })
+  const token = await page.evaluate(() => JSON.parse(localStorage.getItem('nocode-launchpad.auth') ?? '{}').accessToken as string)
+  const launches = await (await page.request.get('http://localhost:5000/api/solana-tokens', { headers: { Authorization: `Bearer ${token}` } })).json()
+  const launchId = launches.tokens.find((t: { mint_address: string }) => t.mint_address === mint.toBase58()).id
+  const onChain = await (
+    await page.request.get(`http://localhost:5000/api/solana-tokens/${launchId}/metadata`, { headers: { Authorization: `Bearer ${token}` } })
+  ).json()
+  expect(onChain.is_mutable).toBe(false)
+  await expect(page.getByRole('row', { name: /Keeper Renamed/ }).first()).toContainText('Locked')
 })

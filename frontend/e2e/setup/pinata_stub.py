@@ -21,6 +21,7 @@ Run via e2e/setup/run-pinata-stub.sh, not directly.
 from __future__ import annotations
 
 import hashlib
+import json
 
 from flask import Flask, Response, jsonify, request
 
@@ -64,7 +65,13 @@ def pin_file():
 
 @app.post("/pinning/pinJSONToIPFS")
 def pin_json():
-    data = request.get_data()
+    # Real Pinata pins (and its gateway serves back) only `pinataContent` —
+    # `pinataMetadata` is Pinata's own bookkeeping. This used to store the
+    # whole request wrapper, so everything read back through the gateway was
+    # one level too deep: invisible until a token's description had to be
+    # read back after an edit (the NFT metadata-preview spec only asserted
+    # its label, not what it showed).
+    data = json.dumps(request.get_json()["pinataContent"]).encode()
     ipfs_hash = _fake_hash(data)
     _PINNED[ipfs_hash] = (data, "application/json")
     return jsonify(IpfsHash=ipfs_hash, PinSize=len(data), Timestamp="2026-01-01T00:00:00.000Z")

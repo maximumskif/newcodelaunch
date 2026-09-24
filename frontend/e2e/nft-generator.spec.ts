@@ -87,6 +87,12 @@ test('a real NFT collection build: create, upload a trait, generate, and publish
   // stale pre-publish placeholder.
   await page.getByRole('button', { name: 'Preview metadata' }).click()
   await expect(page.getByText('Real content pinned to IPFS.')).toBeVisible({ timeout: 10_000 })
+  // And what's shown is the item's own metadata, read back through the
+  // (stub) gateway — not Pinata's upload wrapper around it.
+  const preview = page.locator('pre').first()
+  await expect(preview).toContainText('"image": "ipfs://')
+  await expect(preview).toContainText('"attributes"')
+  await expect(preview).not.toContainText('pinataContent')
 })
 
 test('editing and deleting real traits, layers, and collections — through the actual UI', async ({ page }) => {

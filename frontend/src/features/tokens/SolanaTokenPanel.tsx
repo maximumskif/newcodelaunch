@@ -430,6 +430,7 @@ function SolanaTokenHistory({
                   <span className="ml-2 inline-flex gap-1">
                     {launch.mint_authority_revoked ? <Badge tone="success">Fixed</Badge> : <Badge tone="warning">Mintable</Badge>}
                     {!launch.freeze_authority_revoked && <Badge tone="warning">Freezable</Badge>}
+                    {launch.metadata_locked && <Badge tone="success">Locked</Badge>}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-ink">{SOLANA_NETWORKS.find((n) => n.id === launch.network)?.label ?? launch.network}</td>
@@ -444,7 +445,7 @@ function SolanaTokenHistory({
                 </td>
                 <td className="px-4 py-3 text-ink-faint">{new Date(launch.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3">
-                  {!(launch.mint_authority_revoked && launch.freeze_authority_revoked) && (
+                  {!(launch.mint_authority_revoked && launch.freeze_authority_revoked && launch.metadata_locked) && (
                     <Button
                       variant="ghost"
                       size="sm"

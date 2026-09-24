@@ -18,7 +18,7 @@ vi.mock('@solana/web3.js', () => ({
 
 vi.mock('../../lib/solanaTokensApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/solanaTokensApi')>()
-  return { ...actual, solanaTokensApi: { ...actual.solanaTokensApi, refresh: vi.fn(), prepareAction: vi.fn() } }
+  return { ...actual, solanaTokensApi: { ...actual.solanaTokensApi, refresh: vi.fn(), prepareAction: vi.fn(), getMetadata: vi.fn(), prepareMetadataUpdate: vi.fn() } }
 })
 
 vi.mock('../auth/AuthContext', () => ({
@@ -40,6 +40,7 @@ const launch: SolanaTokenLaunch = {
   metadata_uri: null,
   mint_authority_revoked: false,
   freeze_authority_revoked: false,
+  metadata_locked: false,
   explorer_url: null,
   created_at: '2026-09-24T00:00:00Z',
 }
@@ -59,6 +60,9 @@ describe('SolanaTokenManage', () => {
     vi.clearAllMocks()
     sendTransaction.mockResolvedValue('sig-action')
     vi.mocked(solanaTokensApi.prepareAction).mockResolvedValue({ transaction: 'eA==', authority: CREATOR })
+    vi.mocked(solanaTokensApi.getMetadata).mockResolvedValue({
+      name: 'Keep', symbol: 'KEEP', uri: '', update_authority: CREATOR, is_mutable: true, description: '', image: null,
+    })
   })
 
   it('mints more for the authority, then re-reads the token from the chain', async () => {
@@ -110,10 +114,10 @@ describe('SolanaTokenManage', () => {
     expect(screen.getByRole('button', { name: 'Revoke freeze authority…' })).toBeDisabled()
   })
 
-  it('says so when there is nothing left to manage', async () => {
+  it('says so when both authorities are revoked', async () => {
     connect(CREATOR)
     vi.mocked(solanaTokensApi.refresh).mockResolvedValue(liveState({ mint_authority: null, freeze_authority: null }))
     render(<SolanaTokenManage launch={launch} onUpdated={vi.fn()} />)
-    expect(await screen.findByText(/nothing left to manage/)).toBeInTheDocument()
+    expect(await screen.findByText(/Mint and freeze authority are both revoked/)).toBeInTheDocument()
   })
 })

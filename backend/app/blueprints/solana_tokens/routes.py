@@ -142,3 +142,48 @@ def refresh_token_launch(launch_id):
         return jsonify(solana_tokens.refresh_token_launch(launch))
     except solana_tokens.ValidationError as exc:
         return jsonify(error=str(exc)), 502
+
+
+@solana_tokens_bp.get("/<launch_id>/metadata")
+@jwt_required()
+def get_token_metadata(launch_id):
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    try:
+        return jsonify(solana_tokens.get_token_metadata(launch))
+    except candy_machine.CandyMachineServiceError as exc:
+        return jsonify(error=str(exc)), 502
+
+
+@solana_tokens_bp.post("/<launch_id>/prepare-metadata-update")
+@jwt_required()
+def prepare_metadata_update(launch_id):
+    """multipart/form-data like /prepare (an optional new logo file). The
+    transaction must be signed by the returned update authority; then POST
+    .../refresh re-reads the token from the chain."""
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    form = request.form
+    logo_file = request.files.get("logo")
+    try:
+        return jsonify(
+            solana_tokens.prepare_metadata_update(
+                launch,
+                name=form.get("name", ""),
+                symbol=form.get("symbol", ""),
+                description=form.get("description", ""),
+                logo=logo_file.read() if logo_file and logo_file.filename else None,
+                lock=_form_bool(form.get("lock"), False),
+            )
+        )
+    except solana_tokens.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except ipfs.IPFSNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
+    except ipfs.IPFSUploadError as exc:
+        return jsonify(error=str(exc)), 502
+    except candy_machine.CandyMachineServiceError as exc:
+        status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+        return jsonify(error=str(exc)), status
