@@ -6,6 +6,8 @@ interface AuthContextValue {
   user: AuthUser | null
   accessToken: string | null
   login: (accessToken: string, user: AuthUser) => void
+  // Replace the signed-in user (e.g. after linking a wallet), same session.
+  updateUser: (user: AuthUser) => void
   logout: () => void
 }
 
@@ -33,13 +35,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken: token, user: nextUser }))
   }, [])
 
+  const updateUser = useCallback((nextUser: AuthUser) => {
+    setUser(nextUser)
+    setAccessToken((token) => {
+      if (token) localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken: token, user: nextUser }))
+      return token
+    })
+  }, [])
+
   const logout = useCallback(() => {
     setAccessToken(null)
     setUser(null)
     localStorage.removeItem(STORAGE_KEY)
   }, [])
 
-  const value = useMemo(() => ({ user, accessToken, login, logout }), [user, accessToken, login, logout])
+  const value = useMemo(
+    () => ({ user, accessToken, login, updateUser, logout }),
+    [user, accessToken, login, updateUser, logout],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

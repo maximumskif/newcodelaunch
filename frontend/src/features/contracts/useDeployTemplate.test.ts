@@ -42,7 +42,7 @@ describe('useDeployTemplate', () => {
     vi.mocked(useSwitchChain).mockReturnValue({
       switchChainAsync: vi.fn(),
     } as unknown as ReturnType<typeof useSwitchChain>)
-    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
 
     const deployContractAsync = vi.fn().mockResolvedValue(TX_HASH)
     vi.mocked(useDeployContract).mockReturnValue({
@@ -112,7 +112,7 @@ describe('useDeployTemplate', () => {
     vi.mocked(useSwitchChain).mockReturnValue({
       switchChainAsync: vi.fn(),
     } as unknown as ReturnType<typeof useSwitchChain>)
-    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
 
     const deployContractAsync = vi.fn().mockResolvedValue(TX_HASH)
     vi.mocked(useDeployContract).mockReturnValue({

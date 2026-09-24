@@ -110,7 +110,7 @@ describe('DeployPanel', () => {
     // selector itself lives in AppShell's top bar) — resuming a project
     // whose saved network is 'ethereum' should show the mainnet gate.
     mockConnectedWallet()
-    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
     mockIdleDeployHook()
     vi.mocked(contractsApi.listTemplates).mockResolvedValue({ templates: [TOKEN_TEMPLATE] })
     vi.mocked(contractsApi.listDeployments).mockResolvedValue({ deployments: [] })
@@ -130,7 +130,7 @@ describe('DeployPanel', () => {
 
   it('re-arms the mainnet checkbox on a live network switch instead of carrying the tick over', async () => {
     mockConnectedWallet()
-    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
     mockIdleDeployHook()
     vi.mocked(contractsApi.listTemplates).mockResolvedValue({ templates: [TOKEN_TEMPLATE] })
     vi.mocked(contractsApi.listDeployments).mockResolvedValue({ deployments: [] })
@@ -164,7 +164,7 @@ describe('DeployPanel', () => {
 
   it('does not show the mainnet gate on a testnet, and Deploy is enabled once a wallet is connected', async () => {
     mockConnectedWallet()
-    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
     mockIdleDeployHook()
     vi.mocked(contractsApi.listTemplates).mockResolvedValue({ templates: [TOKEN_TEMPLATE] })
     vi.mocked(contractsApi.listDeployments).mockResolvedValue({ deployments: [] })
@@ -178,7 +178,7 @@ describe('DeployPanel', () => {
 
   it('disables Deploy and Estimate when no wallet is connected', async () => {
     vi.mocked(useAccount).mockReturnValue({ address: undefined } as unknown as ReturnType<typeof useAccount>)
-    vi.mocked(useAuth).mockReturnValue({ accessToken: null, user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: null, user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
     mockIdleDeployHook()
     vi.mocked(contractsApi.listTemplates).mockResolvedValue({ templates: [TOKEN_TEMPLATE] })
 
@@ -196,7 +196,7 @@ describe('DeployPanel', () => {
     // sets network to 'polygon_amoy' — the autosave that follows must carry
     // that same value, not the NetworkProvider's own 'sepolia' default.
     mockConnectedWallet()
-    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
     mockIdleDeployHook()
     vi.mocked(contractsApi.listTemplates).mockResolvedValue({ templates: [TOKEN_TEMPLATE] })
     vi.mocked(contractsApi.listDeployments).mockResolvedValue({ deployments: [] })

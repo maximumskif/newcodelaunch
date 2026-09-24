@@ -10,12 +10,16 @@ interface Props {
   // wrapped onto its own line, e.g. `ml-auto` to keep it pinned to that
   // line's right edge (see ProjectContextBar's "Switch project" trigger).
   className?: string
+  // True for menus of links (a click navigates away). False for a menu of
+  // in-place actions whose result shows inside it — e.g. the wallet menu's
+  // link/unlink feedback, which closing on click would hide.
+  closeOnSelect?: boolean
 }
 
 // Minimal click-toggle dropdown — closes on outside click or Escape.
 // Not a full menu/listbox implementation (no roving tabindex); fine for the
 // nav's small, mostly-link content. Revisit if a future use case needs more.
-export function Dropdown({ trigger, children, align = 'left', className = '' }: Props) {
+export function Dropdown({ trigger, children, align = 'left', className = '', closeOnSelect = true }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -61,7 +65,7 @@ export function Dropdown({ trigger, children, align = 'left', className = '' }: 
       </button>
       {isOpen && (
         <div
-          onClick={() => setIsOpen(false)}
+          onClick={closeOnSelect ? () => setIsOpen(false) : undefined}
           className={`absolute top-full z-20 mt-2 w-64 rounded-lg border border-border bg-surface p-1.5 shadow-md ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}

@@ -78,6 +78,11 @@ function installFakeSolanaWallet() {
     on: emitter.on.bind(emitter),
     off: emitter.off.bind(emitter),
     connect: async () => {
+      // Real Phantom exposes the key again on every connect. This used to
+      // leave it null after a disconnect(), so PhantomWalletAdapter's
+      // reconnect quietly failed (it reads publicKey right after connect) —
+      // invisible until a spec first reconnected after signing out.
+      wallet.publicKey = keypair.publicKey
       wallet.isConnected = true
       emitter.emit('connect', keypair.publicKey)
     },

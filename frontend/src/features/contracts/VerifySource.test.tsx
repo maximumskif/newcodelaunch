@@ -11,7 +11,7 @@ vi.mock('../../lib/contractsApi', async (importOriginal) => {
 })
 
 vi.mock('../auth/AuthContext', () => ({
-  useAuth: () => ({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() }),
+  useAuth: () => ({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() }),
 }))
 
 const base: ContractDeployment = {

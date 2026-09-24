@@ -172,6 +172,13 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   unauthenticated visitor flow). This is the exact flow this project's own
   docs had only ever verified via `curl`-level checks or a single manual
   devnet pass before this.
+- `account-linking.spec.ts` — both fixture wallets in one browser, like a
+  user with MetaMask and Phantom: the Solana wallet signs in and gets a
+  project → sign out → the EVM wallet signs in (can't see it) → links the
+  Solana wallet from the account menu with a real ed25519 signature → the
+  Solana account merges in and its project appears → signing in with the
+  Solana wallet now opens the same account. Unlinks at the end so the shared
+  fixture wallets stay separate accounts for the other specs.
 - `candy-machine-phases.spec.ts` — launch a two-item drop through the
   actual form with an allowlist phase (the fixture wallet + one other, open
   now; public phase tomorrow). Recording itself proves the on-chain guard

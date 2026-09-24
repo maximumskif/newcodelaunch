@@ -37,7 +37,7 @@ vi.mock('../../lib/projectsApi', async (importOriginal) => {
 })
 
 vi.mock('../auth/AuthContext', () => ({
-  useAuth: () => ({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() }),
+  useAuth: () => ({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() }),
 }))
 
 const CREATOR = 'Creator1111111111111111111111111111111111111'

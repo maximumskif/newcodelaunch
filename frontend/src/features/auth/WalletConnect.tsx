@@ -13,10 +13,12 @@ import { apiClient, type Chain } from '../../lib/apiClient'
 import { useAuth } from './AuthContext'
 
 export function WalletConnect() {
-  const { user, accessToken, login, logout } = useAuth()
+  const { user, accessToken, login, updateUser, logout } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [didCopy, setDidCopy] = useState(false)
+  const [linkNotice, setLinkNotice] = useState<string | null>(null)
+  const [isLinking, setIsLinking] = useState(false)
 
   const { address, isConnected: isEvmConnected } = useAccount()
   const { connectors, connect } = useConnect()
@@ -120,6 +122,44 @@ export function WalletConnect() {
     })
   }
 
+  // Link the connected wallet of the *other* chain family to this account.
+  // The wallet signs a fresh nonce to prove it's yours; if it already has its
+  // own account, the server merges that account into this one.
+  const linkWallet = async (chain: Chain, walletAddress: string, sign: (message: string) => Promise<string>) => {
+    if (!accessToken) return
+    setError(null)
+    setLinkNotice(null)
+    setIsLinking(true)
+    try {
+      const { message, nonce } = await apiClient.requestNonce(walletAddress, chain)
+      const signature = await sign(message)
+      const { user: updated, merged } = await apiClient.linkWallet(accessToken, { wallet_address: walletAddress, chain, signature, nonce })
+      updateUser(updated)
+      const movedCount = Object.values(merged).reduce((total, count) => total + count, 0)
+      setLinkNotice(
+        movedCount > 0
+          ? `Linked — ${movedCount} item${movedCount === 1 ? '' : 's'} from that wallet's account moved into this one.`
+          : 'Wallet linked.',
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Linking failed')
+    } finally {
+      setIsLinking(false)
+    }
+  }
+
+  const unlinkWallet = async (chain: Chain, walletAddress: string) => {
+    if (!accessToken) return
+    setError(null)
+    setLinkNotice(null)
+    try {
+      const { user: updated } = await apiClient.unlinkWallet(accessToken, chain, walletAddress)
+      updateUser(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unlinking failed')
+    }
+  }
+
   const handleLogout = async () => {
     logout()
     if (isEvmConnected) await disconnectEvm()
@@ -127,6 +167,32 @@ export function WalletConnect() {
   }
 
   if (accessToken && user) {
+    // Sessions from before wallet linking stored a user without `wallets`.
+    const linkedWallets = user.wallets ?? [{ wallet_address: user.wallet_address, chain: user.chain, linked_at: user.created_at }]
+    const isLinked = (chain: Chain, walletAddress: string) =>
+      linkedWallets.some((wallet) => wallet.chain === chain && wallet.wallet_address.toLowerCase() === walletAddress.toLowerCase())
+    const solanaAddress = publicKey?.toBase58()
+    // The other chain family's connected wallet, if it isn't linked yet.
+    const linkCandidate =
+      user.chain === 'evm' && solanaAddress && signMessage && !isLinked('solana', solanaAddress)
+        ? {
+            label: `Solana wallet ${solanaAddress.slice(0, 4)}…${solanaAddress.slice(-4)}`,
+            link: () =>
+              linkWallet('solana', solanaAddress, async (message) => bs58.encode(await signMessage(new TextEncoder().encode(message)))),
+          }
+        : user.chain === 'solana' && address && !isLinked('evm', address)
+          ? {
+              label: `EVM wallet ${address.slice(0, 6)}…${address.slice(-4)}`,
+              link: () => linkWallet('evm', address, (message) => signMessageAsync({ message })),
+            }
+          : null
+    const otherChainAction =
+      user.chain === 'evm' && !isSolanaConnected
+        ? { label: 'Connect a Solana wallet to link it', connect: handleConnectSolana }
+        : user.chain === 'solana' && !isEvmConnected
+          ? { label: 'Connect an EVM wallet to link it', connect: handleConnectEvm }
+          : null
+
     const handleCopy = () => {
       void navigator.clipboard.writeText(user.wallet_address)
       setDidCopy(true)
@@ -136,6 +202,7 @@ export function WalletConnect() {
     return (
       <Dropdown
         align="right"
+        closeOnSelect={false}
         trigger={
           <>
             <Badge tone="success">
@@ -148,6 +215,51 @@ export function WalletConnect() {
         <div className="px-3 py-2">
           <p className="text-xs text-ink-faint">Signed in as</p>
           <p className="mt-0.5 break-all font-mono text-xs text-ink">{user.wallet_address}</p>
+        </div>
+        <div className="border-t border-border px-3 py-2">
+          <p className="text-xs text-ink-faint">Linked wallets</p>
+          <ul className="mt-1 space-y-1">
+            {linkedWallets.map((wallet) => {
+              const isSession = wallet.chain === user.chain && wallet.wallet_address === user.wallet_address
+              return (
+                <li key={`${wallet.chain}:${wallet.wallet_address}`} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-mono text-ink">
+                    {wallet.chain.toUpperCase()} · {wallet.wallet_address.slice(0, 6)}…{wallet.wallet_address.slice(-4)}
+                    {isSession && <span className="ml-1 font-sans text-ink-faint">(signed in)</span>}
+                  </span>
+                  {!isSession && (
+                    <button
+                      type="button"
+                      onClick={() => void unlinkWallet(wallet.chain, wallet.wallet_address)}
+                      aria-label={`Unlink ${wallet.chain} wallet ${wallet.wallet_address}`}
+                      className="text-danger hover:underline"
+                    >
+                      Unlink
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          {linkCandidate ? (
+            <div className="mt-2 space-y-1">
+              <Button variant="secondary" size="sm" className="w-full" isLoading={isLinking} onClick={() => void linkCandidate.link()}>
+                Link {linkCandidate.label}
+              </Button>
+              <p className="text-[11px] leading-snug text-ink-faint">
+                You'll sign a message with it. If it already has its own account, that account's projects and launches
+                move into this one.
+              </p>
+            </div>
+          ) : (
+            otherChainAction && (
+              <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={otherChainAction.connect}>
+                {otherChainAction.label}
+              </Button>
+            )
+          )}
+          {linkNotice && <p className="mt-1 text-xs text-success">{linkNotice}</p>}
+          {error && <p className="mt-1 text-xs text-danger" role="alert">{error}</p>}
         </div>
         <button
           type="button"

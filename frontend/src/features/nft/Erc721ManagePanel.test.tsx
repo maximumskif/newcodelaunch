@@ -25,7 +25,7 @@ vi.mock('../../lib/nftApi', async (importOriginal) => {
 })
 
 vi.mock('../auth/AuthContext', () => ({
-  useAuth: () => ({ accessToken: 'tok', user: null, login: vi.fn(), logout: vi.fn() }),
+  useAuth: () => ({ accessToken: 'tok', user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() }),
 }))
 
 const OWNER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'

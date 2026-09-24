@@ -25,6 +25,7 @@ Last updated 2026-09-15 (NFT Generator's "Generate collection" row corrected for
 | Nav "Products" dropdown | Real | Auto-derived from `lib/products.ts` — every entry with a `path` is a real page; entries without one would show a "Soon" badge instead (none currently — every listed product is real as of the Candy Machine creator flow). |
 | Wallet connect (EVM) | Real | wagmi + MetaMask/injected connector, nonce + signature → JWT. |
 | Wallet connect (Solana) | Real | `@solana/wallet-adapter` (Phantom), nonce + signature → JWT. |
+| One account, both chains (wallet menu → "Linked wallets") | Real | Added 2026-09-24. Link a wallet of the other chain family by signing a fresh nonce with it; sign in with any linked wallet and it's the same account — same projects, collections, deployments, drops and tokens. Linking a wallet that already has its own account merges that account in (everything moves, one transaction; the UI says so before you sign and reports what moved). Unlink any wallet except the one you're signed in with, never the last. |
 
 ## Dashboard (`/dashboard`) & New Project wizard (`/projects/new`)
 

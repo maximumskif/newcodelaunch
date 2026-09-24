@@ -2,11 +2,28 @@ import { request } from './http'
 
 export type Chain = 'evm' | 'solana'
 
-export interface AuthUser {
-  id: string
+export interface LinkedWallet {
   wallet_address: string
   chain: Chain
+  linked_at: string
+}
+
+export interface AuthUser {
+  id: string
+  // The wallet this session signed in with — what the connected wallet is
+  // checked against. `wallets` is every wallet linked to the account.
+  wallet_address: string
+  chain: Chain
+  wallets: LinkedWallet[]
   created_at: string
+}
+
+// A signed nonce proving control of a wallet (sign-in, or linking).
+export interface WalletProof {
+  wallet_address: string
+  chain: Chain
+  signature: string
+  nonce: string
 }
 
 export interface NetworkSummary {
@@ -38,6 +55,18 @@ export const apiClient = {
     }),
 
   me: (token: string) => request<{ user: AuthUser }>('/auth/me', {}, token),
+
+  // Link another wallet to the signed-in account. If it has its own account,
+  // that account merges into this one — `merged` counts what moved.
+  linkWallet: (token: string, proof: WalletProof) =>
+    request<{ user: AuthUser; merged: Record<string, number> }>(
+      '/auth/wallets',
+      { method: 'POST', body: JSON.stringify(proof) },
+      token,
+    ),
+
+  unlinkWallet: (token: string, chain: Chain, walletAddress: string) =>
+    request<{ user: AuthUser }>(`/auth/wallets/${chain}/${encodeURIComponent(walletAddress)}`, { method: 'DELETE' }, token),
 
   networks: () => request<{ networks: NetworkSummary[] }>('/blockchain/networks'),
 
