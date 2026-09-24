@@ -255,3 +255,27 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   of real artwork) — the stub proves the integration is real, not that
   `gpt-4o-mini`'s opinions are good ones. That's a product/prompt-quality
   question, not something browser automation can check.
+
+## Real-network smoke test (Solana devnet)
+
+The Playwright suite runs everything against a local validator. `e2e/devnet/`
+runs the same Solana flows against a **real** cluster, through the real
+backend API with a real keypair — everything the browser does, minus the
+browser: sign-in, SPL token launch, a Candy Machine with an allowlist phase
+and a per-wallet mint limit (allowlist mint, outsider and over-limit
+refusals), editing the live drop, a public mint, and the dashboard. The
+backend's own on-chain checks run against the real cluster, which is the
+point — they're the parts most sensitive to real-network timing. IPFS stays
+the local stub (on-chain operations store metadata URIs, never fetch them).
+
+```bash
+cd frontend
+bash e2e/devnet/run-stack.sh &            # backend :5100, sidecar :4100, Pinata stub
+node e2e/devnet/smoke.mjs --keypair ~/devnet-wallet.json
+```
+
+The wallet needs about 0.15 SOL of **devnet** SOL (a run spends ~0.04); fund
+it at https://faucet.solana.com. Each check prints PASS/FAIL, every
+transaction prints an explorer link, and the run stops at the first failure.
+Against a local validator instead: `SOLANA_RPC_URL=http://127.0.0.1:8899
+bash e2e/devnet/run-stack.sh` and `--rpc http://127.0.0.1:8899 --airdrop`.
