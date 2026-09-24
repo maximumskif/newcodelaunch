@@ -110,6 +110,29 @@ def prepare_candy_machine_step():
     return jsonify(result)
 
 
+@mint_bp.post("/prepare-config-lines")
+@jwt_required()
+def prepare_config_lines():
+    # Step 3 (after the Candy Machine exists): load the rest of its items, a
+    # batch of transactions per wallet prompt, until none are returned.
+    data = request.get_json(silent=True) or {}
+    missing = [f for f in ("collection_id", "network", "creator_wallet", "candy_machine") if not data.get(f)]
+    if missing:
+        return jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400
+    try:
+        collection = nft_collections.get_owned_collection(data["collection_id"], get_jwt_identity())
+    except nft_collections.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    try:
+        return jsonify(
+            candy_machine.prepare_config_lines(collection, data["network"], data["creator_wallet"], data["candy_machine"])
+        )
+    except candy_machine.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        return _handle_candy_machine_service_error(exc)
+
+
 @mint_bp.post("/candy-machines")
 @jwt_required()
 def create_candy_machine():

@@ -179,6 +179,12 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   Solana account merges in and its project appears → signing in with the
   Solana wallet now opens the same account. Unlinks at the end so the shared
   fixture wallets stay separate accounts for the other specs.
+- `candy-machine-big-drop.spec.ts` — a 150-item drop (well past the old
+  20-item cap, and more than one transaction holds): seeded through the
+  API, launched through the actual page — the creation transaction carries
+  the first items, the rest load via the fake Phantom's
+  `signAllTransactions` in one batch — then the storefront shows all 150
+  available, a mint succeeds, and the dashboard reads 1 / 150.
 - `candy-machine-phases.spec.ts` — launch a two-item drop through the
   actual form with an allowlist phase (the fixture wallet + one other, open
   now; public phase tomorrow). Recording itself proves the on-chain guard

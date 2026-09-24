@@ -46,6 +46,19 @@ export interface PrepareCollectionResult {
 export interface PrepareCandyMachineResult {
   candy_machine: string
   transactions: string[]
+  // How many items the creation transaction itself loads; the rest come
+  // from prepareConfigLines, a batch at a time.
+  items_loaded: number
+}
+
+// The next batch of item-loading transactions (empty once all are loaded).
+// Resumes from the chain's own count, so it's safe to call again after an
+// interruption.
+export interface ConfigLinesBatch {
+  transactions: string[]
+  items_loaded: number
+  items_after: number
+  items_available: number
 }
 
 export interface CandyMachineDeployment {
@@ -184,6 +197,11 @@ export const candyMachineApi = {
       { method: 'POST', body: JSON.stringify(payload) },
       token,
     ),
+
+  prepareConfigLines: (
+    token: string,
+    payload: { collection_id: string; network: SolanaNetworkId; creator_wallet: string; candy_machine: string },
+  ) => request<ConfigLinesBatch>('/mint/prepare-config-lines', { method: 'POST', body: JSON.stringify(payload) }, token),
 
   create: (
     token: string,

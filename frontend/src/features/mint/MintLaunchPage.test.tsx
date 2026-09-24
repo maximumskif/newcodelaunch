@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { candyMachineApi } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
@@ -19,7 +19,10 @@ vi.mock('@solana/web3.js', () => ({
   // arrow function throws "is not a constructor" there even though it
   // works fine called normally.
   Connection: vi.fn().mockImplementation(function MockConnection() {
-    return { confirmTransaction: vi.fn().mockResolvedValue({ value: { err: null } }) }
+    return {
+      confirmTransaction: vi.fn().mockResolvedValue({ value: { err: null } }),
+      sendRawTransaction: vi.fn().mockResolvedValue('sig-batch'),
+    }
   }),
   VersionedTransaction: { deserialize: vi.fn().mockReturnValue({}) },
 }))
@@ -32,6 +35,8 @@ vi.mock('../../lib/candyMachineApi', async (importOriginal) => {
       ...actual.candyMachineApi,
       prepareCollection: vi.fn(),
       prepareCandyMachine: vi.fn(),
+      // Nothing left to load after the creation transaction, by default.
+      prepareConfigLines: vi.fn().mockResolvedValue({ transactions: [], items_loaded: 1, items_after: 1, items_available: 1 }),
       create: vi.fn(),
     },
   }
@@ -126,7 +131,7 @@ describe('MintLaunchPage project linking', () => {
     })
     vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({
       candy_machine: 'CandyMachine11111111111111111111111111111',
-      transactions: ['eA=='],
+      transactions: ['eA=='], items_loaded: 1,
     })
     vi.mocked(candyMachineApi.create).mockResolvedValue({
       candy_machine: {
@@ -187,7 +192,7 @@ describe('MintLaunchPage project linking', () => {
     vi.mocked(candyMachineApi.prepareCandyMachine).mockImplementation(async (_token, payload) => {
       callOrder.push('prepareCandyMachine')
       expect(payload.collection_mint).toBe('CollMint1111111111111111111111111111111111')
-      return { candy_machine: 'CandyMachine11111111111111111111111111111', transactions: ['eA=='] }
+      return { candy_machine: 'CandyMachine11111111111111111111111111111', transactions: ['eA=='], items_loaded: 1 }
     })
     vi.mocked(candyMachineApi.create).mockResolvedValue({
       candy_machine: {
@@ -242,7 +247,7 @@ describe('MintLaunchPage project linking', () => {
     })
     vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({
       candy_machine: 'CandyMachine11111111111111111111111111111',
-      transactions: ['eA=='],
+      transactions: ['eA=='], items_loaded: 1,
     })
     vi.mocked(candyMachineApi.create).mockResolvedValue({
       candy_machine: {
@@ -356,7 +361,7 @@ describe('MintLaunchPage allowlist phase', () => {
     vi.mocked(nftApi.getCollection).mockResolvedValue({ collection })
     vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
     vi.mocked(candyMachineApi.prepareCollection).mockResolvedValue({ collection_mint: 'CollMint1', transaction: 'eA==' })
-    vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({ candy_machine: 'Candy1', transactions: ['eA=='] })
+    vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({ candy_machine: 'Candy1', transactions: ['eA=='], items_loaded: 1 })
     vi.mocked(candyMachineApi.create).mockResolvedValue({
       candy_machine: {
         id: 'cm-1',
@@ -436,3 +441,78 @@ describe('MintLaunchPage allowlist phase', () => {
     expect(candyMachineApi.prepareCandyMachine).toHaveBeenCalledWith('tok', expect.objectContaining({ mint_limit: 3 }))
   })
 })
+
+describe('MintLaunchPage big drops', () => {
+  // Earlier describes leave call history on the shared module mocks.
+  beforeEach(() => vi.clearAllMocks())
+
+  function mockBigDrop() {
+    const signAllTransactions = vi.fn(async (txs: unknown[]) => txs.map(() => ({ serialize: () => new Uint8Array([1]) })))
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: { toBase58: () => 'CreatorPublicKey11111111111111111111111111' },
+      sendTransaction: vi.fn().mockResolvedValue('sig-1'),
+      signAllTransactions,
+    } as unknown as ReturnType<typeof useWallet>)
+    vi.mocked(nftApi.getCollection).mockResolvedValue({ collection })
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
+    vi.mocked(candyMachineApi.prepareCollection).mockResolvedValue({ collection_mint: 'CollMint1', transaction: 'eA==' })
+    vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({ candy_machine: 'Candy1', transactions: ['eA=='], items_loaded: 24 })
+    vi.mocked(candyMachineApi.create).mockResolvedValue({
+      candy_machine: {
+        id: 'cm-1', nft_collection_id: 'col-1', network: 'solana_devnet', collection_mint: 'CollMint1', candy_machine: 'Candy1',
+        price_sol: 0.1, items_available: 1, go_live_date: '2026-09-02T00:00:00.000Z', allowlist: null, mint_limit: null,
+        creator_wallet: 'CreatorPublicKey11111111111111111111111111', transaction_signatures: ['sig-1'], explorer_url: null,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    })
+    return signAllTransactions
+  }
+
+  it('loads the remaining items a batch per wallet prompt, then records the drop', async () => {
+    const signAllTransactions = mockBigDrop()
+    vi.mocked(candyMachineApi.prepareConfigLines)
+      .mockResolvedValueOnce({ transactions: ['eA==', 'eA==', 'eA=='], items_loaded: 24, items_after: 190, items_available: 250 })
+      .mockResolvedValueOnce({ transactions: ['eA=='], items_loaded: 190, items_after: 250, items_available: 250 })
+      .mockResolvedValueOnce({ transactions: [], items_loaded: 250, items_after: 250, items_available: 250 })
+    const user = userEvent.setup()
+    renderAt('?collection=col-1')
+
+    await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
+    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+
+    expect(await screen.findByText('Candy Machine created.')).toBeInTheDocument()
+    // One prompt per batch, not one per transaction.
+    expect(signAllTransactions).toHaveBeenCalledTimes(2)
+    expect(signAllTransactions.mock.calls[0][0]).toHaveLength(3)
+    expect(candyMachineApi.prepareConfigLines).toHaveBeenCalledWith('tok', expect.objectContaining({ candy_machine: 'Candy1' }))
+    // Recorded only once nothing was left to load.
+    expect(vi.mocked(candyMachineApi.prepareConfigLines).mock.invocationCallOrder[2]).toBeLessThan(
+      vi.mocked(candyMachineApi.create).mock.invocationCallOrder[0],
+    )
+  })
+
+  it('offers Resume (not a second launch) when loading is interrupted, and finishes from there', async () => {
+    const signAllTransactions = mockBigDrop()
+    signAllTransactions.mockRejectedValueOnce(new Error('User rejected the request.'))
+    vi.mocked(candyMachineApi.prepareConfigLines)
+      .mockResolvedValueOnce({ transactions: ['eA=='], items_loaded: 24, items_after: 80, items_available: 80 })
+      .mockResolvedValueOnce({ transactions: ['eA=='], items_loaded: 24, items_after: 80, items_available: 80 })
+      .mockResolvedValueOnce({ transactions: [], items_loaded: 80, items_after: 80, items_available: 80 })
+    const user = userEvent.setup()
+    renderAt('?collection=col-1')
+
+    await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
+    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('User rejected the request.')
+    expect(candyMachineApi.create).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Launch Candy Machine' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Resume launch' }))
+    expect(await screen.findByText('Candy Machine created.')).toBeInTheDocument()
+    // Resumed the existing drop — the Candy Machine was created exactly once.
+    expect(candyMachineApi.prepareCandyMachine).toHaveBeenCalledTimes(1)
+    expect(candyMachineApi.create).toHaveBeenCalledWith('tok', expect.objectContaining({ candy_machine: 'Candy1' }))
+  })
+})
+

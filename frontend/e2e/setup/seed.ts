@@ -60,3 +60,45 @@ export async function seedPublishedCollection(
   published.sort((a: { token_index: number }, b: { token_index: number }) => a.token_index - b.token_index)
   return { collection, items: published as { id: string; ipfs_image_hash: string; attributes: unknown[] }[] }
 }
+
+
+// A bigger published collection — `count` unique items from 3 layers of 6
+// traits (216 possible combinations). Every trait reuses one tiny PNG: the
+// generator deduplicates by trait combination, not by image bytes. For
+// specs that need more items than one Candy Machine transaction can hold.
+export async function seedLargePublishedCollection(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  name: string,
+  count: number,
+) {
+  if (count > 216) throw new Error('seedLargePublishedCollection supports at most 216 items')
+  const { collection } = await (
+    await request.post(`${API_BASE_URL}/nft/collections`, { headers, data: { name, description: 'Seeded by the e2e suite' } })
+  ).json()
+  for (const layerName of ['Background', 'Body', 'Hat']) {
+    const { layer } = await (
+      await request.post(`${API_BASE_URL}/nft/collections/${collection.id}/layers`, { headers, data: { name: layerName } })
+    ).json()
+    for (let t = 1; t <= 6; t++) {
+      const traitRes = await request.post(`${API_BASE_URL}/nft/layers/${layer.id}/traits`, {
+        headers,
+        multipart: {
+          name: `${layerName} ${t}`,
+          rarity_weight: '10',
+          image: { name: `${layerName}-${t}.png`, mimeType: 'image/png', buffer: Buffer.from(TRAIT_PNGS[0][1], 'base64') },
+        },
+      })
+      expect(traitRes.ok()).toBe(true)
+    }
+  }
+  const generateRes = await request.post(`${API_BASE_URL}/nft/collections/${collection.id}/generate`, { headers, data: { count } })
+  expect(generateRes.status()).toBe(202)
+  await waitForGenerationJob(request, headers, (await generateRes.json()).job.id)
+  const { items } = await (await request.get(`${API_BASE_URL}/nft/collections/${collection.id}/items`, { headers })).json()
+  expect(items).toHaveLength(count)
+  for (const item of items) {
+    expect((await request.post(`${API_BASE_URL}/nft/items/${item.id}/publish`, { headers })).ok()).toBe(true)
+  }
+  return { collection }
+}

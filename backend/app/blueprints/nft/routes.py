@@ -264,7 +264,7 @@ def publish_evm_metadata(collection_id):
     # flow with nft_collection_id set).
     try:
         collection = nft_collections.get_owned_collection(collection_id, get_jwt_identity())
-        result = nft_collections.publish_evm_metadata_folder(collection)
+        result = nft_collections.publish_metadata_folder(collection)
     except nft_collections.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
     except nft_collections.ValidationError as exc:

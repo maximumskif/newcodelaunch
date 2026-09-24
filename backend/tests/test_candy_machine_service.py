@@ -47,6 +47,8 @@ def chain_guards(monkeypatch):
             return state["guards"]
         if path.endswith("/merkle-root"):
             return {"merkle_root": state["merkle_root"]}
+        if path.endswith("/status"):
+            return {"items_available": 1, "items_loaded": 1, "items_redeemed": 0, "items_remaining": 1}
         raise AssertionError(f"unexpected sidecar call: {method} {path}")
 
     monkeypatch.setattr(candy_machine, "_sidecar_request", fake_sidecar_request)
@@ -215,13 +217,15 @@ def test_record_rejects_empty_transaction_signatures(app):
             )
 
 
-def test_prepare_collection_rejects_too_many_items(app):
+def test_prepare_collection_rejects_too_many_items(app, monkeypatch):
     # Pre-flight checked in prepare_collection even though this step's own
     # transaction doesn't need the item list — so a creator who's about to
     # fail step 2 finds out before paying gas for the collection tx.
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
+        # A small cap, not 10,001 real rows.
+        monkeypatch.setattr(candy_machine, "MAX_ITEMS", 3)
         _add_published_items(collection, candy_machine.MAX_ITEMS + 1)
         with pytest.raises(candy_machine.ValidationError):
             candy_machine.prepare_collection(
@@ -233,10 +237,12 @@ def test_prepare_collection_rejects_too_many_items(app):
             )
 
 
-def test_prepare_candy_machine_step_rejects_too_many_items(app):
+def test_prepare_candy_machine_step_rejects_too_many_items(app, monkeypatch):
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
+        # A small cap, not 10,001 real rows.
+        monkeypatch.setattr(candy_machine, "MAX_ITEMS", 3)
         _add_published_items(collection, candy_machine.MAX_ITEMS + 1)
         with pytest.raises(candy_machine.ValidationError):
             candy_machine.prepare_candy_machine_step(
@@ -460,6 +466,11 @@ def test_prepare_candy_machine_step_sends_the_sidecars_own_network_ids(app, monk
             return _FakeResponse(200, {"candy_machine": "y", "transactions": []})
 
         monkeypatch.setattr(candy_machine.requests, "post", fake_post)
+        monkeypatch.setattr(
+            candy_machine.nft_collections,
+            "publish_metadata_folder",
+            lambda c: {"base_uri": "ipfs://QmDir/", "gateway_url": "x", "item_count": 1},
+        )
 
         candy_machine.prepare_candy_machine_step(
             collection=collection,
@@ -472,6 +483,9 @@ def test_prepare_candy_machine_step_sends_the_sidecars_own_network_ids(app, monk
 
         assert captured["network"] == "devnet"
         assert captured["collectionMint"] == OTHER_ADDRESS
+        # Compact items: a shared prefix + folder, not a per-item list.
+        assert (captured["itemsCount"], captured["namePrefix"], captured["uriPrefix"]) == (1, "Test Collection #", "ipfs://QmDir/")
+        assert "items" not in captured
 
 
 def test_get_public_status_rejects_an_unknown_address(app):

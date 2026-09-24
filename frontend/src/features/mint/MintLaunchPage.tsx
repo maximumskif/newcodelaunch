@@ -13,13 +13,14 @@ import {
   candyMachineApi,
   isSolanaMainnet,
   SOLANA_NETWORKS,
+  type AllowlistPhaseInput,
   type CandyMachineDeployment,
   type SolanaNetworkId,
 } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { parseMintLimit } from '../../lib/mintLimit'
-import { signSendAndConfirm } from '../../lib/solana'
+import { signSendAndConfirm, signSendAndConfirmAll } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { AllowlistPhaseFields } from './AllowlistPhaseFields'
@@ -28,12 +29,24 @@ import { useAllowlistPhase } from './useAllowlistPhase'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
+interface PendingDrop {
+  network: SolanaNetworkId
+  creatorWallet: string
+  collectionMint: string
+  candyMachine: string
+  signatures: string[]
+  priceSol: number
+  goLiveDate: string
+  allowlist: AllowlistPhaseInput | undefined
+  mintLimit: number | undefined
+}
+
 export function MintLaunchPage() {
   const [searchParams] = useSearchParams()
   const collectionId = searchParams.get('collection')
   const projectId = searchParams.get('project')
   const { accessToken } = useAuth()
-  const { publicKey, sendTransaction } = useWallet()
+  const { publicKey, sendTransaction, signAllTransactions } = useWallet()
 
   const [collection, setCollection] = useState<NFTCollection | null>(null)
   const [items, setItems] = useState<NFTGeneratedItem[]>([])
@@ -54,6 +67,9 @@ export function MintLaunchPage() {
   const [progressLabel, setProgressLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CandyMachineDeployment | null>(null)
+  // A drop created on-chain but not finished (items still to load, or not
+  // yet recorded) — what "Resume" picks up from.
+  const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null)
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
   // Re-arms the confirmation every time the network changes (so switching
   // straight from one mainnet to another still requires a fresh tick),
@@ -198,27 +214,83 @@ export function MintLaunchPage() {
         )
       }
 
-      setStep('recording')
-      setProgressLabel('Recording…')
-      const { candy_machine: recorded } = await candyMachineApi.create(accessToken, {
-        collection_id: collectionId,
+      // The drop now exists on-chain. Everything from here (loading the
+      // rest of its items, recording it) is resumable, so keep what's
+      // needed to resume if anything below is interrupted.
+      const created: PendingDrop = {
         network,
-        collection_mint: collectionPrepared.collection_mint,
-        candy_machine: candyMachinePrepared.candy_machine,
-        transaction_signatures: signatures,
-        price_sol: Number(priceSol),
-        items_available: publishedItems.length,
-        go_live_date: isoGoLiveDate,
-        creator_wallet: publicKey.toBase58(),
-        project_id: projectId ?? undefined,
+        creatorWallet: publicKey.toBase58(),
+        collectionMint: collectionPrepared.collection_mint,
+        candyMachine: candyMachinePrepared.candy_machine,
+        signatures,
+        priceSol: Number(priceSol),
+        goLiveDate: isoGoLiveDate,
         allowlist,
-        mint_limit,
-      })
-
-      setResult(recorded)
-      setStep('done')
+        mintLimit: mint_limit,
+      }
+      setPendingDrop(created)
+      await finishLaunch(created, connection)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Launch failed')
+      setStep('error')
+    }
+  }
+
+  // Loads whatever items aren't on-chain yet — a batch of transactions per
+  // wallet prompt, each batch resuming from the chain's own count — then
+  // records the drop. Shared by a fresh launch and "Resume".
+  const finishLaunch = async (drop: PendingDrop, connection: Connection) => {
+    if (!accessToken || !collectionId) return
+    for (;;) {
+      setStep('preparing')
+      setProgressLabel('Preparing the next batch of items…')
+      const batch = await candyMachineApi.prepareConfigLines(accessToken, {
+        collection_id: collectionId,
+        network: drop.network,
+        creator_wallet: drop.creatorWallet,
+        candy_machine: drop.candyMachine,
+      })
+      if (batch.transactions.length === 0) break
+      setStep('signing')
+      await signSendAndConfirmAll(
+        batch.transactions,
+        connection,
+        { signAllTransactions, sendTransaction },
+        `items ${batch.items_loaded + 1}–${batch.items_after} of ${batch.items_available}`,
+        setProgressLabel,
+      )
+    }
+
+    setStep('recording')
+    setProgressLabel('Recording…')
+    const { candy_machine: recorded } = await candyMachineApi.create(accessToken, {
+      collection_id: collectionId,
+      network: drop.network,
+      collection_mint: drop.collectionMint,
+      candy_machine: drop.candyMachine,
+      transaction_signatures: drop.signatures,
+      price_sol: drop.priceSol,
+      items_available: publishedItems.length,
+      go_live_date: drop.goLiveDate,
+      creator_wallet: drop.creatorWallet,
+      project_id: projectId ?? undefined,
+      allowlist: drop.allowlist,
+      mint_limit: drop.mintLimit,
+    })
+
+    setPendingDrop(null)
+    setResult(recorded)
+    setStep('done')
+  }
+
+  const handleResume = async () => {
+    if (!pendingDrop) return
+    setError(null)
+    try {
+      const rpcUrl = SOLANA_NETWORKS.find((item) => item.id === pendingDrop.network)!.rpcUrl
+      await finishLaunch(pendingDrop, new Connection(rpcUrl, 'confirmed'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Resuming failed')
       setStep('error')
     }
   }
@@ -377,6 +449,18 @@ export function MintLaunchPage() {
                 </p>
               )}
 
+              {pendingDrop && !isBusy && !result && (
+                <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-sm">
+                  <p className="text-ink">
+                    Your Candy Machine exists on-chain, but launching it didn't finish. Resume to load its remaining items and
+                    record it — it picks up exactly where it stopped, without creating (or paying for) anything twice.
+                  </p>
+                  <Button variant="primary" size="sm" onClick={() => void handleResume()}>
+                    Resume launch
+                  </Button>
+                </div>
+              )}
+
               {result ? (
                 <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
                   <p className="text-success">Candy Machine created.</p>
@@ -396,7 +480,9 @@ export function MintLaunchPage() {
                     {`${window.location.origin}/mint/buy/${result.candy_machine}`}
                   </Link>
                 </div>
-              ) : (
+              ) : pendingDrop ? null : (
+                // Not offered while a created drop is unfinished: a second
+                // launch would create (and charge for) a second Candy Machine.
                 <Button
                   variant="primary"
                   className="w-full"

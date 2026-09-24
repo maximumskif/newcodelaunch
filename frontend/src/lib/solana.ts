@@ -30,3 +30,35 @@ export async function signSendAndConfirm(
   }
   return signature
 }
+
+// Signs a batch of transactions with ONE wallet prompt (signAllTransactions),
+// then sends and confirms them all, throwing if any failed on-chain. For
+// loading a big Candy Machine's items, where one prompt per transaction
+// would mean hundreds. Falls back to one prompt each for a wallet without
+// signAllTransactions.
+export async function signSendAndConfirmAll(
+  base64Transactions: string[],
+  connection: Connection,
+  wallet: Pick<WalletContextState, 'signAllTransactions' | 'sendTransaction'>,
+  label: string,
+  setProgressLabel: (value: string) => void,
+): Promise<string[]> {
+  const transactions = base64Transactions.map((b64) => VersionedTransaction.deserialize(base64ToBytes(b64)))
+  if (!wallet.signAllTransactions) {
+    const signatures: string[] = []
+    for (const [i, b64] of base64Transactions.entries()) {
+      signatures.push(await signSendAndConfirm(b64, connection, wallet.sendTransaction, `${label} (${i + 1}/${transactions.length})`, setProgressLabel))
+    }
+    return signatures
+  }
+  setProgressLabel(`Approve ${label} in your wallet (${transactions.length} transaction${transactions.length === 1 ? '' : 's'})…`)
+  const signed = await wallet.signAllTransactions(transactions)
+  setProgressLabel(`Confirming ${label}…`)
+  const signatures = await Promise.all(signed.map((tx) => connection.sendRawTransaction(tx.serialize())))
+  const confirmations = await Promise.all(signatures.map((signature) => connection.confirmTransaction(signature, 'confirmed')))
+  const failed = confirmations.findIndex((confirmation) => confirmation.value.err)
+  if (failed !== -1) {
+    throw new Error(`${label} failed on-chain: ${JSON.stringify(confirmations[failed].value.err)}`)
+  }
+  return signatures
+}

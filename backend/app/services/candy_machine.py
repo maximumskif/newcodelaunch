@@ -26,7 +26,7 @@ from solders.pubkey import Pubkey
 from ..extensions import db
 from ..models.candy_machine import CandyMachineDeployment
 from ..models.nft import NFTCollection
-from . import blockchain, ipfs
+from . import blockchain, ipfs, nft_collections
 
 SOLANA_NETWORKS = ("solana_devnet", "solana")
 
@@ -50,10 +50,14 @@ class CandyMachineServiceError(RuntimeError):
         self.status_code = status_code
 
 
-# Mirrors services/candy-machine/src/routes/candyMachine.ts's own MAX_ITEMS —
-# checked here too so a too-large collection fails fast with a clean 422
-# before ever calling the sidecar, instead of surfacing as an opaque 502.
-MAX_ITEMS = 20
+# Mirrors services/candy-machine/src/routes/candyMachine.ts's own MAX_ITEMS
+# (the NFT generator's ceiling) — checked here too so a too-large
+# collection fails fast with a clean 422 before ever calling the sidecar.
+# Was 20 while every item's full name and URI had to fit in the creation
+# transaction; items are now stored compactly and loaded in batches.
+MAX_ITEMS = 10_000
+# Core/Candy Machine item name limit, applied to prefix + number.
+MAX_ITEM_NAME_BYTES = 32
 
 # Mirrors the sidecar's ALLOWLIST_GROUP / PUBLIC_GROUP / MAX_ALLOWLIST.
 ALLOWLIST_GROUP = "wl"
@@ -162,8 +166,19 @@ def _validate_launch_inputs(collection: NFTCollection, network: str, price_sol: 
     if not published_items:
         raise ValidationError("Publish at least one item to IPFS before launching a Candy Machine")
     if len(published_items) > MAX_ITEMS:
-        raise ValidationError(f"At most {MAX_ITEMS} published items are supported per candy machine right now")
+        raise ValidationError(f"At most {MAX_ITEMS:,} published items are supported per candy machine")
+    # Each item is named "<collection name> #<n>" on-chain, within 32 bytes.
+    longest = f"{_name_prefix(collection)}{len(published_items)}"
+    if len(longest.encode("utf-8")) > MAX_ITEM_NAME_BYTES:
+        raise ValidationError(
+            f'Item names would be too long for Solana ("{longest}" is over {MAX_ITEM_NAME_BYTES} bytes) — '
+            "shorten the collection's name before launching"
+        )
     return published_items
+
+
+def _name_prefix(collection: NFTCollection) -> str:
+    return f"{collection.name} #"
 
 
 def _parse_iso(value: Any, field: str) -> datetime:
@@ -290,14 +305,19 @@ def prepare_candy_machine_step(
     phase = _validate_allowlist(allowlist, go_live_date)
     limit = _validate_mint_limit(mint_limit)
 
+    # Pin every published item's metadata as one folder: the Candy Machine
+    # then stores the folder URI and "<collection> #" prefix once, and each
+    # item only "<n>" / "<n>.json" — that's what lets a drop hold thousands
+    # of items instead of the ~20 whose full names and URIs fit in one
+    # transaction. Same folder shape as an ERC-721 deploy.
+    folder = nft_collections.publish_metadata_folder(collection)
     payload = {
         "network": _sidecar_network(network),
         "creatorPublicKey": creator_wallet,
         "collectionMint": collection_mint,
-        "items": [
-            {"name": f"{collection.name} #{item.token_index}", "uri": f"ipfs://{item.ipfs_metadata_hash}"}
-            for item in published_items
-        ],
+        "itemsCount": folder["item_count"],
+        "namePrefix": _name_prefix(collection),
+        "uriPrefix": folder["base_uri"],
         "priceSol": price_sol,
         "goLiveDate": go_live_date,
     }
@@ -311,6 +331,21 @@ def prepare_candy_machine_step(
         payload["mintLimit"] = limit
 
     return _sidecar_request("POST", "/internal/candy-machine/prepare-candy-machine", json=payload, timeout=30)
+
+
+def prepare_config_lines(collection: NFTCollection, network: str, creator_wallet: str, candy_machine: str) -> dict[str, Any]:
+    """The next batch of item-loading transactions for a just-created Candy
+    Machine (see the sidecar's prepare-config-lines): where to resume comes
+    from the chain's own itemsLoaded, so an interrupted launch picks up
+    exactly where it stopped. Returns no transactions once all are loaded."""
+    if network not in SOLANA_NETWORKS:
+        raise ValidationError(f"network must be one of: {', '.join(SOLANA_NETWORKS)}")
+    return _sidecar_request(
+        "POST",
+        f"/internal/candy-machine/{candy_machine}/prepare-config-lines",
+        json={"network": _sidecar_network(network), "creatorPublicKey": creator_wallet},
+        timeout=60,
+    )
 
 
 def _verify_guards_on_chain(
@@ -449,6 +484,19 @@ def record_candy_machine(
 
     phase = _validate_allowlist(allowlist, go_live_date)
     limit = _validate_mint_limit(mint_limit)
+    # Every item must actually be loaded — a launch interrupted between
+    # item batches isn't a sellable drop yet (the frontend resumes it).
+    loaded = _sidecar_request(
+        "GET",
+        f"/internal/candy-machine/{candy_machine}/status",
+        params={"network": _sidecar_network(network)},
+        timeout=15,
+    )
+    if loaded.get("items_loaded") != loaded.get("items_available") or loaded.get("items_available") != items_available:
+        raise ValidationError(
+            f"Only {loaded.get('items_loaded')} of {loaded.get('items_available')} items are loaded on-chain — "
+            "finish loading them before recording this drop"
+        )
     _verify_guards_on_chain(
         network, candy_machine, creator_wallet, price_sol, _parse_iso(go_live_date, "go_live_date"), phase, limit
     )

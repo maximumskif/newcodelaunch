@@ -69,10 +69,15 @@ def sidecar(monkeypatch):
         if path.endswith("/mint"):
             return {"transaction": "tx", "nft_mint": "nft"}
         if path.endswith("/status"):
-            return {"items_available": 2, "items_redeemed": 2, "items_remaining": 0}
+            return {"items_available": 2, "items_loaded": 2, "items_redeemed": 2, "items_remaining": 0}
         raise AssertionError(path)
 
     monkeypatch.setattr(candy_machine, "_sidecar_request", fake)
+    monkeypatch.setattr(
+        candy_machine.nft_collections,
+        "publish_metadata_folder",
+        lambda collection: {"base_uri": "ipfs://QmDir/", "gateway_url": "x", "item_count": 2},
+    )
     monkeypatch.setattr(
         blockchain, "get_transaction_status", lambda network, sig: {"status": "success", "account_keys": [CREATOR, CANDY]}
     )
@@ -522,3 +527,75 @@ def test_editing_can_set_and_clear_the_limit(app, sidecar):
     sidecar["guards"] = _with_default_limit(_phased_guards(), None)
     candy_machine.apply_phase_update(deployment, "7" * 88, 0.2, PUBLIC_START.isoformat(), ALLOWLIST)
     assert deployment.mint_limit is None
+
+
+# --- big drops: compact items, batched loading --------------------------------
+
+
+def test_a_name_prefix_too_long_for_solana_fails_before_anything_is_paid(app, sidecar):
+    _, collection = _collection()
+    collection.name = "An Extremely Long Collection Name"
+    _db.session.commit()
+    with pytest.raises(candy_machine.ValidationError, match="shorten the collection's name"):
+        candy_machine.prepare_collection(collection, "solana_devnet", CREATOR, 0.2, PUBLIC_START.isoformat())
+    assert sidecar["calls"] == []
+
+
+def test_config_lines_are_requested_for_the_creator_and_resume_from_the_chain(app, sidecar):
+    _, collection = _collection()
+    sidecar_calls = sidecar["calls"]
+    original = candy_machine._sidecar_request  # the fixture's fake
+
+    def with_config_lines(method, path, *, json=None, params=None, timeout):
+        if path.endswith("/prepare-config-lines"):
+            sidecar_calls.append({"method": method, "path": path, "json": json})
+            return {"transactions": ["a", "b"], "items_loaded": 24, "items_after": 150, "items_available": 150}
+        return original(method, path, json=json, params=params, timeout=timeout)
+
+    candy_machine._sidecar_request = with_config_lines
+    try:
+        result = candy_machine.prepare_config_lines(collection, "solana_devnet", CREATOR, CANDY)
+    finally:
+        candy_machine._sidecar_request = original
+    assert sidecar_calls[-1]["path"] == f"/internal/candy-machine/{CANDY}/prepare-config-lines"
+    # Only who signs is sent — where to resume comes from the chain.
+    assert sidecar_calls[-1]["json"] == {"network": "devnet", "creatorPublicKey": CREATOR}
+    assert result["items_after"] == 150
+
+
+def test_record_refuses_a_drop_whose_items_are_not_all_loaded(app, sidecar, monkeypatch):
+    _, collection = _collection()
+    original = candy_machine._sidecar_request
+
+    def partly_loaded(method, path, *, json=None, params=None, timeout):
+        if path.endswith("/status"):
+            return {"items_available": 2, "items_loaded": 1, "items_redeemed": 0, "items_remaining": 2}
+        return original(method, path, json=json, params=params, timeout=timeout)
+
+    monkeypatch.setattr(candy_machine, "_sidecar_request", partly_loaded)
+    with pytest.raises(candy_machine.ValidationError, match="Only 1 of 2 items are loaded"):
+        _record(collection)
+    assert CandyMachineDeployment.query.count() == 0
+
+
+def test_record_refuses_a_claimed_item_count_the_chain_disagrees_with(app, sidecar):
+    _, collection = _collection()
+    with pytest.raises(candy_machine.ValidationError, match="loaded on-chain"):
+        candy_machine.record_candy_machine(
+            collection=collection, network="solana_devnet", collection_mint=CREATOR, candy_machine=CANDY,
+            transaction_signatures=["5" * 88], price_sol=0.2, items_available=5,
+            go_live_date=PUBLIC_START.isoformat(), creator_wallet=CREATOR, allowlist=ALLOWLIST,
+        )
+
+
+def test_config_lines_route_is_owner_only(app, client, monkeypatch, sidecar):
+    user, collection = _collection()
+    monkeypatch.setattr(candy_machine, "prepare_config_lines", lambda c, n, w, cm: {"transactions": []})
+    body = {"collection_id": collection.id, "network": "solana_devnet", "creator_wallet": CREATOR, "candy_machine": CANDY}
+    stranger = User(wallet_address=OUTSIDER, chain=Chain.SOLANA)
+    _db.session.add(stranger)
+    _db.session.commit()
+    headers = lambda u: {"Authorization": f"Bearer {create_access_token(identity=u.id)}"}  # noqa: E731
+    assert client.post("/api/mint/prepare-config-lines", headers=headers(stranger), json=body).status_code == 404
+    assert client.post("/api/mint/prepare-config-lines", headers=headers(user), json=body).status_code == 200
+    assert client.post("/api/mint/prepare-config-lines", headers=headers(user), json={}).status_code == 400

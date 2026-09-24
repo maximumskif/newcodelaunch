@@ -320,10 +320,12 @@ def get_item_metadata(item: NFTGeneratedItem, collection: NFTCollection) -> dict
     }
 
 
-def publish_evm_metadata_folder(collection: NFTCollection) -> dict[str, Any]:
-    """Pins the collection's metadata as ONE IPFS directory for an ERC-721
-    deploy (contract_templates' erc721_basic: tokenURI = baseURI + tokenId +
-    ".json", token ids starting at 1). Token ids 1..N map to the collection's
+def publish_metadata_folder(collection: NFTCollection) -> dict[str, Any]:
+    """Pins the collection's metadata as ONE IPFS directory — what both an
+    ERC-721 deploy (contract_templates' erc721_basic: tokenURI = baseURI +
+    tokenId + ".json", token ids starting at 1) and a Candy Machine drop
+    (each item stored on-chain as just "<n>" / "<n>.json" under the folder,
+    see candy_machine.prepare_candy_machine_step) point into. Token ids 1..N map to the collection's
     published items in generation order; each file is the same metadata
     shape publish_item_to_ipfs pins per item, named by token id so a
     marketplace's "#3" is token 3. Unpublished items are left out — their

@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { generateSigner, none, publicKey, sol, some, type PublicKey } from "@metaplex-foundation/umi";
+import { generateSigner, none, publicKey, sol, some, type PublicKey, type TransactionBuilder } from "@metaplex-foundation/umi";
+import { setComputeUnitLimit } from "@metaplex-foundation/mpl-toolbox";
 import { createCollection, ruleSet } from "@metaplex-foundation/mpl-core";
 import {
   addConfigLines,
@@ -21,11 +22,74 @@ import { createUmiForCreator, createUmiForWallet, isSolanaNetwork, SOLANA_NETWOR
 
 export const candyMachineRouter = Router();
 
-// Real limit, not a guess — see docs/REBUILD_PROGRESS.md's Candy Machine
-// entry. Mirrors the NFT generator's own MAX_ITEMS_PER_GENERATE_CALL cap
-// (backend/app/services/nft_generation.py): a modest, documented ceiling
-// rather than trying to support arbitrary-size drops in a first pass.
-const MAX_ITEMS = 20;
+// The NFT generator's own per-collection ceiling. Drops this big work
+// because items are stored compactly (see prepare-candy-machine) and loaded
+// in batches after creation (prepare-config-lines) — ~55 items per
+// transaction, so 10,000 is ~180 transactions, signed a batch at a time.
+const MAX_ITEMS = 10_000;
+
+// Token Metadata/Core name and URI limits, which the Candy Machine applies
+// to prefix + per-item suffix.
+const MAX_ITEM_NAME_BYTES = 32;
+const MAX_ITEM_URI_BYTES = 200;
+
+// Adding config lines is compute-heavy: a transaction full of them (by
+// size) blew through the default 200k compute units on a real validator.
+// Every creation/loading transaction asks for Solana's per-tx maximum.
+const COMPUTE_UNITS = 1_400_000;
+
+// Wallets approve batches with one prompt (signAllTransactions); a cap per
+// request keeps any one prompt — and its blockhashes' ~60-90s lifetime —
+// manageable. The frontend just asks again for the next batch.
+const MAX_CONFIG_LINE_TRANSACTIONS = 20;
+
+// An item's on-chain entry is only its suffix: its 1-based position, and
+// that position's file in the collection's pinned metadata folder. The
+// Candy Machine stores the shared name prefix and folder URI once.
+function configLine(position: number) {
+  return { name: String(position), uri: `${position}.json` };
+}
+
+// Greedily packs config lines from `fromIndex` into as few transactions as
+// fit (size-wise, with the compute-limit instruction included), up to
+// `maxTransactions`.
+function configLineBatches(
+  umi: ReturnType<typeof createUmiForCreator>,
+  candyMachine: PublicKey,
+  fromIndex: number,
+  total: number,
+  maxTransactions: number,
+  first?: TransactionBuilder,
+) {
+  const builders: { builder: TransactionBuilder; to: number }[] = [];
+  let index = fromIndex;
+  let base = first;
+  while (index < total && builders.length < maxTransactions) {
+    const start = base ?? setComputeUnitLimit(umi, { units: COMPUTE_UNITS });
+    const lines = (count: number) =>
+      addConfigLines(umi, {
+        candyMachine,
+        index,
+        configLines: Array.from({ length: count }, (_, i) => configLine(index + i + 1)),
+      });
+    let count = 0;
+    while (index + count < total && start.add(lines(count + 1)).fitsInOneTransaction(umi)) count++;
+    if (count === 0) {
+      if (base) {
+        // The creation transaction itself had no room left for any lines.
+        builders.push({ builder: base, to: index });
+        base = undefined;
+        continue;
+      }
+      throw new Error("A single config line doesn't fit in a transaction");
+    }
+    builders.push({ builder: start.add(lines(count)), to: index + count });
+    index += count;
+    base = undefined;
+  }
+  if (base) builders.push({ builder: base, to: index });
+  return builders;
+}
 
 // Allowlist phase (guard groups): a modest cap, same spirit as MAX_ITEMS.
 // Proof size grows with log2(list size), so 2,000 wallets is an 11-hash
@@ -142,11 +206,6 @@ function unwrap<T>(option: { __option: "Some"; value: T } | { __option: "None" }
   return option.__option === "Some" ? option.value : null;
 }
 
-interface PrepareItem {
-  name: string;
-  uri: string;
-}
-
 interface PrepareCollectionBody {
   network?: string;
   creatorPublicKey?: string;
@@ -160,7 +219,11 @@ interface PrepareCandyMachineBody {
   network?: string;
   creatorPublicKey?: string;
   collectionMint?: string;
-  items?: PrepareItem[];
+  itemsCount?: number;
+  // Shared by every item: "<collection name> #" and the metadata folder's
+  // "ipfs://<cid>/". Each item adds only its number and "<number>.json".
+  namePrefix?: string;
+  uriPrefix?: string;
   priceSol?: number;
   goLiveDate?: string;
   allowlist?: AllowlistPhase;
@@ -268,12 +331,23 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
     res.status(400).json({ error: "collectionMint is required" });
     return;
   }
-  if (!body.items || body.items.length === 0) {
-    res.status(400).json({ error: "items must be a non-empty array" });
+  if (!Number.isInteger(body.itemsCount) || body.itemsCount! < 1 || body.itemsCount! > MAX_ITEMS) {
+    res.status(400).json({ error: `itemsCount must be a whole number from 1 to ${MAX_ITEMS}` });
     return;
   }
-  if (body.items.length > MAX_ITEMS) {
-    res.status(400).json({ error: `at most ${MAX_ITEMS} items are supported per candy machine right now` });
+  const itemsCount = body.itemsCount!;
+  if (typeof body.namePrefix !== "string" || typeof body.uriPrefix !== "string" || !body.uriPrefix) {
+    res.status(400).json({ error: "namePrefix and uriPrefix are required" });
+    return;
+  }
+  const nameLength = String(itemsCount).length;
+  const uriLength = `${itemsCount}.json`.length;
+  if (utf8Length(body.namePrefix) + nameLength > MAX_ITEM_NAME_BYTES) {
+    res.status(400).json({ error: `item names ("${body.namePrefix}${itemsCount}") must be at most ${MAX_ITEM_NAME_BYTES} bytes` });
+    return;
+  }
+  if (utf8Length(body.uriPrefix) + uriLength > MAX_ITEM_URI_BYTES) {
+    res.status(400).json({ error: `item URIs must be at most ${MAX_ITEM_URI_BYTES} bytes` });
     return;
   }
   // Beyond just ">0": Umi's sol() -> createAmountFromDecimals does
@@ -315,53 +389,37 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
     const creator = umi.identity;
 
     const candyMachine = generateSigner(umi);
-    const maxNameLength = Math.max(...body.items.map((item) => utf8Length(item.name)));
-    const maxUriLength = Math.max(...body.items.map((item) => utf8Length(item.uri)));
-
     const candyMachineBuilder = await create(umi, {
       candyMachine,
       collection: publicKey(body.collectionMint),
       collectionUpdateAuthority: creator,
-      itemsAvailable: body.items.length,
+      itemsAvailable: itemsCount,
       configLineSettings: {
-        prefixName: "",
-        nameLength: maxNameLength,
-        prefixUri: "",
-        uriLength: maxUriLength,
+        prefixName: body.namePrefix,
+        nameLength,
+        prefixUri: body.uriPrefix,
+        uriLength,
         isSequential: false,
       },
       ...buildGuardConfig(creator.publicKey, body.priceSol, body.goLiveDate, body.allowlist, body.mintLimit),
     });
 
-    const configLinesBuilder = addConfigLines(umi, {
-      candyMachine: candyMachine.publicKey,
-      authority: creator,
-      index: 0,
-      configLines: body.items,
-    });
+    // The creation transaction carries as many items as still fit; the
+    // rest load afterwards via prepare-config-lines, a batch per wallet
+    // prompt. Only this one transaction is signed by the ephemeral
+    // candyMachine key, so only this one is time-critical — later batches
+    // are built fresh on request, from the chain's own itemsLoaded count.
+    const [first] = configLineBatches(
+      umi,
+      candyMachine.publicKey,
+      0,
+      itemsCount,
+      1,
+      setComputeUnitLimit(umi, { units: COMPUTE_UNITS }).add(candyMachineBuilder),
+    );
+    const transactions = [await serializeSigned(umi, first.builder)];
 
-    // Pack config lines into the same transaction as the create instruction
-    // when it fits (small drops, the common case at this item cap); split
-    // into a separate transaction otherwise rather than guessing. Each is
-    // independently valid — inserting config lines is a distinct, retryable
-    // action, not something that leaves a "half-created" account if it runs
-    // in its own transaction. Both still use the same ephemeral candy_machine
-    // signer generated once above, and each gets its own serializeSigned()
-    // call below (its own fresh blockhash fetch, milliseconds apart within
-    // this one request) — so a drop large enough to split still needs its 2
-    // transactions approved reasonably close together — the fix here is
-    // eliminating the gap *between steps*, not within one step's own
-    // transaction(s).
-    const combined = candyMachineBuilder.add(configLinesBuilder);
-    const transactions: string[] = [];
-    if (combined.fitsInOneTransaction(umi)) {
-      transactions.push(await serializeSigned(umi, combined));
-    } else {
-      transactions.push(await serializeSigned(umi, candyMachineBuilder));
-      transactions.push(await serializeSigned(umi, configLinesBuilder));
-    }
-
-    res.json({ candy_machine: candyMachine.publicKey, transactions });
+    res.json({ candy_machine: candyMachine.publicKey, transactions, items_loaded: first.to });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build candy machine transactions" });
   }
@@ -395,6 +453,9 @@ candyMachineRouter.get("/:candyMachineId/status", async (req, res) => {
     const itemsRedeemed = Number(account.itemsRedeemed);
     res.json({
       items_available: itemsAvailable,
+      // How many items have actually been loaded (config lines) — a drop is
+      // only complete once this equals items_available.
+      items_loaded: account.itemsLoaded,
       items_redeemed: itemsRedeemed,
       items_remaining: Math.max(itemsAvailable - itemsRedeemed, 0),
     });
@@ -462,6 +523,44 @@ candyMachineRouter.post("/:candyMachineId/prepare-update", async (req, res) => {
     res.json({ transaction });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build guard update transaction" });
+  }
+});
+
+interface ConfigLinesBody {
+  network?: string;
+  creatorPublicKey?: string;
+}
+
+// The next batch of item-loading transactions for a created Candy Machine.
+// Where to resume and what to load both come from the chain — itemsLoaded,
+// itemsAvailable — not from the caller, so an interrupted launch resumes
+// exactly where it stopped. Signed by the creator (the machine's
+// authority; anyone else is rejected on-chain).
+candyMachineRouter.post("/:candyMachineId/prepare-config-lines", async (req, res) => {
+  const body = req.body as ConfigLinesBody;
+  if (!body.network || !isSolanaNetwork(body.network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+  if (!body.creatorPublicKey) {
+    res.status(400).json({ error: "creatorPublicKey is required" });
+    return;
+  }
+  try {
+    const umi = createUmiForCreator(body.network, body.creatorPublicKey);
+    const account = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId), { commitment: READ_COMMITMENT });
+    const total = Number(account.data.itemsAvailable);
+    const batches = configLineBatches(umi, account.publicKey, account.itemsLoaded, total, MAX_CONFIG_LINE_TRANSACTIONS);
+    const transactions = [];
+    for (const batch of batches) transactions.push(await serializeSigned(umi, batch.builder));
+    res.json({
+      transactions,
+      items_loaded: account.itemsLoaded,
+      items_after: batches.length ? batches[batches.length - 1].to : account.itemsLoaded,
+      items_available: total,
+    });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build config line transactions" });
   }
 });
 
