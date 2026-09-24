@@ -107,9 +107,15 @@ class Config:
 
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
-    # too, just at CoinGecko's lower public rate limit. The others aren't used yet.
+    # too, just at CoinGecko's lower public rate limit. MORALIS/SOLSCAN aren't used yet.
     COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "")
+    # Block-explorer source verification (services/explorer_verification.py).
+    # One Etherscan key covers every EVM network this app deploys to via
+    # Etherscan's multichain V2 API (chainid parameter). Optional: without
+    # it, "Verify source" returns a clean 503 and nothing else changes. The
+    # URL override exists for the e2e suite's local verifier stub.
     ETHERSCAN_API_KEY = os.environ.get("ETHERSCAN_API_KEY", "")
+    ETHERSCAN_API_URL = os.environ.get("ETHERSCAN_API_URL", "https://api.etherscan.io/v2/api")
     MORALIS_API_KEY = os.environ.get("MORALIS_API_KEY", "")
     SOLSCAN_API_KEY = os.environ.get("SOLSCAN_API_KEY", "")
 

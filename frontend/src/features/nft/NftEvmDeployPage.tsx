@@ -13,6 +13,7 @@ import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nft
 import { defaultSymbol, priceToWei } from '../../lib/nftEvm'
 import { useAuth } from '../auth/AuthContext'
 import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from '../contracts/useDeployTemplate'
+import { VerifySource } from '../contracts/VerifySource'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 
 const inputClass = 'mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink'
@@ -292,6 +293,9 @@ export function NftEvmDeployPage() {
                       View on explorer
                     </a>
                   )}
+                  <div>
+                    <VerifySource key={deployment.id} deployment={deployment} />
+                  </div>
                   {enableConfirmed ? (
                     <p className="text-success">Public minting is on — anyone can mint up to {maxPerWallet} each.</p>
                   ) : (

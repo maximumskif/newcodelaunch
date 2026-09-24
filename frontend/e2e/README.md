@@ -72,6 +72,23 @@ faked is global IPFS availability itself — nothing outside this one process
 can resolve these hashes, which nothing in this app's own tests or UI checks
 for anyway.
 
+## Why a local Etherscan stub (that really verifies)
+
+Source verification (`backend/app/services/explorer_verification.py`) talks
+to Etherscan's V2 API, which needs a real key and can't see a local anvil
+chain anyway. `e2e/setup/etherscan_stub.py` stands in for it — but it
+doesn't hand back a canned "Pass". It does what an explorer does: compiles
+the submitted standard-JSON input with the requested solc version and
+compares the runtime bytecode, metadata hash included, byte-for-byte with
+what's actually deployed at that address on anvil (`eth_getCode`). So a
+"Source verified" in `token-deploy.spec.ts`/`nft-evm-deploy.spec.ts` means
+the source, settings, compiler version and contract name this app submits
+genuinely reproduce the deployed contract. (Checked on its own too: a
+one-character source change fails with a bytecode mismatch; an address with
+no code is reported as such.) Like Etherscan, its first status poll answers
+"Pending in queue", so the frontend's polling is exercised. What it can't
+prove: real Etherscan's availability and per-chain API coverage.
+
 ## Why a local OpenAI stub
 
 Same reasoning as Pinata, applied to the AI Trait Identifier's optional
@@ -140,7 +157,9 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   `personal_sign` + real backend verification) → fill an ERC-20 template →
   estimate (real compile + real gas estimate against anvil) → deploy (real
   sign + broadcast + on-chain confirmation) → confirm the backend recorded
-  the address it actually saw on-chain. This is the exact flow
+  the address it actually saw on-chain → verify its source (see "Why a
+  local Etherscan stub" above), scoped to this deploy's own result. This
+  is the exact flow
   `useDeployTemplate.ts`'s own code comment flagged as never smoke-tested
   before this.
 - `candy-machine.spec.ts` — sign in with Solana (real nonce + real

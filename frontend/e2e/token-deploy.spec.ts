@@ -60,4 +60,18 @@ test('a real token deploy: connect, sign in, compile, estimate, deploy, and reco
   const deployedText = page.getByText(/Deployed at/)
   await expect(deployedText).toBeVisible({ timeout: 30_000 })
   await expect(deployedText).toContainText(/0x[a-fA-F0-9]{40}/)
+
+  // Source verification against the local verifying Etherscan stub: it
+  // recompiles exactly what the backend submits and compares that with the
+  // bytecode really deployed on anvil — so "verified" here means the
+  // submitted source/settings reproduce this contract byte-for-byte. The
+  // stub answers "Pending in queue" first, so this also covers polling.
+  //
+  // Scoped to this deploy's own result: the history table below can hold
+  // other, already-verified deployments by the same anvil wallet from
+  // earlier specs in the run, and an unscoped match would pass on those.
+  const result = page.getByTestId('deploy-result')
+  await result.getByRole('button', { name: 'Verify source' }).click()
+  await expect(result.getByText('Verifying source…')).toBeVisible()
+  await expect(result.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
 })

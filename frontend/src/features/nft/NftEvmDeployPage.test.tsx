@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { contractsApi } from '../../lib/contractsApi'
+import { contractsApi, type ContractDeployment } from '../../lib/contractsApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { useDeployTemplate } from '../contracts/useDeployTemplate'
 import { NftEvmDeployPage } from './NftEvmDeployPage'
@@ -78,8 +78,10 @@ const deployment = {
   gas_used: null,
   deployment_cost_native: null,
   explorer_url: 'https://sepolia.etherscan.io/address/0x5FbDB2315678afecb367f032d93F642f64180aa3',
+  verification_status: 'unverified',
+  verification_message: null,
   created_at: '2026-09-24T00:00:00Z',
-}
+} satisfies ContractDeployment
 
 const deploy = vi.fn()
 const writeContractAsync = vi.fn()

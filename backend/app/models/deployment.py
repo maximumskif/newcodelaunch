@@ -40,6 +40,13 @@ class ContractDeployment(db.Model):
     deployment_cost_native = db.Column(db.Float, nullable=True)
     explorer_url = db.Column(db.String(256), nullable=True)
 
+    # Block-explorer source verification (services/explorer_verification.py):
+    # 'unverified' | 'pending' | 'verified' | 'failed'. The guid is the
+    # explorer's handle for a submitted verification, polled until it settles.
+    verification_status = db.Column(db.String(16), nullable=False, default="unverified", server_default="unverified")
+    verification_guid = db.Column(db.String(128), nullable=True)
+    verification_message = db.Column(db.String(512), nullable=True)
+
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
 
     def to_dict(self) -> dict:
@@ -57,5 +64,7 @@ class ContractDeployment(db.Model):
             "gas_used": self.gas_used,
             "deployment_cost_native": self.deployment_cost_native,
             "explorer_url": self.explorer_url,
+            "verification_status": self.verification_status,
+            "verification_message": self.verification_message,
             "created_at": self.created_at.isoformat(),
         }

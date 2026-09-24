@@ -52,6 +52,10 @@ export FLASK_APP="wsgi.py"
 # machine runs it, AND the AI-vision pass itself (previously never
 # exercised in e2e at all, key or no key) now gets real request/response
 # coverage on every run, for free, with no real account or network access.
+# Source verification goes to the local verifying stub (run-etherscan-stub.sh)
+# — never real Etherscan, whatever key a developer's backend/.env holds.
+export ETHERSCAN_API_KEY="e2e-fake-etherscan-key"
+export ETHERSCAN_API_URL="http://127.0.0.1:5557/v2/api"
 export OPENAI_API_KEY="sk-e2e-test-not-for-real-use"
 export OPENAI_BASE_URL="http://127.0.0.1:5556/v1"
 

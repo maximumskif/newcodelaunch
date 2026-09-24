@@ -11,6 +11,7 @@ import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkCo
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { DeploymentHistory } from './DeploymentHistory'
 import { TemplateForm } from './TemplateForm'
+import { VerifySource } from './VerifySource'
 import { useDeployTemplate } from './useDeployTemplate'
 
 const BUSY_STEPS = new Set(['compiling', 'deploying', 'confirming', 'recording'])
@@ -238,14 +239,17 @@ export function DeployPanel({ title, description, templateType, projectId, prese
               </p>
             )}
             {deployment && (
-              <p className="text-sm text-success">
-                Deployed at <span className="font-mono">{deployment.contract_address}</span>.{' '}
-                {deployment.explorer_url && (
-                  <a href={deployment.explorer_url} target="_blank" rel="noreferrer" className="underline">
-                    View on explorer
-                  </a>
-                )}
-              </p>
+              <div className="space-y-1 text-sm" data-testid="deploy-result">
+                <p className="text-success">
+                  Deployed at <span className="font-mono">{deployment.contract_address}</span>.{' '}
+                  {deployment.explorer_url && (
+                    <a href={deployment.explorer_url} target="_blank" rel="noreferrer" className="underline">
+                      View on explorer
+                    </a>
+                  )}
+                </p>
+                <VerifySource key={deployment.id} deployment={deployment} />
+              </div>
             )}
           </div>
         )}

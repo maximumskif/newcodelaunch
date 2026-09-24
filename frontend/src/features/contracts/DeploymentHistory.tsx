@@ -1,5 +1,6 @@
 import { EmptyState } from '../../components/ui/EmptyState'
 import type { ContractDeployment } from '../../lib/contractsApi'
+import { VerifySource } from './VerifySource'
 
 export function DeploymentHistory({ deployments }: { deployments: ContractDeployment[] }) {
   if (deployments.length === 0) {
@@ -20,6 +21,7 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
             <th className="px-4 py-3 font-medium">Template</th>
             <th className="px-4 py-3 font-medium">Network</th>
             <th className="px-4 py-3 font-medium">Contract</th>
+            <th className="px-4 py-3 font-medium">Source</th>
             <th className="px-4 py-3 font-medium">Deployed</th>
           </tr>
         </thead>
@@ -41,6 +43,9 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                 ) : (
                   `${deployment.contract_address.slice(0, 10)}…`
                 )}
+              </td>
+              <td className="px-4 py-3 text-sm">
+                <VerifySource deployment={deployment} compact />
               </td>
               <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
             </tr>

@@ -50,6 +50,9 @@ export interface ContractDeployment {
   gas_used: number | null
   deployment_cost_native: number | null
   explorer_url: string | null
+  // Block-explorer source verification — see VerifySource.tsx.
+  verification_status: 'unverified' | 'pending' | 'verified' | 'failed'
+  verification_message: string | null
   created_at: string
 }
 
@@ -90,6 +93,14 @@ export const contractsApi = {
       { method: 'POST', body: JSON.stringify(payload) },
       token,
     ),
+
+  // Submit the deployment's source to its network's block explorer, then
+  // poll refreshVerification until the status leaves 'pending'.
+  verifySource: (token: string, deploymentId: string) =>
+    request<{ deployment: ContractDeployment }>(`/contracts/deployments/${deploymentId}/verify`, { method: 'POST' }, token),
+
+  refreshVerification: (token: string, deploymentId: string) =>
+    request<{ deployment: ContractDeployment }>(`/contracts/deployments/${deploymentId}/verification`, {}, token),
 
   listDeployments: (token: string) =>
     request<{ deployments: ContractDeployment[] }>('/contracts/deployments', {}, token),

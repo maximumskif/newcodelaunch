@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import blockchain, contract_templates, contracts, projects
+from ...services import blockchain, contract_templates, contracts, explorer_verification, projects
 
 contracts_bp = Blueprint("contracts", __name__)
 
@@ -125,3 +125,40 @@ def get_deployment(contract_address):
         live_status = None
 
     return jsonify(deployment=deployment.to_dict(), live_status=live_status)
+
+
+def _verification_errors(action):
+    try:
+        return action()
+    except explorer_verification.ExplorerNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
+    except explorer_verification.VerificationNotPossibleError as exc:
+        return jsonify(error=str(exc)), 422
+    except explorer_verification.ExplorerRequestError as exc:
+        return jsonify(error=str(exc)), 502
+
+
+@contracts_bp.post("/deployments/<deployment_id>/verify")
+@jwt_required()
+def verify_deployment_source(deployment_id):
+    """Submits the deployment's source to its network's block explorer.
+    Owner-only — by id, not address: an address is only unique per network."""
+    deployment = explorer_verification.get_owned_deployment(deployment_id, get_jwt_identity())
+    if deployment is None:
+        return jsonify(error="Deployment not found"), 404
+    return _verification_errors(
+        lambda: jsonify(deployment=explorer_verification.submit_verification(deployment).to_dict())
+    )
+
+
+@contracts_bp.get("/deployments/<deployment_id>/verification")
+@jwt_required()
+def refresh_deployment_verification(deployment_id):
+    """Polls a pending verification once; the frontend calls this every few
+    seconds until the status leaves 'pending'."""
+    deployment = explorer_verification.get_owned_deployment(deployment_id, get_jwt_identity())
+    if deployment is None:
+        return jsonify(error="Deployment not found"), 404
+    return _verification_errors(
+        lambda: jsonify(deployment=explorer_verification.refresh_verification(deployment).to_dict())
+    )

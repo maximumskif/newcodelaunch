@@ -152,6 +152,12 @@ test('a real ERC-721 deploy of a generated collection: metadata folder pinned, d
   // The collection page now knows where it's deployed (nft_collection_id link).
   await expect(page.getByRole('link', { name: contractAddress })).toBeVisible()
 
+  // Verified against the real deployed bytecode by the local verifying
+  // Etherscan stub — including the identifier derived from a display name
+  // with spaces ("E2E Cool Apes" -> contract E2ECoolApes).
+  await page.getByRole('button', { name: 'Verify source' }).click()
+  await expect(page.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
+
   // Switch public minting on — a real owner-only transaction from the page.
   await page.getByRole('button', { name: 'Enable public minting' }).click()
   await expect(page.getByText(/Public minting is on/)).toBeVisible({ timeout: 30_000 })
