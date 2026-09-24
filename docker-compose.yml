@@ -100,6 +100,44 @@ services:
     # once, before gunicorn starts, rather than requiring a separate manual
     # step every time this stack comes up fresh.
     command: sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 wsgi:app"
+    healthcheck:
+      # Liveness (/api/health), not readiness — see app/blueprints/health.py.
+      # gunicorn only starts after `flask db upgrade` succeeds, so "healthy"
+      # here also means "migrated", which the scheduler below waits on.
+      # python, not wget/curl: the slim base image ships neither.
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Runs `flask reap-stale-generation-jobs` and `flask prune-nonces` every
+  # MAINTENANCE_INTERVAL_SECONDS (default 300) — see
+  # backend/scripts/maintenance-loop.sh for why a loop rather than cron.
+  # Same image and env as `backend`, no ports. One instance is enough; more
+  # would be redundant but harmless (both commands are idempotent).
+  #
+  # Not yet run under Docker — written 2026-09-24 in an environment with no
+  # Docker (same for the backend healthcheck above). The script itself was
+  # run directly against a migrated SQLite database (see
+  # docs/REBUILD_PROGRESS.md); `docker compose up --build` and check
+  # `docker compose logs scheduler` before relying on this.
+  scheduler:
+    build: ./backend
+    container_name: launchpad-scheduler
+    env_file:
+      - ./backend/.env
+    environment:
+      # Same compose-network override as `backend` above — backend/.env's
+      # own DATABASE_URL points at the host's localhost.
+      DATABASE_URL: postgresql://launchpad:launchpad@postgres:5432/launchpad
+    depends_on:
+      # Waits for the backend to be healthy (i.e. migrations applied), so
+      # the first round doesn't fail on missing tables.
+      backend:
+        condition: service_healthy
+    command: sh scripts/maintenance-loop.sh
     restart: unless-stopped
 
   frontend:

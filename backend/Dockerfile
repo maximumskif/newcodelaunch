@@ -23,6 +23,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY migrations ./migrations
 COPY wsgi.py ./
+# docker-compose.yml's `scheduler` service runs scripts/maintenance-loop.sh
+# from this same image.
+COPY scripts ./scripts
 
 EXPOSE 5000
 
