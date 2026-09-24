@@ -206,6 +206,10 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   a second anvil account mints both tokens, paying the real price → each
   `tokenURI` resolves through the stub gateway to the right item's
   metadata (token 1 → first item, token 2 → second).
+  Then the owner's Manage panel: withdraw (the contract's 0.02 ETH of mint
+  proceeds lands in the creator's wallet, contract balance 0), set a new
+  price, and pause minting — each a real owner transaction, each checked
+  on anvil directly.
 - `nft-generator.spec.ts` — sign in with EVM (auth only; nothing here is
   chain-specific) → create a collection, add a layer, and upload a real
   trait image, all through the actual multi-step upload UI (not seeded via

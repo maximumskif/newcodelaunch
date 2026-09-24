@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Connection, VersionedTransaction } from '@solana/web3.js'
@@ -32,15 +32,28 @@ export function MintBuyPage() {
   // Re-fetched when the wallet changes: allowlist eligibility and the price
   // this wallet pays are per wallet.
   const wallet = publicKey?.toBase58()
+  // Only the newest status request may land. On page load the status is
+  // fetched without a wallet and again moments later once the wallet
+  // auto-connects; if the wallet-less response arrived last it overwrote
+  // the per-wallet fields (allowlist eligibility, mint count, limit
+  // reached) — found by the e2e suite as an intermittent missing count.
+  const latestRequest = useRef(0)
   const loadStatus = useCallback(() => {
     if (!candyMachineId) return
+    const request = ++latestRequest.current
     setIsLoading(true)
     setLoadError(null)
     candyMachineApi
       .getPublicStatus(candyMachineId, wallet)
-      .then(setStatus)
-      .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'Failed to load this drop'))
-      .finally(() => setIsLoading(false))
+      .then((fetched) => {
+        if (request === latestRequest.current) setStatus(fetched)
+      })
+      .catch((err) => {
+        if (request === latestRequest.current) setLoadError(err instanceof ApiError ? err.message : 'Failed to load this drop')
+      })
+      .finally(() => {
+        if (request === latestRequest.current) setIsLoading(false)
+      })
   }, [candyMachineId, wallet])
 
   useEffect(() => {

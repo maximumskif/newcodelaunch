@@ -16,6 +16,13 @@ const sepoliaRpcUrl = (import.meta.env.VITE_SEPOLIA_RPC_URL as string | undefine
 export const wagmiConfig = createConfig({
   chains: [sepolia, mainnet, polygonAmoy, polygon, bscTestnet, bsc],
   connectors: [metaMask(), injected()],
+  // wagmi defaults to { multicall: true }, which silently folds contract
+  // reads made in the same tick into one call to the Multicall3 contract —
+  // so reads fail outright on any chain where it isn't deployed (a fresh
+  // local devnet has none; found by the e2e suite's ERC-721 owner panel,
+  // whose reads all failed against anvil). A handful of extra eth_calls is
+  // a better trade than reads that depend on a helper contract existing.
+  batch: { multicall: false },
   transports: {
     [sepolia.id]: http(sepoliaRpcUrl),
     [mainnet.id]: http(),

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
@@ -202,4 +202,36 @@ describe('MintBuyPage', () => {
       expect(screen.queryByText(/Mint for/)).not.toBeInTheDocument()
     })
   })
+
+  it('never lets a slower, wallet-less status response overwrite the per-wallet one', async () => {
+    // Regression: the wallet-less fetch on first render could resolve after
+    // the fetch made once the wallet connected, wiping the wallet's count.
+    let resolveWalletless: (value: PublicCandyMachineStatus) => void = () => {}
+    vi.mocked(candyMachineApi.getPublicStatus).mockImplementation((_id, wallet) =>
+      wallet
+        ? Promise.resolve({ ...baseStatus, items_remaining: 10, mint_limit: 2, wallet_minted: 1 })
+        : new Promise((resolve) => {
+            resolveWalletless = resolve
+          }),
+    )
+    vi.mocked(useWallet).mockReturnValue({ publicKey: null, sendTransaction: vi.fn() } as unknown as ReturnType<typeof useWallet>)
+    const { rerender } = renderAt(baseStatus.candy_machine)
+
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: { toBase58: () => 'BuyerPublicKey111111111111111111111111111' },
+      sendTransaction: vi.fn(),
+    } as unknown as ReturnType<typeof useWallet>)
+    rerender(
+      <MemoryRouter initialEntries={[`/mint/buy/${baseStatus.candy_machine}`]}>
+        <Routes>
+          <Route path="/mint/buy/:candyMachineId" element={<MintBuyPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText("You've minted 1 of 2 allowed per wallet.")).toBeInTheDocument()
+
+    await act(async () => resolveWalletless({ ...baseStatus, items_remaining: 10, mint_limit: 2, wallet_minted: null }))
+    expect(screen.getByText("You've minted 1 of 2 allowed per wallet.")).toBeInTheDocument()
+  })
 })
+

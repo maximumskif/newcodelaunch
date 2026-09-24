@@ -15,7 +15,7 @@ const IPFS_GATEWAY = 'http://127.0.0.1:5555/ipfs/'
 
 // anvil's default account #0 is the injected wallet (fixtures/injectedEvmWallet.ts);
 // #1 plays a separate buyer who mints once public minting is on.
-const CREATOR_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+const CREATOR_ADDRESS: Address = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const BUYER_PRIVATE_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'
 
 // run-anvil.sh runs anvil with Sepolia's chain id, so the app's real config needs no changes.
@@ -136,4 +136,32 @@ test('a real ERC-721 deploy of a generated collection: metadata folder pinned, d
     expect(metadata.image).toBe(`ipfs://${published[Number(tokenId) - 1].ipfs_image_hash}`)
     expect(metadata.attributes).toEqual(published[Number(tokenId) - 1].attributes)
   }
+
+  // Owner tools: the buyer paid 0.02 ETH into the contract. The creator
+  // withdraws it, changes the price and pauses minting from the page's
+  // Manage panel — each a real owner-only transaction from the injected
+  // wallet, each checked on the chain directly afterwards.
+  await page.reload()
+  await page.getByRole('button', { name: 'Manage' }).click()
+  const panel = page.getByTestId('erc721-manage')
+  await expect(panel).toContainText('2 / 2 minted')
+  await expect(panel).toContainText('0.02 ETH')
+
+  const creatorBefore = await publicClient.getBalance({ address: CREATOR_ADDRESS })
+  await panel.getByRole('button', { name: 'Withdraw to owner' }).click()
+  await expect(panel.getByText('Proceeds withdrawn to the owner wallet.')).toBeVisible({ timeout: 30_000 })
+  expect(await publicClient.getBalance({ address: contractAddress })).toBe(0n)
+  // +0.02 ETH, minus the withdraw transaction's own gas.
+  const creatorGain = (await publicClient.getBalance({ address: CREATOR_ADDRESS })) - creatorBefore
+  expect(creatorGain > parseEther('0.019') && creatorGain < parseEther('0.02')).toBe(true)
+
+  await panel.getByLabel('New mint price (ETH)').fill('0.05')
+  await panel.getByRole('button', { name: 'Set price' }).click()
+  await expect(panel.getByText('Mint price updated.')).toBeVisible({ timeout: 30_000 })
+  expect(await read<bigint>('mintPrice')).toBe(parseEther('0.05'))
+
+  await panel.getByRole('button', { name: 'Pause minting' }).click()
+  await expect(panel.getByText('Minting status updated.')).toBeVisible({ timeout: 30_000 })
+  expect(await read<boolean>('mintingEnabled')).toBe(false)
+  await expect(panel).toContainText('Minting paused')
 })

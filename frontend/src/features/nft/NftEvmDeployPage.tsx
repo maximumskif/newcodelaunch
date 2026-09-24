@@ -9,26 +9,17 @@ import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
 import { contractsApi, type ContractDeployment } from '../../lib/contractsApi'
+import { ERC721_MANAGE_ABI } from '../../lib/erc721Abi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { defaultSymbol, priceToWei } from '../../lib/nftEvm'
 import { useAuth } from '../auth/AuthContext'
 import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from '../contracts/useDeployTemplate'
 import { VerifySource } from '../contracts/VerifySource'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
+import { Erc721ManagePanel } from './Erc721ManagePanel'
 
 const inputClass = 'mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink'
 
-// Just the one owner-only function this page calls after deploying — the
-// full ABI comes from the backend's real compile at deploy time.
-const SET_MINTING_ENABLED_ABI = [
-  {
-    type: 'function',
-    name: 'setMintingEnabled',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'enabled', type: 'bool' }],
-    outputs: [],
-  },
-] as const
 
 export function NftEvmDeployPage() {
   const [searchParams] = useSearchParams()
@@ -44,6 +35,7 @@ export function NftEvmDeployPage() {
   const [items, setItems] = useState<NFTGeneratedItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [pastDeployments, setPastDeployments] = useState<ContractDeployment[]>([])
+  const [managing, setManaging] = useState<string | null>(null)
 
   const [symbol, setSymbol] = useState('')
   const [mintPrice, setMintPrice] = useState('0.01')
@@ -152,7 +144,7 @@ export function NftEvmDeployPage() {
     try {
       const hash = await writeContractAsync({
         address: deployment.contract_address as `0x${string}`,
-        abi: SET_MINTING_ENABLED_ABI,
+        abi: ERC721_MANAGE_ABI,
         functionName: 'setMintingEnabled',
         args: [true],
         chainId: NETWORK_TO_CHAIN_ID[deployment.network],
@@ -330,17 +322,28 @@ export function NftEvmDeployPage() {
       {pastDeployments.length > 0 && (
         <section className="max-w-xl space-y-2">
           <h2 className="text-base font-medium text-ink">This collection is deployed at</h2>
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-3 text-sm">
             {pastDeployments.map((past) => (
-              <li key={past.id} className="flex flex-wrap items-center gap-2 text-ink-muted">
-                <span className="text-ink">{EVM_NETWORKS.find((n) => n.id === past.network)?.label ?? past.network}</span>
-                {past.explorer_url ? (
-                  <a href={past.explorer_url} target="_blank" rel="noreferrer" className="font-mono text-accent-400 hover:underline">
-                    {past.contract_address}
-                  </a>
-                ) : (
-                  <span className="font-mono">{past.contract_address}</span>
-                )}
+              <li key={past.id} className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-ink-muted">
+                  <span className="text-ink">{EVM_NETWORKS.find((n) => n.id === past.network)?.label ?? past.network}</span>
+                  {past.explorer_url ? (
+                    <a href={past.explorer_url} target="_blank" rel="noreferrer" className="font-mono text-accent-400 hover:underline">
+                      {past.contract_address}
+                    </a>
+                  ) : (
+                    <span className="font-mono">{past.contract_address}</span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={managing === past.id}
+                    onClick={() => setManaging((current) => (current === past.id ? null : past.id))}
+                  >
+                    {managing === past.id ? 'Hide' : 'Manage'}
+                  </Button>
+                </div>
+                {managing === past.id && collection && <Erc721ManagePanel deployment={past} collectionId={collection.id} />}
               </li>
             ))}
           </ul>
