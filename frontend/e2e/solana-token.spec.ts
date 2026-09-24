@@ -117,3 +117,58 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   const card = page.locator('li, article, div').filter({ hasText: 'E2E SPL Project' }).filter({ hasText: 'E2ET' }).last()
   await expect(card).toContainText(`E2ET · ${mintAddress!.slice(0, 10)}`)
 })
+
+test('owner tools on a token that kept its authorities: mint more, then revoke freeze and mint — each checked on-chain', async ({ page }) => {
+  test.setTimeout(90_000)
+  const connection = new Connection(VALIDATOR_RPC_URL, 'confirmed')
+  const readMint = async (mint: PublicKey) =>
+    ((await connection.getParsedAccountInfo(mint)).value!.data as { parsed: { info: Record<string, unknown> } }).parsed.info
+
+  await page.goto('/tokens?chain=solana')
+  const connectButton = page.getByRole('button', { name: 'Connect Solana Wallet' })
+  if (await connectButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await connectButton.click()
+    await page.getByRole('button', { name: /Phantom/ }).click()
+  }
+  await page.getByRole('button', { name: /^Sign in with/ }).click()
+  await expect(page.getByText(new RegExp(`SOLANA · ${CREATOR_PUBLIC_KEY.slice(0, 6)}`))).toBeVisible({ timeout: 15_000 })
+
+  // Launch keeping both authorities (both boxes unticked).
+  await page.getByLabel('Token name').fill('Keeper Token')
+  await page.getByLabel('Symbol').fill('KEEP')
+  await page.getByLabel('Initial supply (whole tokens)').fill('1000')
+  await page.getByLabel('Decimals').fill('2')
+  await page.getByLabel(/Fixed supply/).uncheck()
+  await page.getByLabel(/Revoke freeze authority/).uncheck()
+  await page.getByRole('button', { name: 'Launch token' }).click()
+  await expect(page.getByText(/Keeper Token \(KEEP\) launched/)).toBeVisible({ timeout: 45_000 })
+  const mint = new PublicKey((await page.locator('p.font-mono').first().textContent())!.trim())
+
+  const row = page.getByRole('row', { name: /Keeper Token/ })
+  await expect(row).toContainText('Mintable')
+  await row.getByRole('button', { name: 'Manage KEEP' }).click()
+  const panel = page.getByTestId('token-manage')
+
+  // Mint 500 more — signed by the fixture wallet (the mint authority).
+  await panel.getByLabel(/Mint more/).fill('500')
+  await panel.getByRole('button', { name: 'Mint' }).click()
+  await expect(panel.getByText('Minted.')).toBeVisible({ timeout: 30_000 })
+  expect((await readMint(mint)).supply).toBe('150000')
+  await expect(panel).toContainText('1,500')
+
+  // Revoke freeze, then fix the supply — each behind a confirmation.
+  await panel.getByRole('button', { name: 'Revoke freeze authority…' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Revoke freeze authority' }).click()
+  await expect(panel.getByText('Freeze authority revoked.')).toBeVisible({ timeout: 30_000 })
+  expect((await readMint(mint)).freezeAuthority).toBeNull()
+
+  await panel.getByRole('button', { name: 'Fix supply…' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Revoke mint authority' }).click()
+  await expect(panel.getByText('Supply is now fixed.')).toBeVisible({ timeout: 30_000 })
+  expect((await readMint(mint)).mintAuthority).toBeNull()
+
+  // The history row reflects what the backend re-read from the chain.
+  await expect(row).toContainText('Fixed')
+  await expect(row).not.toContainText('Freezable')
+  await expect(row).toContainText('1,500')
+})

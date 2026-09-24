@@ -212,3 +212,68 @@ def get_user_token_launches(user_id: str) -> list[SolanaTokenLaunch]:
     return (
         SolanaTokenLaunch.query.filter_by(user_id=user_id).order_by(SolanaTokenLaunch.created_at.desc()).all()
     )
+
+
+# --- owner tools for a launched token ----------------------------------------
+
+TOKEN_ACTIONS = ("mint", "revokeMint", "revokeFreeze")
+
+
+def get_owned_launch(launch_id: str, user_id: str) -> SolanaTokenLaunch:
+    launch = db.session.get(SolanaTokenLaunch, launch_id)
+    if launch is None or launch.user_id != user_id:
+        raise NotFoundError(f"Token launch not found: {launch_id}")
+    return launch
+
+
+def _live_mint(launch: SolanaTokenLaunch) -> dict[str, Any]:
+    mint = blockchain.get_solana_mint_info(launch.network, launch.mint_address)
+    if mint.get("status") != "success":
+        raise ValidationError(f"Couldn't read the mint on-chain right now (status: {mint.get('status')})")
+    return mint
+
+
+def refresh_token_launch(launch: SolanaTokenLaunch) -> dict[str, Any]:
+    """Re-reads the mint account and updates what's shown — supply and
+    whether each authority still exists. No client input involved: the
+    chain is the source of truth, so this is safe to call any time (the
+    Manage panel calls it after every owner action). Also returns the
+    current authority addresses, which may differ from the launch-time
+    creator if an authority was transferred outside this app."""
+    mint = _live_mint(launch)
+    launch.decimals = mint["decimals"]
+    launch.supply_raw = mint["supply"]
+    launch.mint_authority_revoked = mint["mint_authority"] is None
+    launch.freeze_authority_revoked = mint["freeze_authority"] is None
+    db.session.commit()
+    return {"token": launch.to_dict(), "mint_authority": mint["mint_authority"], "freeze_authority": mint["freeze_authority"]}
+
+
+def prepare_token_action(launch: SolanaTokenLaunch, action: str, amount: Optional[str] = None) -> dict[str, Any]:
+    """Builds an owner action for the current on-chain authority's wallet to
+    sign: mint more (whole tokens, into that wallet), or revoke the mint or
+    freeze authority for good. Persists nothing — refresh_token_launch
+    re-reads the chain once the transaction has landed."""
+    if action not in TOKEN_ACTIONS:
+        raise ValidationError(f"action must be one of: {', '.join(TOKEN_ACTIONS)}")
+    mint = _live_mint(launch)
+    authority = mint["freeze_authority"] if action == "revokeFreeze" else mint["mint_authority"]
+    if authority is None:
+        raise ValidationError(
+            "This token's supply is already fixed — its mint authority was revoked"
+            if action != "revokeFreeze"
+            else "This token's freeze authority is already revoked"
+        )
+
+    payload: dict[str, Any] = {"network": _sidecar_network(launch.network), "authorityPublicKey": authority, "action": action}
+    if action == "mint":
+        raw = _raw_amount(amount or "", mint["decimals"])
+        if int(mint["supply"]) + raw > U64_MAX:
+            max_more = (U64_MAX - int(mint["supply"])) // 10 ** mint["decimals"]
+            raise ValidationError(f"That would overflow the mint's u64 supply — at most {max_more:,} more tokens")
+        payload["amount"] = str(raw)
+
+    result = _sidecar_request(
+        "POST", f"/internal/token/{launch.mint_address}/prepare-action", json=payload, timeout=30
+    )
+    return {"transaction": result["transaction"], "authority": authority}

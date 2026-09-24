@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Connection } from '@solana/web3.js'
 
@@ -15,6 +15,7 @@ import { formatTokenAmount, solanaTokensApi, validateTokenForm, type SolanaToken
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
+import { SolanaTokenManage } from './SolanaTokenManage'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
@@ -375,13 +376,23 @@ export function SolanaTokenPanel({ projectId = null }: { projectId?: string | nu
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium text-ink">Your Solana tokens</h2>
-        <SolanaTokenHistory launches={history} />
+        <SolanaTokenHistory
+          launches={history}
+          onUpdated={(updated) => setHistory((current) => current.map((item) => (item.id === updated.id ? updated : item)))}
+        />
       </section>
     </div>
   )
 }
 
-function SolanaTokenHistory({ launches }: { launches: SolanaTokenLaunch[] }) {
+function SolanaTokenHistory({
+  launches,
+  onUpdated,
+}: {
+  launches: SolanaTokenLaunch[]
+  onUpdated: (token: SolanaTokenLaunch) => void
+}) {
+  const [managing, setManaging] = useState<string | null>(null)
   if (launches.length === 0) {
     return (
       <EmptyState
@@ -402,33 +413,58 @@ function SolanaTokenHistory({ launches }: { launches: SolanaTokenLaunch[] }) {
             <th className="px-4 py-3 font-medium">Network</th>
             <th className="px-4 py-3 font-medium">Mint</th>
             <th className="px-4 py-3 font-medium">Launched</th>
+            <th className="px-4 py-3 font-medium">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {launches.map((launch) => (
-            <tr key={launch.id} className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
-              <td className="px-4 py-3 text-ink">
-                {launch.name} <span className="text-ink-faint">{launch.symbol}</span>
-              </td>
-              <td className="px-4 py-3 text-ink">
-                {formatTokenAmount(launch.supply_raw, launch.decimals)}
-                <span className="ml-2 inline-flex gap-1">
-                  {launch.mint_authority_revoked ? <Badge tone="success">Fixed</Badge> : <Badge tone="warning">Mintable</Badge>}
-                  {!launch.freeze_authority_revoked && <Badge tone="warning">Freezable</Badge>}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-ink">{SOLANA_NETWORKS.find((n) => n.id === launch.network)?.label ?? launch.network}</td>
-              <td className="px-4 py-3 font-mono text-ink">
-                {launch.explorer_url ? (
-                  <a href={launch.explorer_url} target="_blank" rel="noreferrer" className="text-accent-400 hover:underline">
-                    {launch.mint_address.slice(0, 10)}…
-                  </a>
-                ) : (
-                  `${launch.mint_address.slice(0, 10)}…`
-                )}
-              </td>
-              <td className="px-4 py-3 text-ink-faint">{new Date(launch.created_at).toLocaleString()}</td>
-            </tr>
+            <Fragment key={launch.id}>
+              <tr className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
+                <td className="px-4 py-3 text-ink">
+                  {launch.name} <span className="text-ink-faint">{launch.symbol}</span>
+                </td>
+                <td className="px-4 py-3 text-ink">
+                  {formatTokenAmount(launch.supply_raw, launch.decimals)}
+                  <span className="ml-2 inline-flex gap-1">
+                    {launch.mint_authority_revoked ? <Badge tone="success">Fixed</Badge> : <Badge tone="warning">Mintable</Badge>}
+                    {!launch.freeze_authority_revoked && <Badge tone="warning">Freezable</Badge>}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-ink">{SOLANA_NETWORKS.find((n) => n.id === launch.network)?.label ?? launch.network}</td>
+                <td className="px-4 py-3 font-mono text-ink">
+                  {launch.explorer_url ? (
+                    <a href={launch.explorer_url} target="_blank" rel="noreferrer" className="text-accent-400 hover:underline">
+                      {launch.mint_address.slice(0, 10)}…
+                    </a>
+                  ) : (
+                    `${launch.mint_address.slice(0, 10)}…`
+                  )}
+                </td>
+                <td className="px-4 py-3 text-ink-faint">{new Date(launch.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3">
+                  {!(launch.mint_authority_revoked && launch.freeze_authority_revoked) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={managing === launch.id}
+                      aria-label={`Manage ${launch.symbol}`}
+                      onClick={() => setManaging((current) => (current === launch.id ? null : launch.id))}
+                    >
+                      {managing === launch.id ? 'Hide' : 'Manage'}
+                    </Button>
+                  )}
+                </td>
+              </tr>
+              {managing === launch.id && (
+                <tr>
+                  <td colSpan={6} className="px-4 pb-4">
+                    <SolanaTokenManage launch={launch} onUpdated={onUpdated} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

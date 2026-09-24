@@ -19,6 +19,16 @@ export interface SolanaTokenLaunch {
   created_at: string
 }
 
+export type TokenAction = 'mint' | 'revokeMint' | 'revokeFreeze'
+
+export interface LiveTokenState {
+  token: SolanaTokenLaunch
+  // Current on-chain authorities (null = revoked). May not be the
+  // launch-time creator if an authority was transferred outside this app.
+  mint_authority: string | null
+  freeze_authority: string | null
+}
+
 export interface PreparedTokenLaunch {
   mint: string
   transaction: string
@@ -115,4 +125,16 @@ export const solanaTokensApi = {
     request<{ token: SolanaTokenLaunch }>('/solana-tokens', { method: 'POST', body: JSON.stringify(payload) }, token),
 
   list: (token: string) => request<{ tokens: SolanaTokenLaunch[] }>('/solana-tokens', {}, token),
+
+  // Owner tools. prepareAction's transaction must be signed by `authority`
+  // (the mint's current on-chain authority); refresh re-reads the mint.
+  prepareAction: (token: string, launchId: string, payload: { action: TokenAction; amount?: string }) =>
+    request<{ transaction: string; authority: string }>(
+      `/solana-tokens/${launchId}/prepare-action`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      token,
+    ),
+
+  refresh: (token: string, launchId: string) =>
+    request<LiveTokenState>(`/solana-tokens/${launchId}/refresh`, { method: 'POST' }, token),
 }

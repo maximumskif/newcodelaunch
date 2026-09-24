@@ -412,3 +412,77 @@ def test_first_linked_launch_wins(app, monkeypatch):
     _db.session.commit()
     projects.link_solana_token(project, other)
     assert project.solana_token_launch_id == first.id
+
+
+# --- owner tools ---------------------------------------------------------------
+
+TRANSFERRED_AUTHORITY = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+
+
+def _kept_authorities(**overrides):
+    mint = {"status": "success", "decimals": 2, "supply": "100000", "mint_authority": CREATOR, "freeze_authority": CREATOR}
+    mint.update(overrides)
+    return mint
+
+
+def test_mint_more_is_built_for_the_current_on_chain_authority(app, monkeypatch, sidecar_calls):
+    _chain(monkeypatch, mint=_kept_authorities(mint_authority=TRANSFERRED_AUTHORITY))
+    launch = _record(_make_user())
+
+    result = solana_tokens.prepare_token_action(launch, "mint", "500")
+
+    call = sidecar_calls[-1]
+    assert call["path"] == f"/internal/token/{MINT}/prepare-action"
+    # Whoever holds the authority now — not necessarily the launch-time creator.
+    assert call["json"]["authorityPublicKey"] == TRANSFERRED_AUTHORITY
+    assert call["json"]["amount"] == "50000"  # 500 tokens x 10^2
+    assert result["authority"] == TRANSFERRED_AUTHORITY
+
+
+def test_actions_on_an_already_revoked_authority_are_refused(app, monkeypatch, sidecar_calls):
+    _chain(monkeypatch, mint=_kept_authorities(mint_authority=None, freeze_authority=None))
+    launch = _record(_make_user())
+    with pytest.raises(solana_tokens.ValidationError, match="supply is already fixed"):
+        solana_tokens.prepare_token_action(launch, "mint", "1")
+    with pytest.raises(solana_tokens.ValidationError, match="freeze authority is already revoked"):
+        solana_tokens.prepare_token_action(launch, "revokeFreeze")
+    assert not any(c["path"].endswith("/prepare-action") for c in sidecar_calls)
+
+
+def test_mint_more_rejects_bad_amounts_and_u64_overflow(app, monkeypatch, sidecar_calls):
+    _chain(monkeypatch, mint=_kept_authorities(decimals=0, supply=str(2**64 - 10)))
+    launch = _record(_make_user())
+    with pytest.raises(solana_tokens.ValidationError, match="at most 9 more tokens"):
+        solana_tokens.prepare_token_action(launch, "mint", "10")
+    with pytest.raises(solana_tokens.ValidationError, match="positive whole number"):
+        solana_tokens.prepare_token_action(launch, "mint", "1.5")
+    with pytest.raises(solana_tokens.ValidationError, match="action must be one of"):
+        solana_tokens.prepare_token_action(launch, "burnEverything")
+
+
+def test_refresh_reads_supply_and_authorities_back_from_the_chain(app, monkeypatch):
+    _chain(monkeypatch, mint=_kept_authorities())
+    launch = _record(_make_user())
+    assert launch.mint_authority_revoked is False
+
+    _chain(monkeypatch, mint=_kept_authorities(supply="150000", mint_authority=None))
+    refreshed = solana_tokens.refresh_token_launch(launch)
+
+    assert refreshed["token"]["supply_raw"] == "150000"
+    assert refreshed["token"]["mint_authority_revoked"] is True
+    assert refreshed["token"]["freeze_authority_revoked"] is False
+    assert (refreshed["mint_authority"], refreshed["freeze_authority"]) == (None, CREATOR)
+
+
+def test_owner_tool_routes_are_owner_only(app, client, monkeypatch, sidecar_calls):
+    _chain(monkeypatch, mint=_kept_authorities())
+    owner = _make_user()
+    launch = _record(owner)
+    stranger = _make_user(wallet="SoLOther11111111111111111111111111111111111")
+
+    for path, body in [(f"/api/solana-tokens/{launch.id}/prepare-action", {"action": "revokeMint"}), (f"/api/solana-tokens/{launch.id}/refresh", None)]:
+        assert client.post(path, headers=_auth(stranger), json=body or {}).status_code == 404
+        assert client.post(path, headers=_auth(owner), json=body or {}).status_code == 200
+    assert client.post(
+        f"/api/solana-tokens/{launch.id}/prepare-action", headers=_auth(owner), json={"action": "mint", "amount": 5}
+    ).status_code == 400

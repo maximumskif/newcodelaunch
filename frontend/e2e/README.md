@@ -198,7 +198,9 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   the mint's decimals/supply, mint and freeze authority both revoked, the
   creator holding the full supply, and a real Token Metadata account
   carrying the token's name — and the project dashboard shows the project
-  linked to that mint.
+  linked to that mint. A second test launches a token keeping both
+  authorities and uses its Manage panel: mint 500 more, revoke freeze, fix
+  the supply — reading the mint account on the validator after each.
 - `nft-evm-deploy.spec.ts` — seed a published two-item collection via the
   API → deploy it as an ERC-721 through the actual `/nft/deploy-evm` page
   (metadata folder pinned through the Pinata stub's directory support, real

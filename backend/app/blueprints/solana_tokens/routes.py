@@ -101,3 +101,44 @@ def record_token_launch():
 def list_token_launches():
     launches = solana_tokens.get_user_token_launches(get_jwt_identity())
     return jsonify(tokens=[launch.to_dict() for launch in launches])
+
+
+def _owned_launch_or_404(launch_id):
+    try:
+        return solana_tokens.get_owned_launch(launch_id, get_jwt_identity()), None
+    except solana_tokens.NotFoundError as exc:
+        return None, (jsonify(error=str(exc)), 404)
+
+
+@solana_tokens_bp.post("/<launch_id>/prepare-action")
+@jwt_required()
+def prepare_token_action(launch_id):
+    """Owner tools: mint more, or revoke the mint/freeze authority. The
+    returned transaction must be signed by the current on-chain authority
+    (returned alongside it); then POST .../refresh re-reads the chain."""
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    amount = data.get("amount")
+    if amount is not None and not isinstance(amount, str):
+        return jsonify(error="amount must be a string of whole tokens"), 400
+    try:
+        return jsonify(solana_tokens.prepare_token_action(launch, str(data.get("action", "")), amount))
+    except solana_tokens.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+        return jsonify(error=str(exc)), status
+
+
+@solana_tokens_bp.post("/<launch_id>/refresh")
+@jwt_required()
+def refresh_token_launch(launch_id):
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    try:
+        return jsonify(solana_tokens.refresh_token_launch(launch))
+    except solana_tokens.ValidationError as exc:
+        return jsonify(error=str(exc)), 502

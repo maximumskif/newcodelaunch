@@ -1,7 +1,13 @@
 import { Router } from "express";
-import { generateSigner, none, percentAmount } from "@metaplex-foundation/umi";
+import { generateSigner, none, percentAmount, publicKey } from "@metaplex-foundation/umi";
 import { createAndMint, mplTokenMetadata, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
-import { AuthorityType, setAuthority } from "@metaplex-foundation/mpl-toolbox";
+import {
+  AuthorityType,
+  createIdempotentAssociatedToken,
+  findAssociatedTokenPda,
+  mintTokensTo,
+  setAuthority,
+} from "@metaplex-foundation/mpl-toolbox";
 
 import { createUmiForWallet, isSolanaNetwork } from "../lib/umi.js";
 import { serializeSigned } from "../lib/transactions.js";
@@ -132,5 +138,71 @@ tokenRouter.post("/prepare", async (req, res) => {
     res.json({ mint: mint.publicKey, transaction });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build token transaction" });
+  }
+});
+
+interface TokenActionBody {
+  network?: string;
+  authorityPublicKey?: string;
+  action?: string;
+  // Raw base units (for "mint"), as a decimal string — see PrepareTokenBody.
+  amount?: string;
+}
+
+const TOKEN_ACTIONS = ["mint", "revokeMint", "revokeFreeze"] as const;
+
+// Owner tools for a token launched here with an authority kept: mint more
+// into the authority's own wallet, or give up the mint / freeze authority
+// for good. The authority's wallet is a noop signer — it signs client-side,
+// and the program rejects anyone who isn't the current authority. No
+// ephemeral signer: nothing new is created (the authority's token account
+// is created only if it no longer exists).
+tokenRouter.post("/:mint/prepare-action", async (req, res) => {
+  const body = req.body as TokenActionBody;
+
+  if (!body.network || !isSolanaNetwork(body.network)) {
+    res.status(400).json({ error: "network must be one of: devnet, mainnet-beta" });
+    return;
+  }
+  if (!body.authorityPublicKey) {
+    res.status(400).json({ error: "authorityPublicKey is required" });
+    return;
+  }
+  if (!TOKEN_ACTIONS.includes(body.action as (typeof TOKEN_ACTIONS)[number])) {
+    res.status(400).json({ error: `action must be one of: ${TOKEN_ACTIONS.join(", ")}` });
+    return;
+  }
+  if (body.action === "mint" && (typeof body.amount !== "string" || !/^[1-9][0-9]*$/.test(body.amount) || BigInt(body.amount) > U64_MAX)) {
+    res.status(400).json({ error: "amount must be a positive integer string that fits in a u64" });
+    return;
+  }
+
+  try {
+    const umi = createUmiForWallet(body.network, body.authorityPublicKey);
+    const authority = umi.identity;
+    const mint = publicKey(req.params.mint);
+
+    const ata = findAssociatedTokenPda(umi, { mint, owner: authority.publicKey });
+    const builder =
+      body.action === "mint"
+        ? // The standard ATA program's idempotent create (a no-op if the
+          // account exists), not mpl-toolbox's createTokenIfMissing: that
+          // routes through Metaplex's separate mplTokenExtras program — an
+          // extra on-chain dependency for no benefit here, and absent from
+          // a local validator (found by probing one).
+          createIdempotentAssociatedToken(umi, { ata, owner: authority.publicKey, mint }).add(
+            mintTokensTo(umi, { mint, token: ata, mintAuthority: authority, amount: BigInt(body.amount!) }),
+          )
+        : setAuthority(umi, {
+            owned: mint,
+            owner: authority,
+            authorityType: body.action === "revokeMint" ? AuthorityType.MintTokens : AuthorityType.FreezeAccount,
+            newAuthority: none(),
+          });
+
+    const transaction = await serializeSigned(umi, builder);
+    res.json({ transaction });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build token action transaction" });
   }
 });
