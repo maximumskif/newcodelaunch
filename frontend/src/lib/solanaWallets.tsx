@@ -5,18 +5,16 @@ import { useMemo, type ReactNode } from 'react'
 
 import '@solana/wallet-adapter-react-ui/styles.css'
 
-// `||`, not `??` — an unset Vite build arg (e.g. a Docker build that didn't
-// forward this one) bakes in an explicit empty string, not `undefined`, and
-// `??` only falls through on `null`/`undefined`. An empty string is never a
-// usable RPC URL, so it should fall through to the default the same way an
-// actually-missing value does.
-const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
+// Same definition as candyMachineApi.ts's mainnet entry (see rpcUrls.ts,
+// which now also does the empty-build-arg normalization this file used to
+// do inline) — the two used to read the same network's URL separately.
+import { SOLANA_MAINNET_RPC_URL } from './rpcUrls'
 
 export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   const wallets = useMemo(() => [new PhantomWalletAdapter()], [])
 
   return (
-    <ConnectionProvider endpoint={SOLANA_RPC_URL}>
+    <ConnectionProvider endpoint={SOLANA_MAINNET_RPC_URL}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>

@@ -111,6 +111,20 @@ services:
         # host-published port (5000 above), not the compose network's
         # internal "backend" hostname, which the browser can't resolve.
         VITE_API_BASE_URL: http://localhost:5000/api
+        # Optional browser-side RPC overrides (see frontend/.env.example).
+        # frontend/.env is deliberately not in the build context (see
+        # frontend/.dockerignore), so these come from Compose's own variable
+        # interpolation instead: your shell's environment, or a `.env` file
+        # next to this docker-compose.yml. Unset → empty → the public
+        # default for that network (src/lib/rpcUrls.ts).
+        VITE_SOLANA_RPC_URL: ${VITE_SOLANA_RPC_URL:-}
+        VITE_SOLANA_DEVNET_RPC_URL: ${VITE_SOLANA_DEVNET_RPC_URL:-}
+        VITE_SEPOLIA_RPC_URL: ${VITE_SEPOLIA_RPC_URL:-}
+        VITE_ETHEREUM_RPC_URL: ${VITE_ETHEREUM_RPC_URL:-}
+        VITE_POLYGON_AMOY_RPC_URL: ${VITE_POLYGON_AMOY_RPC_URL:-}
+        VITE_POLYGON_RPC_URL: ${VITE_POLYGON_RPC_URL:-}
+        VITE_BSC_TESTNET_RPC_URL: ${VITE_BSC_TESTNET_RPC_URL:-}
+        VITE_BSC_RPC_URL: ${VITE_BSC_RPC_URL:-}
     container_name: launchpad-frontend
     ports:
       - '8080:80'

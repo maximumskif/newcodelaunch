@@ -1,5 +1,6 @@
 import { request } from './http'
 import { isMainnetAmong } from './networks'
+import { SOLANA_DEVNET_RPC_URL, SOLANA_MAINNET_RPC_URL } from './rpcUrls'
 
 export type SolanaNetworkId = 'solana_devnet' | 'solana'
 
@@ -15,16 +16,17 @@ export interface SolanaNetworkInfo {
 // rather than folded into NetworkContext.tsx since that context is EVM-only
 // (see its own comment: "Solana has no equivalent").
 //
-// The devnet entry's rpcUrl is overridable — same gap as wagmiConfig.ts's
-// sepolia transport had (no way to point the wallet's own connection at a
-// dedicated provider, only the backend's RPC config was configurable).
-// Doubles as the hook e2e tests use to point confirmation/status reads at a
-// local solana-test-validator (see frontend/e2e/README.md).
-const solanaDevnetRpcUrl = (import.meta.env.VITE_SOLANA_DEVNET_RPC_URL as string | undefined) || 'https://api.devnet.solana.com'
-
+// Both rpcUrls are overridable (VITE_SOLANA_DEVNET_RPC_URL /
+// VITE_SOLANA_RPC_URL, see rpcUrls.ts) — same gap as wagmiConfig.ts's
+// transports had (no way to point the wallet's own connection at a
+// dedicated provider, only the backend's RPC config was configurable; the
+// mainnet entry stayed hard-coded to the public endpoint even after devnet
+// got its override). The devnet one doubles as the hook e2e tests use to
+// point confirmation/status reads at a local solana-test-validator (see
+// frontend/e2e/README.md).
 export const SOLANA_NETWORKS: SolanaNetworkInfo[] = [
-  { id: 'solana_devnet', label: 'Solana Devnet', rpcUrl: solanaDevnetRpcUrl, isTestnet: true },
-  { id: 'solana', label: 'Solana Mainnet', rpcUrl: 'https://api.mainnet-beta.solana.com', isTestnet: false },
+  { id: 'solana_devnet', label: 'Solana Devnet', rpcUrl: SOLANA_DEVNET_RPC_URL, isTestnet: true },
+  { id: 'solana', label: 'Solana Mainnet', rpcUrl: SOLANA_MAINNET_RPC_URL, isTestnet: false },
 ]
 
 export function isSolanaMainnet(networkId: string): boolean {

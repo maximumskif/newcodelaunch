@@ -27,14 +27,28 @@ COPY . .
 # default (http://localhost:5000/api), broken for anyone but localhost.
 # Pass the real values via --build-arg at image-build time, e.g.:
 #   docker build --build-arg VITE_API_BASE_URL=https://api.example.com/api .
+#
+# The RPC overrides are all optional (see .env.example / src/lib/rpcUrls.ts)
+# — an unpassed one bakes in an empty string, which rpcUrls.ts treats as
+# "use the public default".
 ARG VITE_API_BASE_URL
 ARG VITE_SOLANA_RPC_URL
-ARG VITE_SEPOLIA_RPC_URL
 ARG VITE_SOLANA_DEVNET_RPC_URL
+ARG VITE_SEPOLIA_RPC_URL
+ARG VITE_ETHEREUM_RPC_URL
+ARG VITE_POLYGON_AMOY_RPC_URL
+ARG VITE_POLYGON_RPC_URL
+ARG VITE_BSC_TESTNET_RPC_URL
+ARG VITE_BSC_RPC_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
     VITE_SOLANA_RPC_URL=${VITE_SOLANA_RPC_URL} \
+    VITE_SOLANA_DEVNET_RPC_URL=${VITE_SOLANA_DEVNET_RPC_URL} \
     VITE_SEPOLIA_RPC_URL=${VITE_SEPOLIA_RPC_URL} \
-    VITE_SOLANA_DEVNET_RPC_URL=${VITE_SOLANA_DEVNET_RPC_URL}
+    VITE_ETHEREUM_RPC_URL=${VITE_ETHEREUM_RPC_URL} \
+    VITE_POLYGON_AMOY_RPC_URL=${VITE_POLYGON_AMOY_RPC_URL} \
+    VITE_POLYGON_RPC_URL=${VITE_POLYGON_RPC_URL} \
+    VITE_BSC_TESTNET_RPC_URL=${VITE_BSC_TESTNET_RPC_URL} \
+    VITE_BSC_RPC_URL=${VITE_BSC_RPC_URL}
 
 RUN npm run build
 
