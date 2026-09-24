@@ -18,6 +18,7 @@ import {
 } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
+import { parseMintLimit } from '../../lib/mintLimit'
 import { signSendAndConfirm } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
@@ -46,6 +47,8 @@ export function MintLaunchPage() {
 
   // Optional allowlist phase before the public go-live date.
   const allowlistPhase = useAllowlistPhase(goLiveDate)
+  const [mintLimitText, setMintLimitText] = useState('')
+  const mintLimit = parseMintLimit(mintLimitText)
 
   const [step, setStep] = useState<LaunchStep>('idle')
   const [progressLabel, setProgressLabel] = useState('')
@@ -136,6 +139,7 @@ export function MintLaunchPage() {
       const signatures: string[] = []
       const isoGoLiveDate = new Date(goLiveDate).toISOString()
       const allowlist = allowlistPhase.input
+      const mint_limit = mintLimit.value
 
       // Step 1: the collection transaction, signed+sent+confirmed on its
       // own before step 2 is ever requested. Two-step by design, not an
@@ -153,6 +157,7 @@ export function MintLaunchPage() {
         go_live_date: isoGoLiveDate,
         seller_fee_bps: Number(sellerFeeBps),
         allowlist,
+        mint_limit,
       })
 
       setStep('signing')
@@ -179,6 +184,7 @@ export function MintLaunchPage() {
         price_sol: Number(priceSol),
         go_live_date: isoGoLiveDate,
         allowlist,
+        mint_limit,
       })
 
       setStep('signing')
@@ -206,6 +212,7 @@ export function MintLaunchPage() {
         creator_wallet: publicKey.toBase58(),
         project_id: projectId ?? undefined,
         allowlist,
+        mint_limit,
       })
 
       setResult(recorded)
@@ -311,6 +318,18 @@ export function MintLaunchPage() {
               <AllowlistPhaseFields phase={allowlistPhase} disabled={isBusy} />
 
               <label className="block text-sm text-ink-muted">
+                Max mints per wallet <span className="text-ink-faint">(optional — across every phase, enforced on-chain)</span>
+                <input
+                  inputMode="numeric"
+                  value={mintLimitText}
+                  disabled={isBusy}
+                  onChange={(e) => setMintLimitText(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </label>
+              {mintLimit.problem && <p className="text-xs text-warning">{mintLimit.problem}</p>}
+
+              <label className="block text-sm text-ink-muted">
                 Royalty (basis points, 500 = 5%)
                 <input
                   type="number"
@@ -379,7 +398,7 @@ export function MintLaunchPage() {
                   variant="primary"
                   className="w-full"
                   disabled={
-                    !publicKey || !goLiveDate || !priceSol || Boolean(allowlistPhase.problem) || isBusy || (isMainnet && !mainnetConfirmed)
+                    !publicKey || !goLiveDate || !priceSol || Boolean(allowlistPhase.problem) || Boolean(mintLimit.problem) || isBusy || (isMainnet && !mainnetConfirmed)
                   }
                   isLoading={isBusy}
                   onClick={() => void handleLaunch()}

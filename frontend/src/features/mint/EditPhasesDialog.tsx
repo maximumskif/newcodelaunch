@@ -7,6 +7,7 @@ import { Dialog } from '../../components/ui/Dialog'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CreatorDrop } from '../../lib/candyMachineApi'
+import { parseMintLimit } from '../../lib/mintLimit'
 import { signSendAndConfirm } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { AllowlistPhaseFields } from './AllowlistPhaseFields'
@@ -72,6 +73,8 @@ function EditPhasesForm({
     goLive,
     drop.allowlist ? { addresses, price_sol: drop.allowlist.price_sol, start: toLocalInput(drop.allowlist.start_date) } : null,
   )
+  const [mintLimitText, setMintLimitText] = useState(drop.mint_limit ? String(drop.mint_limit) : '')
+  const mintLimit = parseMintLimit(mintLimitText)
   const [step, setStep] = useState<Step>('idle')
   const [progress, setProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -80,12 +83,21 @@ function EditPhasesForm({
   const isMainnet = isSolanaMainnet(drop.network)
   const isCreatorWallet = publicKey === drop.creator_wallet
   const isBusy = step !== 'idle'
-  const problem = !(Number(price) > 0) ? 'Set a public price' : !goLive ? 'Set the public go-live date' : phase.problem
+  const problem = !(Number(price) > 0)
+    ? 'Set a public price'
+    : !goLive
+      ? 'Set the public go-live date'
+      : (phase.problem ?? mintLimit.problem)
 
   const save = async () => {
     if (!accessToken || problem) return
     setError(null)
-    const edit = { price_sol: Number(price), go_live_date: new Date(goLive).toISOString(), allowlist: phase.input }
+    const edit = {
+      price_sol: Number(price),
+      go_live_date: new Date(goLive).toISOString(),
+      allowlist: phase.input,
+      mint_limit: mintLimit.value,
+    }
     try {
       setStep('preparing')
       setProgress('Building the update…')
@@ -135,6 +147,11 @@ function EditPhasesForm({
       </div>
 
       <AllowlistPhaseFields phase={phase} disabled={isBusy} />
+
+      <label className="block text-sm text-ink-muted">
+        Max mints per wallet <span className="text-ink-faint">(optional — empty for no limit)</span>
+        <input inputMode="numeric" value={mintLimitText} disabled={isBusy} onChange={(e) => setMintLimitText(e.target.value)} className={inputClass} />
+      </label>
 
       {isMainnet && (
         <MainnetConfirmCheckbox checked={mainnetConfirmed} onChange={setMainnetConfirmed} disabled={isBusy} verb="changes a drop on" networkLabel="Solana Mainnet" />

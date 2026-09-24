@@ -63,6 +63,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await expect(page.getByText('2 wallets')).toBeVisible()
   await page.getByLabel('Allowlist price (SOL)').fill('0.05')
   await page.getByLabel('Allowlist start').fill(localInput(new Date(Date.now() - 24 * 3600_000)))
+  await page.getByLabel(/Max mints per wallet/).fill('1')
   await page.getByRole('button', { name: 'Launch Candy Machine' }).click()
 
   // Recording now reads the guard groups back from the chain and checks
@@ -90,6 +91,17 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('1 of 2 remaining')).toBeVisible({ timeout: 10_000 })
 
+  // The drop allows 1 per wallet (the mintLimit guard's on-chain counter):
+  // on reload the storefront shows this wallet has hit it, and the mint API
+  // refuses to build another.
+  await page.reload()
+  await expect(page.getByText("You've reached this drop's limit")).toBeVisible()
+  const overLimit = await request.post(`${API_BASE_URL}/mint/public/${candyMachine}/mint`, {
+    data: { minter_wallet: CREATOR_PUBLIC_KEY },
+  })
+  expect(overLimit.status()).toBe(403)
+  expect((await overLimit.json()).error).toContain('limit is 1 per wallet')
+
   // The dashboard: allowlist phase, and revenue as a range (1 mint at either
   // 0.05 or 0.2 — the chain doesn't record which phase a mint came through).
   await page.goto('/mint')
@@ -97,6 +109,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await expect(row).toContainText('1 / 2')
   await expect(row).toContainText('Allowlist phase')
   await expect(row).toContainText('0.05–0.2 SOL')
+  await expect(row).toContainText('Max 1 per wallet')
 
   // Edit the live drop's phases: drop the allowlist, open public minting an
   // hour ago at a new 0.15 SOL price. One creator-signed guard update; the
@@ -108,6 +121,10 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await dialog.getByLabel('Public price (SOL)').fill('0.15')
   await dialog.getByLabel('Public go-live').fill(localInput(new Date(Date.now() - 3600_000)))
   await dialog.getByLabel(/Add an allowlist phase/).uncheck()
+  // Raise the limit to 2 — the counter is shared across phases, so this
+  // wallet (1 allowlist mint so far) gets exactly one more.
+  await expect(dialog.getByLabel(/Max mints per wallet/)).toHaveValue('1')
+  await dialog.getByLabel(/Max mints per wallet/).fill('2')
   await dialog.getByRole('button', { name: 'Save phases' }).click()
   await expect(dialog).toBeHidden({ timeout: 45_000 })
 
@@ -120,6 +137,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   // And the storefront mints at the new price, through the updated guards.
   await page.goto(`/mint/buy/${candyMachine}`)
   await expect(page.getByText('Live now')).toBeVisible()
+  await expect(page.getByText("You've minted 1 of 2 allowed per wallet.")).toBeVisible()
   await page.getByRole('button', { name: 'Mint for 0.15 SOL' }).click()
   await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
 })

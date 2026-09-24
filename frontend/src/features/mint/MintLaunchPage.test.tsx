@@ -138,6 +138,7 @@ describe('MintLaunchPage project linking', () => {
         items_available: 1,
         go_live_date: '2026-09-01T00:00:00.000Z',
         allowlist: null,
+        mint_limit: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1'],
         explorer_url: null,
@@ -198,6 +199,7 @@ describe('MintLaunchPage project linking', () => {
         items_available: 1,
         go_live_date: '2026-09-01T00:00:00.000Z',
         allowlist: null,
+        mint_limit: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1', 'sig-1'],
         explorer_url: null,
@@ -252,6 +254,7 @@ describe('MintLaunchPage project linking', () => {
         items_available: 1,
         go_live_date: '2026-09-01T00:00:00.000Z',
         allowlist: null,
+        mint_limit: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1'],
         explorer_url: null,
@@ -364,6 +367,7 @@ describe('MintLaunchPage allowlist phase', () => {
         items_available: 1,
         go_live_date: '2026-09-02T00:00:00.000Z',
         allowlist: { price_sol: 0.05, start_date: '2026-09-01T00:00:00.000Z', size: 2 },
+        mint_limit: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1'],
         explorer_url: null,
@@ -411,5 +415,23 @@ describe('MintLaunchPage allowlist phase', () => {
     expect(screen.getByText('The allowlist phase must start before the public go-live date')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
   })
-})
 
+  it('sends an optional per-wallet mint limit through every launch step, and blocks an invalid one', async () => {
+    mockLaunchApis()
+    const user = userEvent.setup()
+    renderAt('?collection=col-1')
+
+    await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
+    await user.type(screen.getByLabelText(/Max mints per wallet/), '0')
+    expect(screen.getByText(/whole number from 1 to 65535/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
+
+    await user.clear(screen.getByLabelText(/Max mints per wallet/))
+    await user.type(screen.getByLabelText(/Max mints per wallet/), '3')
+    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+
+    await waitFor(() => expect(candyMachineApi.create).toHaveBeenCalledWith('tok', expect.objectContaining({ mint_limit: 3 })))
+    expect(candyMachineApi.prepareCollection).toHaveBeenCalledWith('tok', expect.objectContaining({ mint_limit: 3 }))
+    expect(candyMachineApi.prepareCandyMachine).toHaveBeenCalledWith('tok', expect.objectContaining({ mint_limit: 3 }))
+  })
+})

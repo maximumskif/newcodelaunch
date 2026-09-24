@@ -25,6 +25,7 @@ const drop: CreatorDrop = {
   items_available: 4,
   go_live_date: '2026-01-01T00:00:00Z',
   allowlist: null,
+  mint_limit: null,
   creator_wallet: 'Creator111',
   transaction_signatures: ['sig'],
   explorer_url: 'https://explorer.solana.com/address/Candy111?cluster=devnet',

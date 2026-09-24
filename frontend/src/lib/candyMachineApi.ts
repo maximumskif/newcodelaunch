@@ -58,6 +58,8 @@ export interface CandyMachineDeployment {
   // Optional allowlist phase before go_live_date (price_sol/go_live_date
   // are the public phase). Never includes the wallet list itself.
   allowlist: AllowlistSummary | null
+  // Optional per-wallet mint limit across all phases.
+  mint_limit: number | null
   creator_wallet: string
   transaction_signatures: string[]
   explorer_url: string | null
@@ -84,6 +86,7 @@ export interface PhaseEdit {
   price_sol: number
   go_live_date: string
   allowlist?: AllowlistPhaseInput
+  mint_limit?: number
 }
 
 export interface PublicCandyMachineStatus {
@@ -102,6 +105,10 @@ export interface PublicCandyMachineStatus {
   allowlisted: boolean | null
   // What that wallet would pay right now; null if it can't mint now.
   mint_price_sol: number | null
+  mint_limit: number | null
+  // Only with a wallet on a limited drop: its on-chain mint count.
+  wallet_minted: number | null
+  limit_reached: boolean
   explorer_url: string | null
   items_available: number
   items_redeemed: number
@@ -152,6 +159,7 @@ export const candyMachineApi = {
       go_live_date: string
       seller_fee_bps?: number
       allowlist?: AllowlistPhaseInput
+      mint_limit?: number
     },
   ) =>
     request<PrepareCollectionResult>('/mint/prepare-collection', { method: 'POST', body: JSON.stringify(payload) }, token),
@@ -166,6 +174,7 @@ export const candyMachineApi = {
       price_sol: number
       go_live_date: string
       allowlist?: AllowlistPhaseInput
+      mint_limit?: number
     },
   ) =>
     request<PrepareCandyMachineResult>(
@@ -188,6 +197,7 @@ export const candyMachineApi = {
       creator_wallet: string
       project_id?: string
       allowlist?: AllowlistPhaseInput
+      mint_limit?: number
     },
   ) =>
     request<{ candy_machine: CandyMachineDeployment }>(

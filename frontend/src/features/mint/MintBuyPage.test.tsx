@@ -42,6 +42,9 @@ const baseStatus: PublicCandyMachineStatus = {
   allowlist: null,
   allowlisted: null,
   mint_price_sol: 0.5,
+  mint_limit: null,
+  wallet_minted: null,
+  limit_reached: false,
   explorer_url: null,
   items_available: 10,
   items_redeemed: 10,
@@ -162,6 +165,41 @@ describe('MintBuyPage', () => {
       renderAt(baseStatus.candy_machine)
 
       expect(await screen.findByRole('button', { name: 'Mint for 0.1 SOL' })).toBeEnabled()
+    })
+  })
+
+  describe('with a per-wallet mint limit', () => {
+    const limited: PublicCandyMachineStatus = { ...baseStatus, items_redeemed: 0, items_remaining: 10, mint_limit: 2 }
+
+    function connectBuyer() {
+      vi.mocked(useWallet).mockReturnValue({
+        publicKey: { toBase58: () => 'BuyerPublicKey111111111111111111111111111' },
+        sendTransaction: vi.fn(),
+      } as unknown as ReturnType<typeof useWallet>)
+    }
+
+    it("shows the limit and the wallet's count while it can still mint", async () => {
+      connectBuyer()
+      vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({ ...limited, wallet_minted: 1 })
+      renderAt(baseStatus.candy_machine)
+
+      expect(await screen.findByText('Limit 2 per wallet')).toBeInTheDocument()
+      expect(screen.getByText("You've minted 1 of 2 allowed per wallet.")).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Mint for/ })).toBeEnabled()
+    })
+
+    it('replaces the mint button once the wallet reaches the limit', async () => {
+      connectBuyer()
+      vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({
+        ...limited,
+        wallet_minted: 2,
+        limit_reached: true,
+        mint_price_sol: null,
+      })
+      renderAt(baseStatus.candy_machine)
+
+      expect(await screen.findByText("You've reached this drop's limit")).toBeInTheDocument()
+      expect(screen.queryByText(/Mint for/)).not.toBeInTheDocument()
     })
   })
 })

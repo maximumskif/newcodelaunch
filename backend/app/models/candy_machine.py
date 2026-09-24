@@ -44,6 +44,9 @@ class CandyMachineDeployment(db.Model):
     # price. Null on rows from before phase editing: fall back to the
     # current prices, which were then the only ones.
     prices_seen = db.Column(db.JSON, nullable=True)
+    # Optional per-wallet mint limit across all phases (the mintLimit guard,
+    # in the default guard set). Checked against the chain like the rest.
+    mint_limit = db.Column(db.Integer, nullable=True)
 
     creator_wallet = db.Column(db.String(64), nullable=False)
     transaction_signatures = db.Column(db.JSON, nullable=False, default=list)
@@ -70,6 +73,7 @@ class CandyMachineDeployment(db.Model):
                 if self.allowlist
                 else None
             ),
+            "mint_limit": self.mint_limit,
             "creator_wallet": self.creator_wallet,
             "transaction_signatures": self.transaction_signatures,
             "explorer_url": self.explorer_url,

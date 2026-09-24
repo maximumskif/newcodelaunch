@@ -127,6 +127,7 @@ export function MintBuyPage() {
                     {status.phase === 'public' ? 'Live now' : status.phase === 'allowlist' ? 'Allowlist phase' : 'Not live yet'}
                   </Badge>
                   <Badge tone="neutral">{status.items_remaining} of {status.items_available} remaining</Badge>
+                  {status.mint_limit && <Badge tone="neutral">Limit {status.mint_limit} per wallet</Badge>}
                   {isMainnet && <Badge tone="warning">Solana Mainnet</Badge>}
                 </div>
                 {status.collection_description && (
@@ -171,6 +172,11 @@ export function MintBuyPage() {
                 </div>
               ) : status.items_remaining === 0 ? (
                 <EmptyState title="Sold out" description="Every item in this drop has already been minted." />
+              ) : status.limit_reached ? (
+                <EmptyState
+                  title="You've reached this drop's limit"
+                  description={`This wallet has minted ${status.wallet_minted} — the most this drop allows per wallet.`}
+                />
               ) : status.phase === 'upcoming' ? (
                 <EmptyState title="Minting hasn't opened yet" description="Check back after the opening time above." />
               ) : status.phase === 'allowlist' && !publicKey ? (
@@ -192,6 +198,12 @@ export function MintBuyPage() {
                       verb="mints on"
                       networkLabel="Solana Mainnet"
                     />
+                  )}
+
+                  {status.mint_limit && status.wallet_minted !== null && (
+                    <p className="text-sm text-ink-muted">
+                      You've minted {status.wallet_minted} of {status.mint_limit} allowed per wallet.
+                    </p>
                   )}
 
                   {mintError && <InlineError>{mintError}</InlineError>}

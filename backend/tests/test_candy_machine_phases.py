@@ -50,7 +50,7 @@ def _phased_guards(**overrides):
 
 @pytest.fixture
 def sidecar(monkeypatch):
-    state = {"guards": _phased_guards(), "calls": []}
+    state = {"guards": _phased_guards(), "calls": [], "minted": 0}
 
     def fake(method, path, *, json=None, params=None, timeout):
         state["calls"].append({"method": method, "path": path, "json": json})
@@ -60,6 +60,10 @@ def sidecar(monkeypatch):
             return {"merkle_root": ROOT}
         if path.endswith("/prepare-candy-machine"):
             return {"candy_machine": CANDY, "transactions": ["tx"]}
+        if path.endswith("/minted"):
+            if state["minted"] is None:
+                raise candy_machine.CandyMachineServiceError("RPC down")
+            return {"minted": state["minted"]}
         if path.endswith("/prepare-update"):
             return {"transaction": "tx"}
         if path.endswith("/mint"):
@@ -419,3 +423,102 @@ def test_full_allowlist_is_for_the_owner_only(app, client, sidecar):
     assert client.get(f"/api/mint/candy-machines/{deployment.id}/allowlist", headers=owner).get_json() == {"addresses": [CREATOR, FAN]}
     assert client.get(f"/api/mint/candy-machines/{deployment.id}/allowlist", headers=stranger).status_code == 404
     assert client.get(f"/api/mint/candy-machines/{deployment.id}/allowlist").status_code == 401
+
+
+# --- per-wallet mint limit ---------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [0, 65536, "abc", True, 1.5])
+def test_mint_limit_validation(app, value):
+    with pytest.raises(candy_machine.ValidationError, match="mint_limit"):
+        candy_machine._validate_mint_limit(value)
+
+
+def test_mint_limit_is_forwarded_at_launch_and_on_edit(app, sidecar):
+    deployment = _deployment()
+    collection = _db.session.get(NFTCollection, deployment.nft_collection_id)
+    candy_machine.prepare_candy_machine_step(
+        collection, "solana_devnet", CREATOR, CREATOR, 0.2, PUBLIC_START.isoformat(), allowlist=ALLOWLIST, mint_limit=3
+    )
+    assert sidecar["calls"][-1]["json"]["mintLimit"] == 3
+    candy_machine.prepare_phase_update(deployment, 0.2, PUBLIC_START.isoformat(), ALLOWLIST, mint_limit="5")
+    assert sidecar["calls"][-1]["json"]["mintLimit"] == 5
+    candy_machine.prepare_phase_update(deployment, 0.2, PUBLIC_START.isoformat(), ALLOWLIST, mint_limit=None)
+    assert "mintLimit" not in sidecar["calls"][-1]["json"]
+
+
+def _with_default_limit(guards, limit):
+    guards["default"]["mint_limit"] = limit
+    return guards
+
+
+def test_record_checks_the_mint_limit_against_the_chain(app, sidecar):
+    _, collection = _collection()
+    sidecar["guards"] = _with_default_limit(_phased_guards(), 3)
+    with pytest.raises(candy_machine.ValidationError, match="mint limit"):
+        _record(collection)  # claims no limit, chain has 3
+    with pytest.raises(candy_machine.ValidationError, match="mint limit"):
+        candy_machine.record_candy_machine(
+            collection=collection, network="solana_devnet", collection_mint=CREATOR, candy_machine=CANDY,
+            transaction_signatures=["5" * 88], price_sol=0.2, items_available=2,
+            go_live_date=PUBLIC_START.isoformat(), creator_wallet=CREATOR, allowlist=ALLOWLIST, mint_limit=2,
+        )
+    deployment = candy_machine.record_candy_machine(
+        collection=collection, network="solana_devnet", collection_mint=CREATOR, candy_machine=CANDY,
+        transaction_signatures=["5" * 88], price_sol=0.2, items_available=2,
+        go_live_date=PUBLIC_START.isoformat(), creator_wallet=CREATOR, allowlist=ALLOWLIST, mint_limit=3,
+    )
+    assert deployment.mint_limit == 3
+    assert deployment.to_dict()["mint_limit"] == 3
+
+
+def test_a_limit_inside_a_group_is_rejected(app, sidecar):
+    _, collection = _collection()
+    sidecar["guards"] = _phased_guards(pub={"mint_limit": 3})
+    with pytest.raises(candy_machine.ValidationError, match="mint limit"):
+        _record(collection)
+
+
+def test_storefront_shows_a_wallets_count_and_when_it_hit_the_limit(app, sidecar):
+    deployment = _deployment()
+    deployment.mint_limit = 2
+    _db.session.commit()
+
+    sidecar["minted"] = 1
+    status = candy_machine.get_public_candy_machine_status(CANDY, FAN)
+    assert (status["mint_limit"], status["wallet_minted"], status["limit_reached"]) == (2, 1, False)
+    assert status["mint_price_sol"] == 0.05
+
+    sidecar["minted"] = 2
+    status = candy_machine.get_public_candy_machine_status(CANDY, FAN)
+    assert status["limit_reached"] is True
+    assert status["mint_price_sol"] is None
+
+
+def test_mint_is_refused_at_the_limit_and_flags_the_counter_below_it(app, sidecar):
+    deployment = _deployment()
+    deployment.mint_limit = 2
+    _db.session.commit()
+
+    sidecar["minted"] = 2
+    with pytest.raises(candy_machine.NotEligibleError, match="limit is 2 per wallet"):
+        candy_machine.prepare_mint(CANDY, FAN)
+
+    sidecar["minted"] = 1
+    candy_machine.prepare_mint(CANDY, FAN)
+    assert sidecar["calls"][-1]["json"]["mintLimit"] is True
+
+    # Count unreadable: don't block — the on-chain guard still enforces it.
+    sidecar["minted"] = None
+    candy_machine.prepare_mint(CANDY, FAN)
+    assert sidecar["calls"][-1]["json"]["mintLimit"] is True
+
+
+def test_editing_can_set_and_clear_the_limit(app, sidecar):
+    deployment = _deployment()
+    sidecar["guards"] = _with_default_limit(_phased_guards(), 4)
+    candy_machine.apply_phase_update(deployment, "6" * 88, 0.2, PUBLIC_START.isoformat(), ALLOWLIST, mint_limit=4)
+    assert deployment.mint_limit == 4
+    sidecar["guards"] = _with_default_limit(_phased_guards(), None)
+    candy_machine.apply_phase_update(deployment, "7" * 88, 0.2, PUBLIC_START.isoformat(), ALLOWLIST)
+    assert deployment.mint_limit is None

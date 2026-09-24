@@ -42,6 +42,7 @@ const drop: CreatorDrop = {
   items_available: 5,
   go_live_date: '2026-10-02T12:00:00.000Z',
   allowlist: { price_sol: 0.05, start_date: '2026-10-01T12:00:00.000Z', size: 1 },
+  mint_limit: null,
   creator_wallet: CREATOR,
   transaction_signatures: ['sig-0'],
   explorer_url: null,
@@ -131,5 +132,19 @@ describe('EditPhasesDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("doesn't match")
     expect(onSaved).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Save phases' })).toBeEnabled()
+  })
+
+  it('starts from the current mint limit and can clear it', async () => {
+    connect(CREATOR)
+    const user = userEvent.setup()
+    render(<EditPhasesDialog drop={{ ...drop, mint_limit: 3 }} onClose={vi.fn()} onSaved={vi.fn()} />)
+
+    const field = await screen.findByLabelText(/Max mints per wallet/)
+    expect(field).toHaveValue('3')
+    await user.clear(field)
+    await user.click(screen.getByRole('button', { name: 'Save phases' }))
+
+    await waitFor(() => expect(candyMachineApi.prepareUpdate).toHaveBeenCalled())
+    expect(vi.mocked(candyMachineApi.prepareUpdate).mock.calls[0][2].mint_limit).toBeUndefined()
   })
 })

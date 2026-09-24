@@ -52,6 +52,7 @@ def prepare_collection():
             go_live_date=data["go_live_date"],
             seller_fee_bps=seller_fee_bps,
             allowlist=data.get("allowlist"),
+            mint_limit=data.get("mint_limit"),
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
@@ -99,6 +100,7 @@ def prepare_candy_machine_step():
             price_sol=price_sol,
             go_live_date=data["go_live_date"],
             allowlist=data.get("allowlist"),
+            mint_limit=data.get("mint_limit"),
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
@@ -150,6 +152,7 @@ def create_candy_machine():
             go_live_date=data["go_live_date"],
             creator_wallet=data["creator_wallet"],
             allowlist=data.get("allowlist"),
+            mint_limit=data.get("mint_limit"),
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
@@ -171,7 +174,7 @@ def _phase_edit_fields(data: dict):
     missing = [f for f in ("price_sol", "go_live_date") if data.get(f) in (None, "")]
     if missing:
         return None, (jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400)
-    return (data["price_sol"], data["go_live_date"], data.get("allowlist")), None
+    return (data["price_sol"], data["go_live_date"], data.get("allowlist"), data.get("mint_limit")), None
 
 
 @mint_bp.post("/candy-machines/<deployment_id>/prepare-update")

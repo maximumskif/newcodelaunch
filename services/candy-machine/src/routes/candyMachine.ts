@@ -12,6 +12,7 @@ import {
   mintV1,
   mplCandyMachine,
   route,
+  safeFetchMintCounterFromSeeds,
 } from "@metaplex-foundation/mpl-core-candy-machine";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
@@ -36,6 +37,22 @@ const MAX_ALLOWLIST = 2000;
 // its price/start date in the default guard set, exactly as before.
 export const ALLOWLIST_GROUP = "wl";
 export const PUBLIC_GROUP = "pub";
+
+// Optional per-wallet mint limit, drop-wide. It always lives in the
+// DEFAULT guard set, which the program applies to every group: one counter
+// covers both phases, so a wallet's allowlist and public mints count
+// against one limit. (Putting the same id in each group is rejected by the
+// program — DuplicatedMintLimitId, found by probing a real validator — and
+// separate ids per group would reset the count when public opens.)
+const MINT_LIMIT_ID = 1;
+const MAX_MINT_LIMIT = 65535; // the guard stores the limit as a u16
+
+function mintLimitProblem(mintLimit: unknown): string | null {
+  if (mintLimit === undefined || mintLimit === null) return null;
+  return Number.isInteger(mintLimit) && (mintLimit as number) >= 1 && (mintLimit as number) <= MAX_MINT_LIMIT
+    ? null
+    : `mintLimit must be a whole number between 1 and ${MAX_MINT_LIMIT}`;
+}
 
 interface AllowlistPhase {
   addresses?: string[];
@@ -75,21 +92,30 @@ function allowlistProblem(allowlist: AllowlistPhase, publicStart: string): strin
 // produce the same on-chain config (and the backend's read-back check has
 // exactly one shape to match). With an allowlist: two groups — the
 // allowlist phase (merkle-root allowList + its own price, open from its
-// start date until the public start) and the public phase — and nothing in
-// the default set, so every mint must name a group. Without: the price and
-// start date in the default set, no groups.
-function buildGuardConfig(creator: PublicKey, priceSol: number, goLiveDate: string, allowlist?: AllowlistPhase) {
+// start date until the public start) and the public phase — and nothing
+// but the optional mint limit in the default set, so every mint must name
+// a group. Without: price, start date (and mint limit) in the default set,
+// no groups.
+function buildGuardConfig(
+  creator: PublicKey,
+  priceSol: number,
+  goLiveDate: string,
+  allowlist?: AllowlistPhase,
+  mintLimit?: number | null,
+) {
+  const limit = mintLimit ? { mintLimit: { id: MINT_LIMIT_ID, limit: mintLimit } } : {};
   if (!allowlist) {
     return {
       guards: {
         solPayment: { lamports: sol(priceSol), destination: creator },
         startDate: { date: goLiveDate },
+        ...limit,
       },
       groups: [],
     };
   }
   return {
-    guards: {},
+    guards: { ...limit },
     groups: [
       {
         label: ALLOWLIST_GROUP,
@@ -138,6 +164,7 @@ interface PrepareCandyMachineBody {
   priceSol?: number;
   goLiveDate?: string;
   allowlist?: AllowlistPhase;
+  mintLimit?: number | null;
 }
 
 function utf8Length(value: string): number {
@@ -277,6 +304,11 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
       return;
     }
   }
+  const limitProblem = mintLimitProblem(body.mintLimit);
+  if (limitProblem) {
+    res.status(400).json({ error: limitProblem });
+    return;
+  }
 
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
@@ -298,7 +330,7 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
         uriLength: maxUriLength,
         isSequential: false,
       },
-      ...buildGuardConfig(creator.publicKey, body.priceSol, body.goLiveDate, body.allowlist),
+      ...buildGuardConfig(creator.publicKey, body.priceSol, body.goLiveDate, body.allowlist, body.mintLimit),
     });
 
     const configLinesBuilder = addConfigLines(umi, {
@@ -377,6 +409,7 @@ interface PrepareUpdateBody {
   priceSol?: number;
   goLiveDate?: string;
   allowlist?: AllowlistPhase;
+  mintLimit?: number | null;
 }
 
 // Edit a live drop's phases: replaces its whole guard configuration (public
@@ -412,18 +445,52 @@ candyMachineRouter.post("/:candyMachineId/prepare-update", async (req, res) => {
       return;
     }
   }
+  const limitProblem = mintLimitProblem(body.mintLimit);
+  if (limitProblem) {
+    res.status(400).json({ error: limitProblem });
+    return;
+  }
 
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
     const candyMachine = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId), { commitment: READ_COMMITMENT });
     const builder = updateCandyGuard(umi, {
       candyGuard: candyMachine.mintAuthority,
-      ...buildGuardConfig(umi.identity.publicKey, body.priceSol, body.goLiveDate, body.allowlist),
+      ...buildGuardConfig(umi.identity.publicKey, body.priceSol, body.goLiveDate, body.allowlist, body.mintLimit),
     });
     const transaction = await serializeSigned(umi, builder);
     res.json({ transaction });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build guard update transaction" });
+  }
+});
+
+// How many times a wallet has minted from this drop, from the mintLimit
+// guard's own on-chain counter (0 if it has never minted — the counter
+// account only exists after a first mint). Read-only.
+candyMachineRouter.get("/:candyMachineId/minted", async (req, res) => {
+  const { network, wallet } = req.query;
+  if (typeof network !== "string" || !isSolanaNetwork(network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+  if (typeof wallet !== "string" || !wallet) {
+    res.status(400).json({ error: "wallet is required" });
+    return;
+  }
+
+  try {
+    const umi = createUmi(SOLANA_NETWORKS[network], READ_COMMITMENT).use(mplCandyMachine());
+    const candyMachine = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId));
+    const counter = await safeFetchMintCounterFromSeeds(umi, {
+      id: MINT_LIMIT_ID,
+      user: publicKey(wallet),
+      candyMachine: candyMachine.publicKey,
+      candyGuard: candyMachine.mintAuthority,
+    });
+    res.json({ minted: counter ? counter.count : 0 });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Candy machine not found on-chain" });
   }
 });
 
@@ -446,7 +513,9 @@ candyMachineRouter.get("/:candyMachineId/guards", async (req, res) => {
       const startDate = unwrap(guards.startDate);
       const endDate = unwrap(guards.endDate);
       const allowList = unwrap(guards.allowList);
+      const mintLimit = unwrap(guards.mintLimit);
       return {
+        mint_limit: mintLimit ? mintLimit.limit : null,
         price_lamports: solPayment ? solPayment.lamports.basisPoints.toString() : null,
         payment_destination: solPayment ? solPayment.destination : null,
         start_date: startDate ? new Date(Number(startDate.date) * 1000).toISOString() : null,
@@ -484,6 +553,9 @@ interface MintBody {
   // allowlist group, the full allowlist too, to build the minter's proof.
   group?: string;
   allowlist?: string[];
+  // Set when the drop has a per-wallet mint limit: the guard needs its
+  // counter id at mint time to find (and bump) this wallet's count.
+  mintLimit?: boolean;
 }
 
 // Builds a buyer's mint transaction — the distinct "buy" flow deferred when
@@ -537,10 +609,11 @@ candyMachineRouter.post("/:candyMachineId/mint", async (req, res) => {
       asset,
       collection: publicKey(body.collectionMint),
       group,
-      mintArgs:
-        body.group === ALLOWLIST_GROUP
-          ? { allowList: { merkleRoot: getMerkleRoot(body.allowlist!) }, solPayment }
-          : { solPayment },
+      mintArgs: {
+        solPayment,
+        ...(body.group === ALLOWLIST_GROUP ? { allowList: { merkleRoot: getMerkleRoot(body.allowlist!) } } : {}),
+        ...(body.mintLimit ? { mintLimit: { id: MINT_LIMIT_ID } } : {}),
+      },
     });
 
     if (body.group === ALLOWLIST_GROUP) {

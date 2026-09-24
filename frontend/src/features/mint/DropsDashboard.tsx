@@ -144,6 +144,7 @@ export function DropsDashboard() {
                           {formatSol(drop.allowlist.price_sol)} allowlist · {drop.allowlist.size} wallets
                         </span>
                       )}
+                      {drop.mint_limit && <span className="block text-xs text-ink-faint">Max {drop.mint_limit} per wallet</span>}
                     </td>
                     <td className="px-4 py-3 text-ink">
                       {drop.revenue_min_sol === null || drop.revenue_max_sol === null

@@ -184,6 +184,10 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   "Edit phases" dialog (allowlist removed, public opened now at a new
   price — one creator-signed guard update, saved only after the backend
   reads it back from the chain), and the storefront mints at the new price.
+  The drop also launches with a limit of 1 per wallet: after the allowlist
+  mint the storefront shows the limit reached and the mint API refuses the
+  wallet (403); the edit raises it to 2, and the final public mint succeeds
+  — the counter is shared across phases.
 - `solana-token.spec.ts` — sign in with Solana → fill the Token
   Launchpad's Solana form through the actual UI, including a real logo file
   upload → launch (real Pillow logo check, logo + metadata JSON pinned

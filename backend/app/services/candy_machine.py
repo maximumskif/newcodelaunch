@@ -60,6 +60,7 @@ ALLOWLIST_GROUP = "wl"
 PUBLIC_GROUP = "pub"
 MAX_ALLOWLIST = 2000
 LAMPORTS_PER_SOL = 1_000_000_000
+MAX_MINT_LIMIT = 65535  # the mintLimit guard stores it as a u16
 
 PHASE_UPCOMING = "upcoming"
 PHASE_ALLOWLIST = "allowlist"
@@ -206,6 +207,18 @@ def _validate_allowlist(allowlist: Any, go_live_date: str) -> dict[str, Any] | N
     return {"addresses": addresses, "price_sol": price_sol, "start_date": start.isoformat()}
 
 
+def _validate_mint_limit(mint_limit: Any) -> int | None:
+    """Optional per-wallet mint limit across all of a drop's phases."""
+    if mint_limit is None or mint_limit == "":
+        return None
+    if isinstance(mint_limit, bool) or not isinstance(mint_limit, (int, str)) or not str(mint_limit).strip().isdigit():
+        raise ValidationError("mint_limit must be a whole number")
+    value = int(str(mint_limit).strip())
+    if not 1 <= value <= MAX_MINT_LIMIT:
+        raise ValidationError(f"mint_limit must be between 1 and {MAX_MINT_LIMIT}")
+    return value
+
+
 def prepare_collection(
     collection: NFTCollection,
     network: str,
@@ -214,6 +227,7 @@ def prepare_collection(
     go_live_date: str,
     seller_fee_bps: int = 500,
     allowlist: Any = None,
+    mint_limit: Any = None,
 ) -> dict[str, Any]:
     """Step 1 of the two-step launch flow (see
     docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md): builds only the
@@ -226,6 +240,7 @@ def prepare_collection(
     steps, via `record_candy_machine`."""
     _validate_launch_inputs(collection, network, price_sol)
     _validate_allowlist(allowlist, go_live_date)
+    _validate_mint_limit(mint_limit)
     if not (0 <= seller_fee_bps <= 10000):
         # 0-10000 basis points (0-100%) is the Royalties plugin's own valid
         # range on the sidecar — validated here too so a creator finds out
@@ -262,6 +277,7 @@ def prepare_candy_machine_step(
     price_sol: float,
     go_live_date: str,
     allowlist: Any = None,
+    mint_limit: Any = None,
 ) -> dict[str, Any]:
     """Step 2: builds the Candy Machine creation (+ config lines)
     transaction(s) against an already-created `collection_mint` (the result
@@ -272,6 +288,7 @@ def prepare_candy_machine_step(
     blockhash-expiry issue: see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md."""
     published_items = _validate_launch_inputs(collection, network, price_sol)
     phase = _validate_allowlist(allowlist, go_live_date)
+    limit = _validate_mint_limit(mint_limit)
 
     payload = {
         "network": _sidecar_network(network),
@@ -290,6 +307,8 @@ def prepare_candy_machine_step(
             "priceSol": phase["price_sol"],
             "startDate": phase["start_date"],
         }
+    if limit:
+        payload["mintLimit"] = limit
 
     return _sidecar_request("POST", "/internal/candy-machine/prepare-candy-machine", json=payload, timeout=30)
 
@@ -301,6 +320,7 @@ def _verify_guards_on_chain(
     price_sol: float,
     go_live: datetime,
     allowlist: dict[str, Any] | None,
+    mint_limit: int | None = None,
 ) -> None:
     """Reads the drop's guard configuration back from the chain and checks
     it's what's about to be recorded — prices, dates, where the proceeds go,
@@ -333,6 +353,13 @@ def _verify_guards_on_chain(
         elif on_chain_end is None or int(_parse_iso(on_chain_end, "end_date").timestamp()) != int(end.timestamp()):
             raise mismatch("end date")
 
+    # The per-wallet limit lives in the default set (applies to every
+    # phase); no group should carry its own.
+    if guards.get("default", {}).get("mint_limit") != mint_limit or any(
+        group.get("mint_limit") is not None for group in guards.get("groups", [])
+    ):
+        raise ValidationError("On-chain per-wallet mint limit doesn't match the launch being recorded")
+
     groups = {group.get("label"): group for group in guards.get("groups", [])}
     if allowlist is None:
         if groups:
@@ -362,6 +389,7 @@ def record_candy_machine(
     go_live_date: str,
     creator_wallet: str,
     allowlist: Any = None,
+    mint_limit: Any = None,
 ) -> CandyMachineDeployment:
     """Persist a candy machine the creator's own wallet already signed and
     sent, after independently confirming the last transaction actually
@@ -420,7 +448,10 @@ def record_candy_machine(
         return existing
 
     phase = _validate_allowlist(allowlist, go_live_date)
-    _verify_guards_on_chain(network, candy_machine, creator_wallet, price_sol, _parse_iso(go_live_date, "go_live_date"), phase)
+    limit = _validate_mint_limit(mint_limit)
+    _verify_guards_on_chain(
+        network, candy_machine, creator_wallet, price_sol, _parse_iso(go_live_date, "go_live_date"), phase, limit
+    )
 
     deployment = CandyMachineDeployment(
         user_id=collection.user_id,
@@ -433,6 +464,7 @@ def record_candy_machine(
         go_live_date=parsed_go_live_date,
         allowlist=phase,
         prices_seen=_prices(price_sol, phase),
+        mint_limit=limit,
         creator_wallet=creator_wallet,
         transaction_signatures=transaction_signatures,
         explorer_url=_explorer_url(network, candy_machine),
@@ -461,7 +493,9 @@ def get_owned_deployment(deployment_id: str, user_id: str) -> CandyMachineDeploy
     return deployment
 
 
-def _validate_phase_edit(price_sol: Any, go_live_date: Any, allowlist: Any) -> tuple[float, datetime, dict[str, Any] | None]:
+def _validate_phase_edit(
+    price_sol: Any, go_live_date: Any, allowlist: Any, mint_limit: Any = None
+) -> tuple[float, datetime, dict[str, Any] | None, int | None]:
     try:
         price = float(price_sol)
     except (TypeError, ValueError) as exc:
@@ -469,17 +503,17 @@ def _validate_phase_edit(price_sol: Any, go_live_date: Any, allowlist: Any) -> t
     if not 0.000001 <= price <= 1_000_000:
         raise ValidationError("price_sol must be between 0.000001 and 1,000,000")
     go_live = _parse_iso(go_live_date, "go_live_date")
-    return price, go_live, _validate_allowlist(allowlist, go_live.isoformat())
+    return price, go_live, _validate_allowlist(allowlist, go_live.isoformat()), _validate_mint_limit(mint_limit)
 
 
 def prepare_phase_update(
-    deployment: CandyMachineDeployment, price_sol: Any, go_live_date: Any, allowlist: Any = None
+    deployment: CandyMachineDeployment, price_sol: Any, go_live_date: Any, allowlist: Any = None, mint_limit: Any = None
 ) -> dict[str, Any]:
     """Builds the creator-signed transaction that replaces a live drop's
     phases (public price/start, and adding, changing or removing the
     allowlist phase). Persists nothing — apply_phase_update does, once the
     chain shows the new configuration."""
-    price, go_live, phase = _validate_phase_edit(price_sol, go_live_date, allowlist)
+    price, go_live, phase, limit = _validate_phase_edit(price_sol, go_live_date, allowlist, mint_limit)
     payload: dict[str, Any] = {
         "network": _sidecar_network(deployment.network),
         # The guard's authority — the only wallet whose signature the
@@ -490,19 +524,26 @@ def prepare_phase_update(
     }
     if phase:
         payload["allowlist"] = {"addresses": phase["addresses"], "priceSol": phase["price_sol"], "startDate": phase["start_date"]}
+    if limit:
+        payload["mintLimit"] = limit
     return _sidecar_request(
         "POST", f"/internal/candy-machine/{deployment.candy_machine}/prepare-update", json=payload, timeout=30
     )
 
 
 def apply_phase_update(
-    deployment: CandyMachineDeployment, transaction_signature: str, price_sol: Any, go_live_date: Any, allowlist: Any = None
+    deployment: CandyMachineDeployment,
+    transaction_signature: str,
+    price_sol: Any,
+    go_live_date: Any,
+    allowlist: Any = None,
+    mint_limit: Any = None,
 ) -> CandyMachineDeployment:
     """Records an edit the creator's wallet already sent — only once the
     transaction succeeded, was paid for by the creator, and the guard
     configuration now on-chain is exactly the claimed one (the same
     read-back check a launch goes through)."""
-    price, go_live, phase = _validate_phase_edit(price_sol, go_live_date, allowlist)
+    price, go_live, phase, limit = _validate_phase_edit(price_sol, go_live_date, allowlist, mint_limit)
 
     tx_status = blockchain.get_transaction_status(deployment.network, transaction_signature)
     if tx_status.get("status") != "success":
@@ -511,12 +552,13 @@ def apply_phase_update(
     if not account_keys or account_keys[0] != deployment.creator_wallet:
         raise ValidationError("The update transaction wasn't sent by this drop's creator wallet")
 
-    _verify_guards_on_chain(deployment.network, deployment.candy_machine, deployment.creator_wallet, price, go_live, phase)
+    _verify_guards_on_chain(deployment.network, deployment.candy_machine, deployment.creator_wallet, price, go_live, phase, limit)
 
     previous = deployment.prices_seen or _prices(deployment.price_sol, deployment.allowlist)
     deployment.price_sol = price
     deployment.go_live_date = go_live
     deployment.allowlist = phase
+    deployment.mint_limit = limit
     deployment.prices_seen = sorted({*previous, *_prices(price, phase)})
     # New list objects, not in-place appends: SQLAlchemy's plain JSON type
     # doesn't track mutation inside a list.
@@ -666,6 +708,23 @@ def get_public_candy_machine_status(candy_machine_address: str, wallet: str | No
     }
 
 
+def _wallet_minted(deployment: CandyMachineDeployment, wallet: str) -> int | None:
+    """How many times `wallet` has minted from this drop, from the mintLimit
+    guard's own on-chain counter; None if it couldn't be read (the guard
+    still enforces the limit on-chain either way)."""
+    try:
+        return int(
+            _sidecar_request(
+                "GET",
+                f"/internal/candy-machine/{deployment.candy_machine}/minted",
+                params={"network": _sidecar_network(deployment.network), "wallet": wallet},
+                timeout=15,
+            )["minted"]
+        )
+    except (CandyMachineServiceError, KeyError, TypeError, ValueError):
+        return None
+
+
 def _phase_view(deployment: CandyMachineDeployment, wallet: str | None) -> dict[str, Any]:
     """What a storefront visitor needs to know about the drop's phases —
     never the allowlist itself (on-chain there's only its merkle root), just
@@ -678,8 +737,16 @@ def _phase_view(deployment: CandyMachineDeployment, wallet: str | None) -> dict[
         mint_price = deployment.price_sol
     else:
         mint_price = None
+    wallet_minted = _wallet_minted(deployment, wallet) if (deployment.mint_limit and wallet) else None
+    limit_reached = wallet_minted is not None and wallet_minted >= deployment.mint_limit
+    if limit_reached:
+        mint_price = None
     return {
         "phase": phase,
+        "mint_limit": deployment.mint_limit,
+        # Only with a wallet on a limited drop: its on-chain mint count.
+        "wallet_minted": wallet_minted,
+        "limit_reached": limit_reached,
         "allowlist": deployment.to_dict()["allowlist"],
         "allowlisted": allowlisted,
         # The price this wallet would pay right now, or None if it can't mint now.
@@ -720,6 +787,14 @@ def prepare_mint(candy_machine_address: str, minter_wallet: str) -> dict[str, An
             payload["allowlist"] = deployment.allowlist["addresses"]
         else:
             payload["group"] = PUBLIC_GROUP
+
+    if deployment.mint_limit:
+        minted = _wallet_minted(deployment, minter_wallet)
+        if minted is not None and minted >= deployment.mint_limit:
+            raise NotEligibleError(
+                f"This wallet has already minted {minted} — this drop's limit is {deployment.mint_limit} per wallet"
+            )
+        payload["mintLimit"] = True
 
     return _sidecar_request(
         "POST", f"/internal/candy-machine/{candy_machine_address}/mint", json=payload, timeout=30
