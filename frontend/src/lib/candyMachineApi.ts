@@ -79,6 +79,13 @@ export interface AllowlistPhaseInput {
 
 export type DropPhase = 'upcoming' | 'allowlist' | 'public'
 
+// A drop's complete new phase configuration — replaces the old one.
+export interface PhaseEdit {
+  price_sol: number
+  go_live_date: string
+  allowlist?: AllowlistPhaseInput
+}
+
 export interface PublicCandyMachineStatus {
   candy_machine: string
   collection_mint: string
@@ -192,6 +199,26 @@ export const candyMachineApi = {
   list: (token: string) => request<{ candy_machines: CandyMachineDeployment[] }>('/mint/candy-machines', {}, token),
 
   dashboard: (token: string) => request<CreatorDashboard>('/mint/dashboard', {}, token),
+
+  // Editing a live drop's phases: the creator's wallet signs the guard
+  // update from prepareUpdate, then applyUpdate records it once the backend
+  // has checked the new configuration on-chain.
+  getAllowlist: (token: string, deploymentId: string) =>
+    request<{ addresses: string[] }>(`/mint/candy-machines/${deploymentId}/allowlist`, {}, token),
+
+  prepareUpdate: (token: string, deploymentId: string, payload: PhaseEdit) =>
+    request<{ transaction: string }>(
+      `/mint/candy-machines/${deploymentId}/prepare-update`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      token,
+    ),
+
+  applyUpdate: (token: string, deploymentId: string, payload: PhaseEdit & { transaction_signature: string }) =>
+    request<{ candy_machine: CandyMachineDeployment }>(
+      `/mint/candy-machines/${deploymentId}/phases`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      token,
+    ),
 
   // Public storefront — no token, no account. Anyone with a shared drop
   // link can view status and mint.

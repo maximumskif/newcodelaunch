@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript({ path: path.join(here, '.generated', 'injectedSolanaWallet.bundle.js') })
 })
 
-test('a real allowlist phase: listed wallet mints at the allowlist price, others are refused — against a real local Solana validator', async ({
+test('a real allowlist phase: listed wallet mints at the allowlist price, others are refused, then the live drop is edited — against a real local Solana validator', async ({
   page,
   request,
 }) => {
@@ -97,4 +97,29 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await expect(row).toContainText('1 / 2')
   await expect(row).toContainText('Allowlist phase')
   await expect(row).toContainText('0.05–0.2 SOL')
+
+  // Edit the live drop's phases: drop the allowlist, open public minting an
+  // hour ago at a new 0.15 SOL price. One creator-signed guard update; the
+  // backend only saves it after reading the new configuration back from the
+  // chain, so reaching the refreshed dashboard means the chain has it.
+  await row.getByRole('button', { name: /Edit phases/ }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel(/Allowlisted wallets/)).toHaveValue(new RegExp(CREATOR_PUBLIC_KEY))
+  await dialog.getByLabel('Public price (SOL)').fill('0.15')
+  await dialog.getByLabel('Public go-live').fill(localInput(new Date(Date.now() - 3600_000)))
+  await dialog.getByLabel(/Add an allowlist phase/).uncheck()
+  await dialog.getByRole('button', { name: 'Save phases' }).click()
+  await expect(dialog).toBeHidden({ timeout: 45_000 })
+
+  await expect(row).toContainText('Live')
+  await expect(row).toContainText('0.15 SOL')
+  // The earlier allowlist sale may have paid 0.05 — the range still covers
+  // every price this drop has had (0.05, 0.2, 0.15).
+  await expect(row).toContainText('0.05–0.2 SOL')
+
+  // And the storefront mints at the new price, through the updated guards.
+  await page.goto(`/mint/buy/${candyMachine}`)
+  await expect(page.getByText('Live now')).toBeVisible()
+  await page.getByRole('button', { name: 'Mint for 0.15 SOL' }).click()
+  await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
 })

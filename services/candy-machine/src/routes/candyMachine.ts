@@ -7,6 +7,7 @@ import {
   fetchCandyGuard,
   fetchCandyMachine,
   getMerkleProof,
+  updateCandyGuard,
   getMerkleRoot,
   mintV1,
   mplCandyMachine,
@@ -67,6 +68,47 @@ function allowlistProblem(allowlist: AllowlistPhase, publicStart: string): strin
   if (Number.isNaN(start)) return "allowlist.startDate must be a valid date";
   if (!(start < end)) return "allowlist.startDate must be before the public goLiveDate";
   return null;
+}
+
+// The drop's whole guard configuration — shared by creation and
+// /:id/prepare-update, so a launch and a later edit with the same inputs
+// produce the same on-chain config (and the backend's read-back check has
+// exactly one shape to match). With an allowlist: two groups — the
+// allowlist phase (merkle-root allowList + its own price, open from its
+// start date until the public start) and the public phase — and nothing in
+// the default set, so every mint must name a group. Without: the price and
+// start date in the default set, no groups.
+function buildGuardConfig(creator: PublicKey, priceSol: number, goLiveDate: string, allowlist?: AllowlistPhase) {
+  if (!allowlist) {
+    return {
+      guards: {
+        solPayment: { lamports: sol(priceSol), destination: creator },
+        startDate: { date: goLiveDate },
+      },
+      groups: [],
+    };
+  }
+  return {
+    guards: {},
+    groups: [
+      {
+        label: ALLOWLIST_GROUP,
+        guards: {
+          allowList: { merkleRoot: getMerkleRoot(allowlist.addresses!) },
+          solPayment: { lamports: sol(allowlist.priceSol!), destination: creator },
+          startDate: { date: allowlist.startDate! },
+          endDate: { date: goLiveDate },
+        },
+      },
+      {
+        label: PUBLIC_GROUP,
+        guards: {
+          solPayment: { lamports: sol(priceSol), destination: creator },
+          startDate: { date: goLiveDate },
+        },
+      },
+    ],
+  };
 }
 
 // "Present in Umi's Option" -> plain value or null, for JSON responses.
@@ -256,39 +298,7 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
         uriLength: maxUriLength,
         isSequential: false,
       },
-      ...(body.allowlist
-        ? {
-            // Two phases as guard groups: the allowlist phase (merkle-root
-            // allowList + its own price, open from its start date until the
-            // public start) and the public phase. Nothing in the default
-            // set, so every mint must name a group.
-            guards: {},
-            groups: [
-              {
-                label: ALLOWLIST_GROUP,
-                guards: {
-                  allowList: { merkleRoot: getMerkleRoot(body.allowlist.addresses!) },
-                  solPayment: { lamports: sol(body.allowlist.priceSol!), destination: creator.publicKey },
-                  startDate: { date: body.allowlist.startDate! },
-                  endDate: { date: body.goLiveDate },
-                },
-              },
-              {
-                label: PUBLIC_GROUP,
-                guards: {
-                  solPayment: { lamports: sol(body.priceSol), destination: creator.publicKey },
-                  startDate: { date: body.goLiveDate },
-                },
-              },
-            ],
-          }
-        : {
-            guards: {
-              solPayment: { lamports: sol(body.priceSol), destination: creator.publicKey },
-              startDate: { date: body.goLiveDate },
-            },
-            groups: [],
-          }),
+      ...buildGuardConfig(creator.publicKey, body.priceSol, body.goLiveDate, body.allowlist),
     });
 
     const configLinesBuilder = addConfigLines(umi, {
@@ -358,6 +368,62 @@ candyMachineRouter.get("/:candyMachineId/status", async (req, res) => {
     });
   } catch (error) {
     res.status(404).json({ error: error instanceof Error ? error.message : "Candy machine not found on-chain" });
+  }
+});
+
+interface PrepareUpdateBody {
+  network?: string;
+  creatorPublicKey?: string;
+  priceSol?: number;
+  goLiveDate?: string;
+  allowlist?: AllowlistPhase;
+}
+
+// Edit a live drop's phases: replaces its whole guard configuration (public
+// price/start, and adding, changing, or removing the allowlist phase) with
+// what buildGuardConfig produces for the new inputs. The candy guard's
+// authority is the creator's wallet — a noop signer here, like everywhere
+// else in this service — so the creator signs this client-side; this
+// service never gains the ability to change a drop. No ephemeral signer
+// needed: nothing new is created.
+candyMachineRouter.post("/:candyMachineId/prepare-update", async (req, res) => {
+  const body = req.body as PrepareUpdateBody;
+
+  if (!body.network || !isSolanaNetwork(body.network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+  if (!body.creatorPublicKey) {
+    res.status(400).json({ error: "creatorPublicKey is required" });
+    return;
+  }
+  if (!isValidPriceSol(body.priceSol)) {
+    res.status(400).json({ error: "priceSol must be a number between 0.000001 and 1,000,000" });
+    return;
+  }
+  if (!body.goLiveDate || Number.isNaN(Date.parse(body.goLiveDate))) {
+    res.status(400).json({ error: "goLiveDate must be a valid date" });
+    return;
+  }
+  if (body.allowlist !== undefined) {
+    const problem = allowlistProblem(body.allowlist, body.goLiveDate);
+    if (problem) {
+      res.status(400).json({ error: problem });
+      return;
+    }
+  }
+
+  try {
+    const umi = createUmiForCreator(body.network, body.creatorPublicKey);
+    const candyMachine = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId), { commitment: READ_COMMITMENT });
+    const builder = updateCandyGuard(umi, {
+      candyGuard: candyMachine.mintAuthority,
+      ...buildGuardConfig(umi.identity.publicKey, body.priceSol, body.goLiveDate, body.allowlist),
+    });
+    const transaction = await serializeSigned(umi, builder);
+    res.json({ transaction });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build guard update transaction" });
   }
 });
 

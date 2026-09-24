@@ -37,6 +37,13 @@ class CandyMachineDeployment(db.Model):
     # on-chain guard at record time; the address list is never exposed by
     # to_dict (only its size) — on-chain there's only a merkle root.
     allowlist = db.Column(db.JSON, nullable=True)
+    # Every per-mint price this drop has ever had (public and allowlist,
+    # across phase edits). The chain doesn't record which price each past
+    # mint paid, so the dashboard's revenue range spans all of these — an
+    # edit mustn't make earlier sales look like they happened at the new
+    # price. Null on rows from before phase editing: fall back to the
+    # current prices, which were then the only ones.
+    prices_seen = db.Column(db.JSON, nullable=True)
 
     creator_wallet = db.Column(db.String(64), nullable=False)
     transaction_signatures = db.Column(db.JSON, nullable=False, default=list)

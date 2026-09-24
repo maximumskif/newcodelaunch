@@ -9,12 +9,10 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
-import { MAX_ALLOWLIST, parseAllowlist } from '../../lib/allowlist'
 import {
   candyMachineApi,
   isSolanaMainnet,
   SOLANA_NETWORKS,
-  type AllowlistPhaseInput,
   type CandyMachineDeployment,
   type SolanaNetworkId,
 } from '../../lib/candyMachineApi'
@@ -23,7 +21,9 @@ import { projectsApi, type Project } from '../../lib/projectsApi'
 import { signSendAndConfirm } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
+import { AllowlistPhaseFields } from './AllowlistPhaseFields'
 import { DropsDashboard } from './DropsDashboard'
+import { useAllowlistPhase } from './useAllowlistPhase'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
@@ -45,24 +45,7 @@ export function MintLaunchPage() {
   const [sellerFeeBps, setSellerFeeBps] = useState('500')
 
   // Optional allowlist phase before the public go-live date.
-  const [allowlistEnabled, setAllowlistEnabled] = useState(false)
-  const [allowlistText, setAllowlistText] = useState('')
-  const [allowlistPrice, setAllowlistPrice] = useState('0.05')
-  const [allowlistStart, setAllowlistStart] = useState('')
-  const parsedAllowlist = parseAllowlist(allowlistText)
-  const allowlistProblem = !allowlistEnabled
-    ? null
-    : parsedAllowlist.invalid.length > 0
-      ? `Not a Solana wallet address: ${parsedAllowlist.invalid.slice(0, 3).join(', ')}${parsedAllowlist.invalid.length > 3 ? '…' : ''}`
-      : parsedAllowlist.addresses.length === 0
-        ? 'Add at least one wallet to the allowlist'
-        : parsedAllowlist.addresses.length > MAX_ALLOWLIST
-          ? `An allowlist can hold at most ${MAX_ALLOWLIST} wallets`
-          : !allowlistStart || !(Number(allowlistPrice) > 0)
-            ? 'Set the allowlist price and start time'
-            : goLiveDate && new Date(allowlistStart) >= new Date(goLiveDate)
-              ? 'The allowlist phase must start before the public go-live date'
-              : null
+  const allowlistPhase = useAllowlistPhase(goLiveDate)
 
   const [step, setStep] = useState<LaunchStep>('idle')
   const [progressLabel, setProgressLabel] = useState('')
@@ -152,13 +135,7 @@ export function MintLaunchPage() {
       const connection = new Connection(networkInfo.rpcUrl, 'confirmed')
       const signatures: string[] = []
       const isoGoLiveDate = new Date(goLiveDate).toISOString()
-      const allowlist: AllowlistPhaseInput | undefined = allowlistEnabled
-        ? {
-            addresses: parsedAllowlist.addresses,
-            price_sol: Number(allowlistPrice),
-            start_date: new Date(allowlistStart).toISOString(),
-          }
-        : undefined
+      const allowlist = allowlistPhase.input
 
       // Step 1: the collection transaction, signed+sent+confirmed on its
       // own before step 2 is ever requested. Two-step by design, not an
@@ -331,67 +308,7 @@ export function MintLaunchPage() {
                 />
               </label>
 
-              <fieldset className="space-y-3 rounded-md border border-border p-3">
-                <legend className="px-1 text-sm text-ink-muted">Allowlist phase (optional)</legend>
-                <label className="flex items-start gap-2 text-sm text-ink">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={allowlistEnabled}
-                    disabled={isBusy}
-                    onChange={(e) => setAllowlistEnabled(e.target.checked)}
-                  />
-                  <span>
-                    Add an allowlist phase before public minting opens
-                    <span className="block text-xs text-ink-faint">
-                      Only listed wallets can mint, at their own price, until public minting opens. Enforced on-chain.
-                    </span>
-                  </span>
-                </label>
-                {allowlistEnabled && (
-                  <>
-                    <label className="block text-sm text-ink-muted">
-                      Allowlisted wallets (one per line, or comma-separated)
-                      <textarea
-                        rows={4}
-                        value={allowlistText}
-                        disabled={isBusy}
-                        onChange={(e) => setAllowlistText(e.target.value)}
-                        className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs text-ink"
-                      />
-                    </label>
-                    <p className="text-xs text-ink-faint">
-                      {parsedAllowlist.addresses.length} wallet{parsedAllowlist.addresses.length === 1 ? '' : 's'}
-                      {parsedAllowlist.duplicates > 0 ? ` (${parsedAllowlist.duplicates} duplicate${parsedAllowlist.duplicates === 1 ? '' : 's'} removed)` : ''}
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block text-sm text-ink-muted">
-                        Allowlist price (SOL)
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={allowlistPrice}
-                          disabled={isBusy}
-                          onChange={(e) => setAllowlistPrice(e.target.value)}
-                          className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
-                        />
-                      </label>
-                      <label className="block text-sm text-ink-muted">
-                        Allowlist start
-                        <input
-                          type="datetime-local"
-                          value={allowlistStart}
-                          disabled={isBusy}
-                          onChange={(e) => setAllowlistStart(e.target.value)}
-                          className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
-                        />
-                      </label>
-                    </div>
-                    {allowlistProblem && <p className="text-xs text-warning">{allowlistProblem}</p>}
-                  </>
-                )}
-              </fieldset>
+              <AllowlistPhaseFields phase={allowlistPhase} disabled={isBusy} />
 
               <label className="block text-sm text-ink-muted">
                 Royalty (basis points, 500 = 5%)
@@ -462,7 +379,7 @@ export function MintLaunchPage() {
                   variant="primary"
                   className="w-full"
                   disabled={
-                    !publicKey || !goLiveDate || !priceSol || Boolean(allowlistProblem) || isBusy || (isMainnet && !mainnetConfirmed)
+                    !publicKey || !goLiveDate || !priceSol || Boolean(allowlistPhase.problem) || isBusy || (isMainnet && !mainnetConfirmed)
                   }
                   isLoading={isBusy}
                   onClick={() => void handleLaunch()}

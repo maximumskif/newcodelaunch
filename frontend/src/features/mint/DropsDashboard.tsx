@@ -5,8 +5,9 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { InlineError } from '../../components/ui/InlineError'
-import { candyMachineApi, SOLANA_NETWORKS, type CreatorDashboard, type NetworkTotals, type SolanaNetworkId } from '../../lib/candyMachineApi'
+import { candyMachineApi, SOLANA_NETWORKS, type CreatorDashboard, type CreatorDrop, type NetworkTotals, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { useAuth } from '../auth/AuthContext'
+import { EditPhasesDialog } from './EditPhasesDialog'
 
 function networkLabel(id: string): string {
   return SOLANA_NETWORKS.find((network) => network.id === id)?.label ?? id
@@ -29,6 +30,7 @@ export function DropsDashboard() {
   const [dashboard, setDashboard] = useState<CreatorDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [editing, setEditing] = useState<CreatorDrop | null>(null)
 
   const load = useCallback(() => {
     if (!accessToken) return
@@ -169,6 +171,16 @@ export function DropsDashboard() {
                             Explorer
                           </a>
                         )}
+                        {drop.items_remaining !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(drop)}
+                            aria-label={`Edit phases for ${drop.collection_name ?? 'this drop'}`}
+                            className="text-left text-accent-400 hover:underline"
+                          >
+                            Edit phases
+                          </button>
+                        )}
                       </span>
                     </td>
                   </tr>
@@ -177,6 +189,16 @@ export function DropsDashboard() {
             </tbody>
           </table>
         </div>
+      )}
+      {editing && (
+        <EditPhasesDialog
+          drop={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            load()
+          }}
+        />
       )}
     </section>
   )

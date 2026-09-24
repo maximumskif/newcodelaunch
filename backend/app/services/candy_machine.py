@@ -432,6 +432,7 @@ def record_candy_machine(
         items_available=items_available,
         go_live_date=parsed_go_live_date,
         allowlist=phase,
+        prices_seen=_prices(price_sol, phase),
         creator_wallet=creator_wallet,
         transaction_signatures=transaction_signatures,
         explorer_url=_explorer_url(network, candy_machine),
@@ -447,6 +448,81 @@ def get_user_candy_machines(user_id: str) -> list[CandyMachineDeployment]:
         .order_by(CandyMachineDeployment.created_at.desc())
         .all()
     )
+
+
+def _prices(price_sol: float, allowlist: dict[str, Any] | None) -> list[float]:
+    return sorted({price_sol, *([allowlist["price_sol"]] if allowlist else [])})
+
+
+def get_owned_deployment(deployment_id: str, user_id: str) -> CandyMachineDeployment:
+    deployment = db.session.get(CandyMachineDeployment, deployment_id)
+    if deployment is None or deployment.user_id != user_id:
+        raise NotFoundError(f"Candy machine not found: {deployment_id}")
+    return deployment
+
+
+def _validate_phase_edit(price_sol: Any, go_live_date: Any, allowlist: Any) -> tuple[float, datetime, dict[str, Any] | None]:
+    try:
+        price = float(price_sol)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("price_sol must be a number") from exc
+    if not 0.000001 <= price <= 1_000_000:
+        raise ValidationError("price_sol must be between 0.000001 and 1,000,000")
+    go_live = _parse_iso(go_live_date, "go_live_date")
+    return price, go_live, _validate_allowlist(allowlist, go_live.isoformat())
+
+
+def prepare_phase_update(
+    deployment: CandyMachineDeployment, price_sol: Any, go_live_date: Any, allowlist: Any = None
+) -> dict[str, Any]:
+    """Builds the creator-signed transaction that replaces a live drop's
+    phases (public price/start, and adding, changing or removing the
+    allowlist phase). Persists nothing — apply_phase_update does, once the
+    chain shows the new configuration."""
+    price, go_live, phase = _validate_phase_edit(price_sol, go_live_date, allowlist)
+    payload: dict[str, Any] = {
+        "network": _sidecar_network(deployment.network),
+        # The guard's authority — the only wallet whose signature the
+        # program accepts for this (anyone else fails on-chain).
+        "creatorPublicKey": deployment.creator_wallet,
+        "priceSol": price,
+        "goLiveDate": go_live.isoformat(),
+    }
+    if phase:
+        payload["allowlist"] = {"addresses": phase["addresses"], "priceSol": phase["price_sol"], "startDate": phase["start_date"]}
+    return _sidecar_request(
+        "POST", f"/internal/candy-machine/{deployment.candy_machine}/prepare-update", json=payload, timeout=30
+    )
+
+
+def apply_phase_update(
+    deployment: CandyMachineDeployment, transaction_signature: str, price_sol: Any, go_live_date: Any, allowlist: Any = None
+) -> CandyMachineDeployment:
+    """Records an edit the creator's wallet already sent — only once the
+    transaction succeeded, was paid for by the creator, and the guard
+    configuration now on-chain is exactly the claimed one (the same
+    read-back check a launch goes through)."""
+    price, go_live, phase = _validate_phase_edit(price_sol, go_live_date, allowlist)
+
+    tx_status = blockchain.get_transaction_status(deployment.network, transaction_signature)
+    if tx_status.get("status") != "success":
+        raise ValidationError(f"Transaction is not a confirmed success on-chain (status: {tx_status.get('status')})")
+    account_keys = tx_status.get("account_keys") or []
+    if not account_keys or account_keys[0] != deployment.creator_wallet:
+        raise ValidationError("The update transaction wasn't sent by this drop's creator wallet")
+
+    _verify_guards_on_chain(deployment.network, deployment.candy_machine, deployment.creator_wallet, price, go_live, phase)
+
+    previous = deployment.prices_seen or _prices(deployment.price_sol, deployment.allowlist)
+    deployment.price_sol = price
+    deployment.go_live_date = go_live
+    deployment.allowlist = phase
+    deployment.prices_seen = sorted({*previous, *_prices(price, phase)})
+    # New list objects, not in-place appends: SQLAlchemy's plain JSON type
+    # doesn't track mutation inside a list.
+    deployment.transaction_signatures = [*deployment.transaction_signatures, transaction_signature]
+    db.session.commit()
+    return deployment
 
 
 def current_phase(deployment: CandyMachineDeployment, now: datetime | None = None) -> str:
@@ -500,7 +576,7 @@ def get_creator_dashboard(user_id: str) -> dict[str, Any]:
         collection = db.session.get(NFTCollection, deployment.nft_collection_id)
         live = _live_counts(deployment)
         go_live = _as_utc(deployment.go_live_date)
-        prices = [deployment.price_sol] + ([deployment.allowlist["price_sol"]] if deployment.allowlist else [])
+        prices = deployment.prices_seen or _prices(deployment.price_sol, deployment.allowlist)
         redeemed = live["items_redeemed"] if live else None
         drop = {
             **deployment.to_dict(),

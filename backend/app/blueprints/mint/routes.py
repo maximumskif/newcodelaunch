@@ -167,6 +167,67 @@ def create_candy_machine():
     return jsonify(candy_machine=deployment.to_dict()), 201
 
 
+def _phase_edit_fields(data: dict):
+    missing = [f for f in ("price_sol", "go_live_date") if data.get(f) in (None, "")]
+    if missing:
+        return None, (jsonify(error=f"Missing required fields: {', '.join(missing)}"), 400)
+    return (data["price_sol"], data["go_live_date"], data.get("allowlist")), None
+
+
+@mint_bp.post("/candy-machines/<deployment_id>/prepare-update")
+@jwt_required()
+def prepare_phase_update(deployment_id):
+    """Step 1 of editing a live drop's phases: the creator-signed guard
+    update transaction. Step 2 (POST .../phases) records it once sent."""
+    data = request.get_json(silent=True) or {}
+    fields, error = _phase_edit_fields(data)
+    if error:
+        return error
+    try:
+        deployment = candy_machine.get_owned_deployment(deployment_id, get_jwt_identity())
+        return jsonify(candy_machine.prepare_phase_update(deployment, *fields))
+    except candy_machine.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except candy_machine.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        return _handle_candy_machine_service_error(exc)
+
+
+@mint_bp.get("/candy-machines/<deployment_id>/allowlist")
+@jwt_required()
+def get_allowlist(deployment_id):
+    """The full wallet list, for the creator's own phase editor only — every
+    public response carries just its size (on-chain there's only a root)."""
+    try:
+        deployment = candy_machine.get_owned_deployment(deployment_id, get_jwt_identity())
+    except candy_machine.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    return jsonify(addresses=deployment.allowlist["addresses"] if deployment.allowlist else [])
+
+
+@mint_bp.post("/candy-machines/<deployment_id>/phases")
+@jwt_required()
+def apply_phase_update(deployment_id):
+    data = request.get_json(silent=True) or {}
+    fields, error = _phase_edit_fields(data)
+    if error:
+        return error
+    signature = data.get("transaction_signature")
+    if not isinstance(signature, str) or not signature:
+        return jsonify(error="Missing required fields: transaction_signature"), 400
+    try:
+        deployment = candy_machine.get_owned_deployment(deployment_id, get_jwt_identity())
+        updated = candy_machine.apply_phase_update(deployment, signature, *fields)
+    except candy_machine.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except candy_machine.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        return _handle_candy_machine_service_error(exc)
+    return jsonify(candy_machine=updated.to_dict())
+
+
 @mint_bp.get("/dashboard")
 @jwt_required()
 def creator_dashboard():

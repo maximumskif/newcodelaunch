@@ -180,7 +180,10 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   gets a 403 from the mint API; the listed wallet sees the allowlist phase
   on the storefront and mints at the allowlist price through a real
   merkle-proof `route` + mint; the dashboard shows the allowlist phase and a
-  revenue range.
+  revenue range Then the same live drop is edited through the dashboard's
+  "Edit phases" dialog (allowlist removed, public opened now at a new
+  price — one creator-signed guard update, saved only after the backend
+  reads it back from the chain), and the storefront mints at the new price.
 - `solana-token.spec.ts` — sign in with Solana → fill the Token
   Launchpad's Solana form through the actual UI, including a real logo file
   upload → launch (real Pillow logo check, logo + metadata JSON pinned

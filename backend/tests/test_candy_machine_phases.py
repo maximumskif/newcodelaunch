@@ -60,6 +60,8 @@ def sidecar(monkeypatch):
             return {"merkle_root": ROOT}
         if path.endswith("/prepare-candy-machine"):
             return {"candy_machine": CANDY, "transactions": ["tx"]}
+        if path.endswith("/prepare-update"):
+            return {"transaction": "tx"}
         if path.endswith("/mint"):
             return {"transaction": "tx", "nft_mint": "nft"}
         if path.endswith("/status"):
@@ -299,3 +301,121 @@ def test_record_route_passes_the_allowlist_through(app, client, sidecar):
     )
     assert response.status_code == 201
     assert response.get_json()["candy_machine"]["allowlist"]["size"] == 2
+
+
+# --- editing a live drop's phases --------------------------------------------
+
+
+def _single_phase_guards(price_lamports: str, start: datetime):
+    return {
+        "default": {
+            "price_lamports": price_lamports,
+            "payment_destination": CREATOR,
+            "start_date": _iso_z(start),
+            "end_date": None,
+            "merkle_root": None,
+        },
+        "groups": [],
+    }
+
+
+def test_prepare_update_is_built_for_the_creator_wallet_with_the_new_phases(app, sidecar):
+    deployment = _deployment()
+    candy_machine.prepare_phase_update(deployment, 0.3, PUBLIC_START.isoformat(), {**ALLOWLIST, "price_sol": 0.1})
+    call = sidecar["calls"][-1]
+    assert call["path"] == f"/internal/candy-machine/{CANDY}/prepare-update"
+    assert call["json"]["creatorPublicKey"] == CREATOR
+    assert call["json"]["priceSol"] == 0.3
+    assert call["json"]["allowlist"]["priceSol"] == 0.1
+
+
+def test_prepare_update_validates_before_building_anything(app, sidecar):
+    deployment = _deployment()
+    with pytest.raises(candy_machine.ValidationError, match="must start before the public phase"):
+        candy_machine.prepare_phase_update(deployment, 0.3, WL_START.isoformat(), ALLOWLIST)
+    with pytest.raises(candy_machine.ValidationError, match="price_sol must be between"):
+        candy_machine.prepare_phase_update(deployment, 0, PUBLIC_START.isoformat())
+    assert sidecar["calls"] == []
+
+
+def test_apply_update_records_the_new_phases_once_the_chain_shows_them(app, sidecar):
+    deployment = _deployment()  # allowlist at 0.05, public at 0.2
+    deployment.prices_seen = [0.05, 0.2]
+    new_start = (NOW - timedelta(minutes=5)).replace(microsecond=0)
+    sidecar["guards"] = _single_phase_guards("300000000", new_start)
+
+    candy_machine.apply_phase_update(deployment, "6" * 88, 0.3, new_start.isoformat(), None)
+
+    assert deployment.price_sol == 0.3
+    assert deployment.allowlist is None
+    assert deployment.transaction_signatures == ["5" * 88, "6" * 88]
+    # Earlier mints may have paid 0.05 or 0.2 — the revenue range keeps them.
+    assert deployment.prices_seen == [0.05, 0.2, 0.3]
+    assert candy_machine.current_phase(deployment) == "public"
+
+
+def test_apply_update_changes_nothing_when_the_chain_disagrees(app, sidecar):
+    deployment = _deployment()
+    sidecar["guards"] = _single_phase_guards("999", NOW)  # not what's being claimed
+    with pytest.raises(candy_machine.ValidationError, match="doesn't match"):
+        candy_machine.apply_phase_update(deployment, "6" * 88, 0.3, NOW.isoformat(), None)
+    _db.session.refresh(deployment)
+    assert deployment.price_sol == 0.2
+    assert deployment.allowlist is not None
+
+
+def test_apply_update_requires_a_successful_tx_paid_by_the_creator(app, sidecar, monkeypatch):
+    deployment = _deployment()
+    monkeypatch.setattr(blockchain, "get_transaction_status", lambda n, s: {"status": "success", "account_keys": [OUTSIDER]})
+    with pytest.raises(candy_machine.ValidationError, match="creator wallet"):
+        candy_machine.apply_phase_update(deployment, "6" * 88, 0.2, PUBLIC_START.isoformat(), ALLOWLIST)
+    monkeypatch.setattr(blockchain, "get_transaction_status", lambda n, s: {"status": "failed", "account_keys": [CREATOR]})
+    with pytest.raises(candy_machine.ValidationError, match="not a confirmed success"):
+        candy_machine.apply_phase_update(deployment, "6" * 88, 0.2, PUBLIC_START.isoformat(), ALLOWLIST)
+
+
+def test_dashboard_range_spans_prices_from_before_an_edit(app, sidecar):
+    deployment = _deployment(allowlist=None, go_live=NOW - timedelta(hours=1))
+    deployment.price_sol = 0.3
+    deployment.prices_seen = [0.1, 0.3]
+    _db.session.commit()
+    drop = candy_machine.get_creator_dashboard(deployment.user_id)["drops"][0]
+    # 2 minted, at 0.1 (before the edit) or 0.3 (after).
+    assert (drop["revenue_min_sol"], drop["revenue_max_sol"]) == (0.2, 0.6)
+
+
+def test_phase_edit_routes_are_owner_only(app, client, sidecar):
+    deployment = _deployment()
+    owner = {"Authorization": f"Bearer {create_access_token(identity=deployment.user_id)}"}
+    stranger_user = User(wallet_address=OUTSIDER, chain=Chain.SOLANA)
+    _db.session.add(stranger_user)
+    _db.session.commit()
+    stranger = {"Authorization": f"Bearer {create_access_token(identity=stranger_user.id)}"}
+    body = {"price_sol": 0.2, "go_live_date": PUBLIC_START.isoformat(), "allowlist": ALLOWLIST}
+
+    assert client.post(f"/api/mint/candy-machines/{deployment.id}/prepare-update", headers=stranger, json=body).status_code == 404
+    assert client.post(f"/api/mint/candy-machines/{deployment.id}/prepare-update", headers=owner, json={}).status_code == 400
+    prepared = client.post(f"/api/mint/candy-machines/{deployment.id}/prepare-update", headers=owner, json=body)
+    assert prepared.status_code == 200
+
+    assert client.post(
+        f"/api/mint/candy-machines/{deployment.id}/phases", headers=owner, json=body
+    ).status_code == 400  # no signature
+    applied = client.post(
+        f"/api/mint/candy-machines/{deployment.id}/phases", headers=owner, json={**body, "transaction_signature": "6" * 88}
+    )
+    assert applied.status_code == 200
+    assert applied.get_json()["candy_machine"]["allowlist"]["size"] == 2
+
+
+def test_full_allowlist_is_for_the_owner_only(app, client, sidecar):
+    deployment = _deployment()
+    owner = {"Authorization": f"Bearer {create_access_token(identity=deployment.user_id)}"}
+    stranger_user = User(wallet_address=OUTSIDER, chain=Chain.SOLANA)
+    _db.session.add(stranger_user)
+    _db.session.commit()
+    stranger = {"Authorization": f"Bearer {create_access_token(identity=stranger_user.id)}"}
+
+    assert client.get(f"/api/mint/candy-machines/{deployment.id}/allowlist", headers=owner).get_json() == {"addresses": [CREATOR, FAN]}
+    assert client.get(f"/api/mint/candy-machines/{deployment.id}/allowlist", headers=stranger).status_code == 404
+    assert client.get(f"/api/mint/candy-machines/{deployment.id}/allowlist").status_code == 401
