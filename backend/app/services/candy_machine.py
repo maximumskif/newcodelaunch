@@ -21,6 +21,7 @@ from typing import Any
 
 import requests
 from flask import current_app
+from solders.pubkey import Pubkey
 
 from ..extensions import db
 from ..models.candy_machine import CandyMachineDeployment
@@ -38,6 +39,11 @@ class NotFoundError(ValueError):
     pass
 
 
+class NotEligibleError(ValueError):
+    """A mint request the drop's current phase doesn't allow — not live yet,
+    or allowlist-only and this wallet isn't on the list."""
+
+
 class CandyMachineServiceError(RuntimeError):
     def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
@@ -48,6 +54,16 @@ class CandyMachineServiceError(RuntimeError):
 # checked here too so a too-large collection fails fast with a clean 422
 # before ever calling the sidecar, instead of surfacing as an opaque 502.
 MAX_ITEMS = 20
+
+# Mirrors the sidecar's ALLOWLIST_GROUP / PUBLIC_GROUP / MAX_ALLOWLIST.
+ALLOWLIST_GROUP = "wl"
+PUBLIC_GROUP = "pub"
+MAX_ALLOWLIST = 2000
+LAMPORTS_PER_SOL = 1_000_000_000
+
+PHASE_UPCOMING = "upcoming"
+PHASE_ALLOWLIST = "allowlist"
+PHASE_PUBLIC = "public"
 
 
 def _sidecar_headers() -> dict[str, str]:
@@ -149,6 +165,47 @@ def _validate_launch_inputs(collection: NFTCollection, network: str, price_sol: 
     return published_items
 
 
+def _parse_iso(value: Any, field: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(f"{field} must be a valid ISO 8601 datetime") from exc
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def _validate_allowlist(allowlist: Any, go_live_date: str) -> dict[str, Any] | None:
+    """Normalizes an optional allowlist phase, or raises ValidationError.
+    Checked in both launch steps (like price) so a bad list fails before
+    the creator pays for the collection transaction, not after."""
+    if allowlist is None:
+        return None
+    if not isinstance(allowlist, dict):
+        raise ValidationError("allowlist must be an object with addresses, price_sol and start_date")
+    addresses = allowlist.get("addresses")
+    if not isinstance(addresses, list) or not addresses or not all(isinstance(a, str) for a in addresses):
+        raise ValidationError("allowlist.addresses must be a non-empty list of wallet addresses")
+    addresses = [a.strip() for a in addresses]
+    if len(addresses) > MAX_ALLOWLIST:
+        raise ValidationError(f"An allowlist can hold at most {MAX_ALLOWLIST} wallets")
+    if len(set(addresses)) != len(addresses):
+        raise ValidationError("allowlist.addresses must not contain duplicates")
+    for address in addresses:
+        try:
+            Pubkey.from_string(address)
+        except ValueError as exc:
+            raise ValidationError(f"Not a valid Solana wallet address: {address[:60]}") from exc
+    try:
+        price_sol = float(allowlist.get("price_sol"))
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("allowlist.price_sol must be a number") from exc
+    if not 0.000001 <= price_sol <= 1_000_000:
+        raise ValidationError("allowlist.price_sol must be between 0.000001 and 1,000,000")
+    start = _parse_iso(allowlist.get("start_date"), "allowlist.start_date")
+    if start >= _parse_iso(go_live_date, "go_live_date"):
+        raise ValidationError("The allowlist phase must start before the public phase")
+    return {"addresses": addresses, "price_sol": price_sol, "start_date": start.isoformat()}
+
+
 def prepare_collection(
     collection: NFTCollection,
     network: str,
@@ -156,6 +213,7 @@ def prepare_collection(
     price_sol: float,
     go_live_date: str,
     seller_fee_bps: int = 500,
+    allowlist: Any = None,
 ) -> dict[str, Any]:
     """Step 1 of the two-step launch flow (see
     docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md): builds only the
@@ -167,6 +225,7 @@ def prepare_collection(
     the creator's wallet has signed and sent every transaction from both
     steps, via `record_candy_machine`."""
     _validate_launch_inputs(collection, network, price_sol)
+    _validate_allowlist(allowlist, go_live_date)
     if not (0 <= seller_fee_bps <= 10000):
         # 0-10000 basis points (0-100%) is the Royalties plugin's own valid
         # range on the sidecar — validated here too so a creator finds out
@@ -202,6 +261,7 @@ def prepare_candy_machine_step(
     collection_mint: str,
     price_sol: float,
     go_live_date: str,
+    allowlist: Any = None,
 ) -> dict[str, Any]:
     """Step 2: builds the Candy Machine creation (+ config lines)
     transaction(s) against an already-created `collection_mint` (the result
@@ -211,6 +271,7 @@ def prepare_candy_machine_step(
     `prepare_collection` ran. This gap is the actual fix for the
     blockhash-expiry issue: see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md."""
     published_items = _validate_launch_inputs(collection, network, price_sol)
+    phase = _validate_allowlist(allowlist, go_live_date)
 
     payload = {
         "network": _sidecar_network(network),
@@ -223,8 +284,71 @@ def prepare_candy_machine_step(
         "priceSol": price_sol,
         "goLiveDate": go_live_date,
     }
+    if phase:
+        payload["allowlist"] = {
+            "addresses": phase["addresses"],
+            "priceSol": phase["price_sol"],
+            "startDate": phase["start_date"],
+        }
 
     return _sidecar_request("POST", "/internal/candy-machine/prepare-candy-machine", json=payload, timeout=30)
+
+
+def _verify_guards_on_chain(
+    network: str,
+    candy_machine: str,
+    creator_wallet: str,
+    price_sol: float,
+    go_live: datetime,
+    allowlist: dict[str, Any] | None,
+) -> None:
+    """Reads the drop's guard configuration back from the chain and checks
+    it's what's about to be recorded — prices, dates, where the proceeds go,
+    and for an allowlist phase the merkle root of the claimed wallet list.
+    Before this, record trusted the client's word for price and go-live
+    date; with phases, a wrong stored allowlist would also hand buyers
+    proofs that fail on-chain."""
+    guards = _sidecar_request(
+        "GET",
+        f"/internal/candy-machine/{candy_machine}/guards",
+        params={"network": _sidecar_network(network)},
+        timeout=15,
+    )
+
+    def check(guard_set: dict[str, Any], label: str, price: float, start: datetime, end: datetime | None) -> None:
+        def mismatch(field: str) -> ValidationError:
+            return ValidationError(f"On-chain {label} guard doesn't match the launch being recorded: {field}")
+
+        if guard_set.get("price_lamports") != str(round(price * LAMPORTS_PER_SOL)):
+            raise mismatch("price")
+        if guard_set.get("payment_destination") != creator_wallet:
+            raise mismatch("payment destination")
+        on_chain_start = guard_set.get("start_date")
+        if on_chain_start is None or int(_parse_iso(on_chain_start, "start_date").timestamp()) != int(start.timestamp()):
+            raise mismatch("start date")
+        on_chain_end = guard_set.get("end_date")
+        if end is None:
+            if on_chain_end is not None:
+                raise mismatch("end date")
+        elif on_chain_end is None or int(_parse_iso(on_chain_end, "end_date").timestamp()) != int(end.timestamp()):
+            raise mismatch("end date")
+
+    groups = {group.get("label"): group for group in guards.get("groups", [])}
+    if allowlist is None:
+        if groups:
+            raise ValidationError("On-chain guard has phases, but the launch being recorded has none")
+        check(guards.get("default", {}), "public", price_sol, go_live, None)
+        return
+
+    if set(groups) != {ALLOWLIST_GROUP, PUBLIC_GROUP}:
+        raise ValidationError("On-chain guard doesn't have the expected allowlist and public phases")
+    check(groups[ALLOWLIST_GROUP], "allowlist", allowlist["price_sol"], _parse_iso(allowlist["start_date"], "start_date"), go_live)
+    check(groups[PUBLIC_GROUP], "public", price_sol, go_live, None)
+    expected_root = _sidecar_request(
+        "POST", "/internal/candy-machine/merkle-root", json={"addresses": allowlist["addresses"]}, timeout=15
+    )["merkle_root"]
+    if groups[ALLOWLIST_GROUP].get("merkle_root") != expected_root:
+        raise ValidationError("On-chain allowlist doesn't match the wallet list being recorded")
 
 
 def record_candy_machine(
@@ -237,10 +361,12 @@ def record_candy_machine(
     items_available: int,
     go_live_date: str,
     creator_wallet: str,
+    allowlist: Any = None,
 ) -> CandyMachineDeployment:
     """Persist a candy machine the creator's own wallet already signed and
     sent, after independently confirming the last transaction actually
-    landed — same pattern as contracts.record_deployment."""
+    landed — same pattern as contracts.record_deployment — and that its
+    on-chain guard configuration is the one being recorded."""
     if network not in SOLANA_NETWORKS:
         raise ValidationError(f"network must be one of: {', '.join(SOLANA_NETWORKS)}")
     if not transaction_signatures:
@@ -293,6 +419,9 @@ def record_candy_machine(
             raise ValidationError("This candy_machine has already been recorded under a different account")
         return existing
 
+    phase = _validate_allowlist(allowlist, go_live_date)
+    _verify_guards_on_chain(network, candy_machine, creator_wallet, price_sol, _parse_iso(go_live_date, "go_live_date"), phase)
+
     deployment = CandyMachineDeployment(
         user_id=collection.user_id,
         nft_collection_id=collection.id,
@@ -302,6 +431,7 @@ def record_candy_machine(
         price_sol=price_sol,
         items_available=items_available,
         go_live_date=parsed_go_live_date,
+        allowlist=phase,
         creator_wallet=creator_wallet,
         transaction_signatures=transaction_signatures,
         explorer_url=_explorer_url(network, candy_machine),
@@ -317,6 +447,18 @@ def get_user_candy_machines(user_id: str) -> list[CandyMachineDeployment]:
         .order_by(CandyMachineDeployment.created_at.desc())
         .all()
     )
+
+
+def current_phase(deployment: CandyMachineDeployment, now: datetime | None = None) -> str:
+    """Which phase a drop is in right now — the same windows its on-chain
+    guard groups enforce (allowlist: its start until go-live; public: from
+    go-live on)."""
+    now = now or datetime.now(timezone.utc)
+    if now >= _as_utc(deployment.go_live_date):
+        return PHASE_PUBLIC
+    if deployment.allowlist and now >= _parse_iso(deployment.allowlist["start_date"], "start_date"):
+        return PHASE_ALLOWLIST
+    return PHASE_UPCOMING
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -345,10 +487,12 @@ def _live_counts(deployment: CandyMachineDeployment) -> dict[str, Any] | None:
 
 def get_creator_dashboard(user_id: str) -> dict[str, Any]:
     """Every drop the user launched, with live on-chain sales. Revenue is
-    minted x price: the solPayment guard sends exactly price_sol to the
-    creator's wallet per mint, and there's no update-guard feature, so the
-    recorded price is the price every mint paid. Totals are per network —
-    devnet SOL and mainnet SOL aren't the same money."""
+    minted x price: the solPayment guard sends exactly the phase's price to
+    the creator's wallet per mint, and there's no update-guard feature. A
+    drop with an allowlist phase has two prices, and the chain doesn't
+    record which phase each mint came through, so its revenue is a
+    min-max range (equal ends for a single-price drop). Totals are per
+    network — devnet SOL and mainnet SOL aren't the same money."""
     now = datetime.now(timezone.utc)
     drops = []
     totals: dict[str, dict[str, Any]] = {}
@@ -356,21 +500,28 @@ def get_creator_dashboard(user_id: str) -> dict[str, Any]:
         collection = db.session.get(NFTCollection, deployment.nft_collection_id)
         live = _live_counts(deployment)
         go_live = _as_utc(deployment.go_live_date)
+        prices = [deployment.price_sol] + ([deployment.allowlist["price_sol"]] if deployment.allowlist else [])
+        redeemed = live["items_redeemed"] if live else None
         drop = {
             **deployment.to_dict(),
             "collection_name": collection.name if collection else None,
             "is_live": now >= go_live,
+            "phase": current_phase(deployment, now),
             "live_status_available": live is not None,
-            "items_redeemed": live["items_redeemed"] if live else None,
+            "items_redeemed": redeemed,
             "items_remaining": live["items_remaining"] if live else None,
-            "revenue_sol": round(live["items_redeemed"] * deployment.price_sol, 9) if live else None,
+            "revenue_min_sol": round(redeemed * min(prices), 9) if live else None,
+            "revenue_max_sol": round(redeemed * max(prices), 9) if live else None,
         }
         drops.append(drop)
         if live:
-            network_totals = totals.setdefault(deployment.network, {"drops": 0, "items_redeemed": 0, "revenue_sol": 0.0})
+            network_totals = totals.setdefault(
+                deployment.network, {"drops": 0, "items_redeemed": 0, "revenue_min_sol": 0.0, "revenue_max_sol": 0.0}
+            )
             network_totals["drops"] += 1
-            network_totals["items_redeemed"] += live["items_redeemed"]
-            network_totals["revenue_sol"] = round(network_totals["revenue_sol"] + drop["revenue_sol"], 9)
+            network_totals["items_redeemed"] += redeemed
+            network_totals["revenue_min_sol"] = round(network_totals["revenue_min_sol"] + drop["revenue_min_sol"], 9)
+            network_totals["revenue_max_sol"] = round(network_totals["revenue_max_sol"] + drop["revenue_max_sol"], 9)
     return {"drops": drops, "totals_by_network": totals}
 
 
@@ -381,7 +532,7 @@ def _get_deployment_by_address(candy_machine_address: str) -> CandyMachineDeploy
     return deployment
 
 
-def get_public_candy_machine_status(candy_machine_address: str) -> dict[str, Any]:
+def get_public_candy_machine_status(candy_machine_address: str, wallet: str | None = None) -> dict[str, Any]:
     """Public (unauthenticated) storefront data for an already-launched
     candy machine. Combines what the creator's own launch already recorded
     — price, go-live date, collection name/description/preview — with a
@@ -431,10 +582,32 @@ def get_public_candy_machine_status(candy_machine_address: str) -> dict[str, Any
         "price_sol": deployment.price_sol,
         "go_live_date": go_live_date.isoformat(),
         "is_live": datetime.now(timezone.utc) >= go_live_date,
+        **_phase_view(deployment, wallet),
         "explorer_url": deployment.explorer_url,
         "items_available": on_chain["items_available"],
         "items_redeemed": on_chain["items_redeemed"],
         "items_remaining": on_chain["items_remaining"],
+    }
+
+
+def _phase_view(deployment: CandyMachineDeployment, wallet: str | None) -> dict[str, Any]:
+    """What a storefront visitor needs to know about the drop's phases —
+    never the allowlist itself (on-chain there's only its merkle root), just
+    its size and, for a given wallet, whether that wallet is on it."""
+    phase = current_phase(deployment)
+    allowlisted = wallet in deployment.allowlist["addresses"] if (deployment.allowlist and wallet) else None
+    if phase == PHASE_ALLOWLIST:
+        mint_price = deployment.allowlist["price_sol"] if allowlisted else None
+    elif phase == PHASE_PUBLIC:
+        mint_price = deployment.price_sol
+    else:
+        mint_price = None
+    return {
+        "phase": phase,
+        "allowlist": deployment.to_dict()["allowlist"],
+        "allowlisted": allowlisted,
+        # The price this wallet would pay right now, or None if it can't mint now.
+        "mint_price_sol": mint_price,
     }
 
 
@@ -447,12 +620,30 @@ def prepare_mint(candy_machine_address: str, minter_wallet: str) -> dict[str, An
     items_redeemed count is the source of truth (see get_public_candy_machine_status)."""
     deployment = _get_deployment_by_address(candy_machine_address)
 
-    payload = {
+    payload: dict[str, Any] = {
         "network": _sidecar_network(deployment.network),
         "minterPublicKey": minter_wallet,
         "collectionMint": deployment.collection_mint,
         "creatorPublicKey": deployment.creator_wallet,
     }
+
+    # Refuse up front what the on-chain guards would reject anyway, with a
+    # message a visitor can act on instead of a failed wallet simulation.
+    phase = current_phase(deployment)
+    if phase == PHASE_UPCOMING:
+        opens = deployment.allowlist["start_date"] if deployment.allowlist else _as_utc(deployment.go_live_date).isoformat()
+        raise NotEligibleError(f"This drop isn't open yet — minting starts {opens}")
+    if deployment.allowlist:
+        if phase == PHASE_ALLOWLIST:
+            if minter_wallet not in deployment.allowlist["addresses"]:
+                raise NotEligibleError(
+                    f"This drop is allowlist-only until {_as_utc(deployment.go_live_date).isoformat()}, "
+                    "and this wallet isn't on the allowlist"
+                )
+            payload["group"] = ALLOWLIST_GROUP
+            payload["allowlist"] = deployment.allowlist["addresses"]
+        else:
+            payload["group"] = PUBLIC_GROUP
 
     return _sidecar_request(
         "POST", f"/internal/candy-machine/{candy_machine_address}/mint", json=payload, timeout=30

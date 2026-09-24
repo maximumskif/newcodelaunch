@@ -29,16 +29,19 @@ export function MintBuyPage() {
   const [mintedNft, setMintedNft] = useState<string | null>(null)
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
 
+  // Re-fetched when the wallet changes: allowlist eligibility and the price
+  // this wallet pays are per wallet.
+  const wallet = publicKey?.toBase58()
   const loadStatus = useCallback(() => {
     if (!candyMachineId) return
     setIsLoading(true)
     setLoadError(null)
     candyMachineApi
-      .getPublicStatus(candyMachineId)
+      .getPublicStatus(candyMachineId, wallet)
       .then(setStatus)
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'Failed to load this drop'))
       .finally(() => setIsLoading(false))
-  }, [candyMachineId])
+  }, [candyMachineId, wallet])
 
   useEffect(() => {
     // Fetching data on an external dependency (candyMachineId) change is
@@ -120,7 +123,9 @@ export function MintBuyPage() {
             <div className="flex flex-col gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={status.is_live ? 'success' : 'warning'}>{status.is_live ? 'Live now' : 'Not live yet'}</Badge>
+                  <Badge tone={status.phase === 'upcoming' ? 'warning' : 'success'}>
+                    {status.phase === 'public' ? 'Live now' : status.phase === 'allowlist' ? 'Allowlist phase' : 'Not live yet'}
+                  </Badge>
                   <Badge tone="neutral">{status.items_remaining} of {status.items_available} remaining</Badge>
                   {isMainnet && <Badge tone="warning">Solana Mainnet</Badge>}
                 </div>
@@ -129,11 +134,28 @@ export function MintBuyPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-border bg-surface-raised p-4">
-                <p className="text-xs text-ink-faint">Price</p>
-                <p className="font-display text-3xl font-semibold text-ink">{status.price_sol} SOL</p>
-                <p className="mt-1 text-xs text-ink-faint">Opens {new Date(status.go_live_date).toLocaleString()}</p>
-              </div>
+              {status.allowlist ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className={`rounded-lg border p-4 ${status.phase === 'allowlist' ? 'border-accent-500 bg-accent-500/5' : 'border-border bg-surface-raised'}`}>
+                    <p className="text-xs text-ink-faint">Allowlist · {status.allowlist.size} wallets</p>
+                    <p className="font-display text-2xl font-semibold text-ink">{status.allowlist.price_sol} SOL</p>
+                    <p className="mt-1 text-xs text-ink-faint">
+                      {new Date(status.allowlist.start_date).toLocaleString()} – {new Date(status.go_live_date).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className={`rounded-lg border p-4 ${status.phase === 'public' ? 'border-accent-500 bg-accent-500/5' : 'border-border bg-surface-raised'}`}>
+                    <p className="text-xs text-ink-faint">Public</p>
+                    <p className="font-display text-2xl font-semibold text-ink">{status.price_sol} SOL</p>
+                    <p className="mt-1 text-xs text-ink-faint">Opens {new Date(status.go_live_date).toLocaleString()}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border bg-surface-raised p-4">
+                  <p className="text-xs text-ink-faint">Price</p>
+                  <p className="font-display text-3xl font-semibold text-ink">{status.price_sol} SOL</p>
+                  <p className="mt-1 text-xs text-ink-faint">Opens {new Date(status.go_live_date).toLocaleString()}</p>
+                </div>
+              )}
 
               {mintedNft ? (
                 // Checked before sold-out/not-live below on purpose: loadStatus() re-fetches
@@ -149,8 +171,15 @@ export function MintBuyPage() {
                 </div>
               ) : status.items_remaining === 0 ? (
                 <EmptyState title="Sold out" description="Every item in this drop has already been minted." />
-              ) : !status.is_live ? (
+              ) : status.phase === 'upcoming' ? (
                 <EmptyState title="Minting hasn't opened yet" description="Check back after the opening time above." />
+              ) : status.phase === 'allowlist' && !publicKey ? (
+                <p className="text-sm text-warning">This drop is in its allowlist phase — connect a Solana wallet above to check whether you're on the list.</p>
+              ) : status.phase === 'allowlist' && status.allowlisted === false ? (
+                <EmptyState
+                  title="Allowlist only for now"
+                  description={`This wallet isn't on the allowlist. Public minting opens ${new Date(status.go_live_date).toLocaleString()}.`}
+                />
               ) : (
                 <>
                   {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to mint.</p>}
@@ -174,7 +203,7 @@ export function MintBuyPage() {
                     isLoading={isBusy}
                     onClick={() => void handleMint()}
                   >
-                    {isBusy ? 'Minting…' : `Mint for ${status.price_sol} SOL`}
+                    {isBusy ? 'Minting…' : `Mint for ${status.mint_price_sol ?? status.price_sol} SOL`}
                   </Button>
                 </>
               )}

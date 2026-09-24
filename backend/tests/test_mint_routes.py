@@ -119,7 +119,7 @@ def test_prepare_candy_machine_step_forwards_collection_mint(app, client, monkey
 def test_get_public_candy_machine_needs_no_auth(client, monkeypatch):
     # No Authorization header at all — a buyer visiting a shared link has
     # no account with this app.
-    monkeypatch.setattr(candy_machine, "get_public_candy_machine_status", lambda addr: {"candy_machine": addr})
+    monkeypatch.setattr(candy_machine, "get_public_candy_machine_status", lambda addr, wallet=None: {"candy_machine": addr})
 
     response = client.get("/api/mint/public/some-address")
 
@@ -128,7 +128,7 @@ def test_get_public_candy_machine_needs_no_auth(client, monkeypatch):
 
 
 def test_get_public_candy_machine_404s_on_unknown_address(client, monkeypatch):
-    def fake_status(addr):
+    def fake_status(addr, wallet=None):
         raise candy_machine.NotFoundError(f"No candy machine found for address: {addr}")
 
     monkeypatch.setattr(candy_machine, "get_public_candy_machine_status", fake_status)
@@ -168,7 +168,7 @@ def test_get_public_candy_machine_sanitizes_service_errors(client, monkeypatch):
     # "CANDY_MACHINE_SHARED_SECRET is not configured" — that must never
     # reach an anonymous caller verbatim on these two public routes (unlike
     # the authenticated /prepare route above, where it's fine).
-    def fake_status(addr):
+    def fake_status(addr, wallet=None):
         raise candy_machine.CandyMachineServiceError(
             "Candy Machine service returned 500: <secret internal sidecar traceback>", status_code=500
         )

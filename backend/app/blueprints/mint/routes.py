@@ -51,6 +51,7 @@ def prepare_collection():
             price_sol=price_sol,
             go_live_date=data["go_live_date"],
             seller_fee_bps=seller_fee_bps,
+            allowlist=data.get("allowlist"),
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
@@ -97,6 +98,7 @@ def prepare_candy_machine_step():
             collection_mint=data["collection_mint"],
             price_sol=price_sol,
             go_live_date=data["go_live_date"],
+            allowlist=data.get("allowlist"),
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
@@ -147,9 +149,14 @@ def create_candy_machine():
             items_available=items_available,
             go_live_date=data["go_live_date"],
             creator_wallet=data["creator_wallet"],
+            allowlist=data.get("allowlist"),
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        # Reading the guard configuration back from the chain failed — the
+        # drop exists on-chain, so this is retryable, not an input error.
+        return _handle_candy_machine_service_error(exc)
 
     project_id = data.get("project_id")
     if project_id:
@@ -197,7 +204,9 @@ def _public_service_error_response(exc: candy_machine.CandyMachineServiceError):
 @limiter.limit("60/minute")
 def get_public_candy_machine(candy_machine_address: str):
     try:
-        status = candy_machine.get_public_candy_machine_status(candy_machine_address)
+        # ?wallet= adds whether that wallet is on the drop's allowlist and
+        # what it would pay right now.
+        status = candy_machine.get_public_candy_machine_status(candy_machine_address, request.args.get("wallet"))
     except candy_machine.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
     except candy_machine.CandyMachineServiceError as exc:
@@ -218,6 +227,8 @@ def prepare_public_mint(candy_machine_address: str):
         result = candy_machine.prepare_mint(candy_machine_address, minter_wallet)
     except candy_machine.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
+    except candy_machine.NotEligibleError as exc:
+        return jsonify(error=str(exc)), 403
     except candy_machine.CandyMachineServiceError as exc:
         return _public_service_error_response(exc)
 

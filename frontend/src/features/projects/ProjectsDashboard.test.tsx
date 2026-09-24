@@ -48,6 +48,7 @@ const baseProject: Project = {
     price_sol: 0.5,
     items_available: 10,
     go_live_date: '2026-01-01T00:00:00Z',
+    allowlist: null,
     creator_wallet: 'CREATOR11111111111111111111111111111111111',
     transaction_signatures: ['sig1'],
     explorer_url: null,

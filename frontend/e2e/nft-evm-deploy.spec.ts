@@ -1,14 +1,14 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { createPublicClient, createWalletClient, defineChain, http, parseAbi, parseEther, type Address } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
+import { AUTH_STORAGE_KEY, seedPublishedCollection } from './setup/seed'
+
 const here = path.dirname(fileURLToPath(import.meta.url))
 
-const API_BASE_URL = 'http://localhost:5000/api'
-const AUTH_STORAGE_KEY = 'nocode-launchpad.auth'
 const ANVIL_RPC_URL = 'http://127.0.0.1:8545'
 // The Pinata stub's gateway (run-backend.sh's PINATA_GATEWAY_URL).
 const IPFS_GATEWAY = 'http://127.0.0.1:5555/ipfs/'
@@ -39,25 +39,6 @@ const ERC721_ABI = parseAbi([
   'function tokenURI(uint256 tokenId) view returns (string)',
 ])
 
-// Two distinct 1x1 PNGs — two traits in one layer give exactly two unique
-// generated items, so the token-id -> item mapping is actually exercised.
-const PNG_BLUE_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
-const PNG_RED_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='
-
-async function waitForGenerationJob(request: APIRequestContext, headers: Record<string, string>, jobId: string) {
-  const deadline = Date.now() + 30_000
-  for (;;) {
-    const res = await request.get(`${API_BASE_URL}/nft/generation-jobs/${jobId}`, { headers })
-    const { job } = await res.json()
-    if (job.status === 'done') return
-    if (job.status === 'failed') throw new Error(`Generation job failed: ${job.error}`)
-    if (Date.now() > deadline) throw new Error(`Generation job ${jobId} never finished`)
-    await new Promise((resolve) => setTimeout(resolve, 200))
-  }
-}
-
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     ;(window as unknown as { __E2E_ANVIL_RPC_URL__: string }).__E2E_ANVIL_RPC_URL__ = 'http://127.0.0.1:8545'
@@ -82,41 +63,8 @@ test('a real ERC-721 deploy of a generated collection: metadata folder pinned, d
   }, AUTH_STORAGE_KEY)
   const headers = { Authorization: `Bearer ${accessToken}` }
 
-  // Seed a published two-item collection through the real API — same
-  // approach (and rationale) as candy-machine.spec.ts; the NFT Generator's
-  // own upload UI is covered by nft-generator.spec.ts.
-  const { collection } = await (
-    await request.post(`${API_BASE_URL}/nft/collections`, {
-      headers,
-      data: { name: 'E2E Cool Apes', description: 'Seeded by the e2e suite' },
-    })
-  ).json()
-  const { layer } = await (
-    await request.post(`${API_BASE_URL}/nft/collections/${collection.id}/layers`, { headers, data: { name: 'Fur' } })
-  ).json()
-  for (const [name, png] of [
-    ['Blue', PNG_BLUE_BASE64],
-    ['Red', PNG_RED_BASE64],
-  ]) {
-    const traitRes = await request.post(`${API_BASE_URL}/nft/layers/${layer.id}/traits`, {
-      headers,
-      multipart: { name, rarity_weight: '50', image: { name: `${name}.png`, mimeType: 'image/png', buffer: Buffer.from(png, 'base64') } },
-    })
-    expect(traitRes.ok()).toBe(true)
-  }
-  const generateRes = await request.post(`${API_BASE_URL}/nft/collections/${collection.id}/generate`, {
-    headers,
-    data: { count: 2 },
-  })
-  expect(generateRes.status()).toBe(202)
-  await waitForGenerationJob(request, headers, (await generateRes.json()).job.id)
-  const { items } = await (await request.get(`${API_BASE_URL}/nft/collections/${collection.id}/items`, { headers })).json()
-  expect(items).toHaveLength(2)
-  for (const item of items) {
-    expect((await request.post(`${API_BASE_URL}/nft/items/${item.id}/publish`, { headers })).ok()).toBe(true)
-  }
-  const published = (await (await request.get(`${API_BASE_URL}/nft/collections/${collection.id}/items`, { headers })).json()).items
-  published.sort((a: { token_index: number }, b: { token_index: number }) => a.token_index - b.token_index)
+  // A published two-item collection, seeded through the real API.
+  const { collection, items: published } = await seedPublishedCollection(request, headers, 'E2E Cool Apes', 2)
 
   // The real part: deploy through the actual page, reached the way a user
   // reaches it (the NFT Generator hands off via ?collection=).

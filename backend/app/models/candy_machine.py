@@ -30,6 +30,13 @@ class CandyMachineDeployment(db.Model):
     price_sol = db.Column(db.Float, nullable=False)
     items_available = db.Column(db.Integer, nullable=False)
     go_live_date = db.Column(db.DateTime(timezone=True), nullable=False)
+    # Optional allowlist phase before go_live_date (a second guard group,
+    # see services/candy-machine's /prepare-candy-machine):
+    # {"addresses": [...], "price_sol": float, "start_date": iso}. price_sol
+    # and go_live_date above are the public phase. Checked against the
+    # on-chain guard at record time; the address list is never exposed by
+    # to_dict (only its size) — on-chain there's only a merkle root.
+    allowlist = db.Column(db.JSON, nullable=True)
 
     creator_wallet = db.Column(db.String(64), nullable=False)
     transaction_signatures = db.Column(db.JSON, nullable=False, default=list)
@@ -47,6 +54,15 @@ class CandyMachineDeployment(db.Model):
             "price_sol": self.price_sol,
             "items_available": self.items_available,
             "go_live_date": self.go_live_date.isoformat(),
+            "allowlist": (
+                {
+                    "price_sol": self.allowlist["price_sol"],
+                    "start_date": self.allowlist["start_date"],
+                    "size": len(self.allowlist["addresses"]),
+                }
+                if self.allowlist
+                else None
+            ),
             "creator_wallet": self.creator_wallet,
             "transaction_signatures": self.transaction_signatures,
             "explorer_url": self.explorer_url,

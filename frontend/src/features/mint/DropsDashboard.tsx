@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { InlineError } from '../../components/ui/InlineError'
-import { candyMachineApi, SOLANA_NETWORKS, type CreatorDashboard, type SolanaNetworkId } from '../../lib/candyMachineApi'
+import { candyMachineApi, SOLANA_NETWORKS, type CreatorDashboard, type NetworkTotals, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { useAuth } from '../auth/AuthContext'
 
 function networkLabel(id: string): string {
@@ -14,6 +14,12 @@ function networkLabel(id: string): string {
 
 function formatSol(value: number): string {
   return `${value.toLocaleString('en-US', { maximumFractionDigits: 9 })} SOL`
+}
+
+// A two-price (allowlist + public) drop's revenue is a range — the chain
+// doesn't record which phase each mint came through.
+function formatRevenue(min: number, max: number): string {
+  return min === max ? formatSol(min) : `${formatSol(min).replace(' SOL', '')}–${formatSol(max)}`
 }
 
 // The creator's own drops with live on-chain sales — what /mint shows when
@@ -46,7 +52,7 @@ export function DropsDashboard() {
     return <p className="text-ink-faint">Sign in with your wallet to see your drops.</p>
   }
 
-  const totals = Object.entries(dashboard?.totals_by_network ?? {}) as [SolanaNetworkId, { drops: number; items_redeemed: number; revenue_sol: number }][]
+  const totals = Object.entries(dashboard?.totals_by_network ?? {}) as [SolanaNetworkId, NetworkTotals][]
 
   return (
     <section className="space-y-4">
@@ -64,7 +70,7 @@ export function DropsDashboard() {
           {totals.map(([network, total]) => (
             <div key={network} className="rounded-xl border border-border bg-surface p-4">
               <p className="text-xs text-ink-faint">{networkLabel(network)}</p>
-              <p className="mt-1 text-2xl font-semibold text-ink">{formatSol(total.revenue_sol)}</p>
+              <p className="mt-1 text-2xl font-semibold text-ink">{formatRevenue(total.revenue_min_sol, total.revenue_max_sol)}</p>
               <p className="text-sm text-ink-muted">
                 {total.items_redeemed.toLocaleString('en-US')} minted across {total.drops} drop{total.drops === 1 ? '' : 's'}
               </p>
@@ -129,13 +135,26 @@ export function DropsDashboard() {
                         <span className="text-ink-faint">Unavailable</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-ink">{formatSol(drop.price_sol)}</td>
-                    <td className="px-4 py-3 text-ink">{drop.revenue_sol === null ? '—' : formatSol(drop.revenue_sol)}</td>
+                    <td className="px-4 py-3 text-ink">
+                      {formatSol(drop.price_sol)}
+                      {drop.allowlist && (
+                        <span className="block text-xs text-ink-faint">
+                          {formatSol(drop.allowlist.price_sol)} allowlist · {drop.allowlist.size} wallets
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-ink">
+                      {drop.revenue_min_sol === null || drop.revenue_max_sol === null
+                        ? '—'
+                        : formatRevenue(drop.revenue_min_sol, drop.revenue_max_sol)}
+                    </td>
                     <td className="px-4 py-3">
                       {drop.live_status_available && drop.items_remaining === 0 ? (
                         <Badge tone="accent">Sold out</Badge>
-                      ) : drop.is_live ? (
+                      ) : drop.phase === 'public' ? (
                         <Badge tone="success">Live</Badge>
+                      ) : drop.phase === 'allowlist' ? (
+                        <Badge tone="info">Allowlist phase</Badge>
                       ) : (
                         <Badge tone="neutral">Starts {new Date(drop.go_live_date).toLocaleString()}</Badge>
                       )}

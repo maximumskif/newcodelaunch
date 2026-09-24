@@ -174,20 +174,13 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   await page.getByRole('link', { name: /\/mint\/buy\// }).click()
   await expect(page).toHaveURL(/\/mint\/buy\//)
 
-  // MintBuyPage.tsx only fetches status once on mount, with no client-side
-  // retry — measured directly (a plain Node script polling this exact
-  // endpoint every second, no browser involved) that a brand-new Candy
-  // Machine account can take up to ~15s before a *fresh* RPC connection
-  // resolves it, even at "confirmed" commitment. An ordinary propagation
-  // characteristic of a bare single-node validator, not a bug — the
-  // project's own real-devnet Candy Machine work hit the identical
-  // "transient false alarm ... resolved on retry" case for this exact
-  // route (see docs/REBUILD_PROGRESS.md). Poll via reload, matching what a
-  // real visitor would do on seeing "drop not found" moments after a fresh link.
-  for (let attempt = 0; !(await page.getByText('Live now').isVisible()) && attempt < 8; attempt++) {
-    await page.waitForTimeout(3_000)
-    await page.reload()
-  }
+  // No reload loop needed: this used to poll via page.reload() for up to
+  // ~24s, on the theory that a brand-new Candy Machine takes ~15s to
+  // "propagate" on a single-node validator. The real cause was the
+  // sidecar's read routes using web3.js's default "finalized" commitment,
+  // which trails "confirmed" by ~13s — fixed there (READ_COMMITMENT in
+  // services/candy-machine/src/routes/candyMachine.ts), so the status is
+  // readable as soon as the launch is confirmed.
   await expect(page.getByText('Live now')).toBeVisible({ timeout: 5_000 })
   await page.getByRole('button', { name: /^Mint for/ }).click()
 
@@ -195,16 +188,12 @@ test('a real Candy Machine launch and public mint — against a real local Solan
 
   // The creator's dashboard (/mint with no collection) reads that sale back
   // live from the chain: 1 of 1 minted, sold out, revenue = 1 x the 0.1 SOL
-  // default price. Same propagation caveat as the storefront above, so the
-  // row is re-checked via reload rather than trusted on first paint.
+  // default price.
   await page.goto('/mint')
   const row = page.getByRole('row', { name: /E2E Candy Collection/ })
-  for (let attempt = 0; !(await row.getByText('1 / 1').isVisible().catch(() => false)) && attempt < 8; attempt++) {
-    await page.waitForTimeout(2_000)
-    await page.reload()
-  }
   await expect(row).toContainText('1 / 1')
   await expect(row).toContainText('Sold out')
   await expect(row).toContainText('0.1 SOL')
-  await expect(page.getByText('1 minted across 1 drop')).toBeVisible()
+  // (Per-network totals aren't asserted here: other Solana specs in the run
+  // launch drops from the same fixture wallet, so they'd count too.)
 })

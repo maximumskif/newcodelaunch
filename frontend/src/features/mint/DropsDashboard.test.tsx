@@ -24,16 +24,19 @@ const drop: CreatorDrop = {
   price_sol: 0.25,
   items_available: 4,
   go_live_date: '2026-01-01T00:00:00Z',
+  allowlist: null,
   creator_wallet: 'Creator111',
   transaction_signatures: ['sig'],
   explorer_url: 'https://explorer.solana.com/address/Candy111?cluster=devnet',
   created_at: '2026-01-01T00:00:00Z',
   collection_name: 'Cool Apes',
   is_live: true,
+  phase: 'public',
   live_status_available: true,
   items_redeemed: 3,
   items_remaining: 1,
-  revenue_sol: 0.75,
+  revenue_min_sol: 0.75,
+  revenue_max_sol: 0.75,
 }
 
 function renderDashboard() {
@@ -51,7 +54,7 @@ describe('DropsDashboard', () => {
     vi.mocked(candyMachineApi.dashboard).mockResolvedValue({
       drops: [
         drop,
-        { ...drop, id: 'cm-2', candy_machine: 'Candy222', collection_name: 'Sold Out Set', items_redeemed: 4, items_remaining: 0, revenue_sol: 1 },
+        { ...drop, id: 'cm-2', candy_machine: 'Candy222', collection_name: 'Sold Out Set', items_redeemed: 4, items_remaining: 0, revenue_min_sol: 1, revenue_max_sol: 1 },
         {
           ...drop,
           id: 'cm-3',
@@ -61,11 +64,13 @@ describe('DropsDashboard', () => {
           live_status_available: false,
           items_redeemed: null,
           items_remaining: null,
-          revenue_sol: null,
+          revenue_min_sol: null,
+          revenue_max_sol: null,
           is_live: false,
+          phase: 'upcoming',
         },
       ],
-      totals_by_network: { solana_devnet: { drops: 2, items_redeemed: 7, revenue_sol: 1.75 } },
+      totals_by_network: { solana_devnet: { drops: 2, items_redeemed: 7, revenue_min_sol: 1.75, revenue_max_sol: 1.75 } },
     })
     renderDashboard()
 
@@ -84,6 +89,27 @@ describe('DropsDashboard', () => {
 
     expect(screen.getByText('1.75 SOL')).toBeInTheDocument()
     expect(screen.getByText('7 minted across 2 drops')).toBeInTheDocument()
+  })
+
+  it('shows a revenue range and the allowlist phase for a two-price drop', async () => {
+    vi.mocked(candyMachineApi.dashboard).mockResolvedValue({
+      drops: [
+        {
+          ...drop,
+          phase: 'allowlist',
+          allowlist: { price_sol: 0.1, start_date: '2026-01-01T00:00:00Z', size: 50 },
+          revenue_min_sol: 0.3,
+          revenue_max_sol: 0.75,
+        },
+      ],
+      totals_by_network: { solana_devnet: { drops: 1, items_redeemed: 3, revenue_min_sol: 0.3, revenue_max_sol: 0.75 } },
+    })
+    renderDashboard()
+
+    const row = (await screen.findByText('Cool Apes')).closest('tr')!
+    expect(within(row).getByText('0.3–0.75 SOL')).toBeInTheDocument()
+    expect(within(row).getByText('Allowlist phase')).toBeInTheDocument()
+    expect(within(row).getByText('0.1 SOL allowlist · 50 wallets')).toBeInTheDocument()
   })
 
   it('points a creator with no drops at the NFT Generator', async () => {

@@ -1,7 +1,17 @@
 import { Router } from "express";
-import { generateSigner, publicKey, sol } from "@metaplex-foundation/umi";
+import { generateSigner, none, publicKey, sol, some, type PublicKey } from "@metaplex-foundation/umi";
 import { createCollection, ruleSet } from "@metaplex-foundation/mpl-core";
-import { addConfigLines, create, fetchCandyMachine, mintV1, mplCandyMachine } from "@metaplex-foundation/mpl-core-candy-machine";
+import {
+  addConfigLines,
+  create,
+  fetchCandyGuard,
+  fetchCandyMachine,
+  getMerkleProof,
+  getMerkleRoot,
+  mintV1,
+  mplCandyMachine,
+  route,
+} from "@metaplex-foundation/mpl-core-candy-machine";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
 import { serializeSigned } from "../lib/transactions.js";
@@ -14,6 +24,55 @@ export const candyMachineRouter = Router();
 // (backend/app/services/nft_generation.py): a modest, documented ceiling
 // rather than trying to support arbitrary-size drops in a first pass.
 const MAX_ITEMS = 20;
+
+// Allowlist phase (guard groups): a modest cap, same spirit as MAX_ITEMS.
+// Proof size grows with log2(list size), so 2,000 wallets is an 11-hash
+// proof — comfortably inside one mint transaction with the route call.
+const MAX_ALLOWLIST = 2000;
+
+// Guard group labels (the program caps a label at 6 bytes). A drop with an
+// allowlist has exactly these two groups; one without has none and keeps
+// its price/start date in the default guard set, exactly as before.
+export const ALLOWLIST_GROUP = "wl";
+export const PUBLIC_GROUP = "pub";
+
+interface AllowlistPhase {
+  addresses?: string[];
+  priceSol?: number;
+  startDate?: string;
+}
+
+function isValidPriceSol(value: unknown): value is number {
+  // See the priceSol comment in /prepare-candy-machine for why these bounds.
+  return typeof value === "number" && Number.isFinite(value) && value >= 0.000001 && value <= 1_000_000;
+}
+
+// Validates an allowlist phase against the public start date; returns an
+// error message, or null if it's usable.
+function allowlistProblem(allowlist: AllowlistPhase, publicStart: string): string | null {
+  const addresses = allowlist.addresses;
+  if (!Array.isArray(addresses) || addresses.length === 0) return "allowlist.addresses must be a non-empty array";
+  if (addresses.length > MAX_ALLOWLIST) return `allowlist.addresses supports at most ${MAX_ALLOWLIST} wallets`;
+  if (new Set(addresses).size !== addresses.length) return "allowlist.addresses must not contain duplicates";
+  for (const address of addresses) {
+    try {
+      publicKey(address);
+    } catch {
+      return `allowlist.addresses contains an invalid wallet address: ${String(address).slice(0, 60)}`;
+    }
+  }
+  if (!isValidPriceSol(allowlist.priceSol)) return "allowlist.priceSol must be a number between 0.000001 and 1,000,000";
+  const start = Date.parse(allowlist.startDate ?? "");
+  const end = Date.parse(publicStart);
+  if (Number.isNaN(start)) return "allowlist.startDate must be a valid date";
+  if (!(start < end)) return "allowlist.startDate must be before the public goLiveDate";
+  return null;
+}
+
+// "Present in Umi's Option" -> plain value or null, for JSON responses.
+function unwrap<T>(option: { __option: "Some"; value: T } | { __option: "None" }): T | null {
+  return option.__option === "Some" ? option.value : null;
+}
 
 interface PrepareItem {
   name: string;
@@ -36,6 +95,7 @@ interface PrepareCandyMachineBody {
   items?: PrepareItem[];
   priceSol?: number;
   goLiveDate?: string;
+  allowlist?: AllowlistPhase;
 }
 
 function utf8Length(value: string): number {
@@ -168,6 +228,13 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
     res.status(400).json({ error: "goLiveDate is required" });
     return;
   }
+  if (body.allowlist !== undefined) {
+    const problem = allowlistProblem(body.allowlist, body.goLiveDate);
+    if (problem) {
+      res.status(400).json({ error: problem });
+      return;
+    }
+  }
 
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
@@ -189,11 +256,39 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
         uriLength: maxUriLength,
         isSequential: false,
       },
-      guards: {
-        solPayment: { lamports: sol(body.priceSol), destination: creator.publicKey },
-        startDate: { date: body.goLiveDate },
-      },
-      groups: [],
+      ...(body.allowlist
+        ? {
+            // Two phases as guard groups: the allowlist phase (merkle-root
+            // allowList + its own price, open from its start date until the
+            // public start) and the public phase. Nothing in the default
+            // set, so every mint must name a group.
+            guards: {},
+            groups: [
+              {
+                label: ALLOWLIST_GROUP,
+                guards: {
+                  allowList: { merkleRoot: getMerkleRoot(body.allowlist.addresses!) },
+                  solPayment: { lamports: sol(body.allowlist.priceSol!), destination: creator.publicKey },
+                  startDate: { date: body.allowlist.startDate! },
+                  endDate: { date: body.goLiveDate },
+                },
+              },
+              {
+                label: PUBLIC_GROUP,
+                guards: {
+                  solPayment: { lamports: sol(body.priceSol), destination: creator.publicKey },
+                  startDate: { date: body.goLiveDate },
+                },
+              },
+            ],
+          }
+        : {
+            guards: {
+              solPayment: { lamports: sol(body.priceSol), destination: creator.publicKey },
+              startDate: { date: body.goLiveDate },
+            },
+            groups: [],
+          }),
     });
 
     const configLinesBuilder = addConfigLines(umi, {
@@ -230,6 +325,14 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
   }
 });
 
+// Reads at "confirmed", not web3.js's default "finalized" — finalization
+// trails confirmation by ~13s, so a drop the creator's wallet had just
+// confirmed read as "not found" here for that long after launch (the
+// e2e suite's storefront reload loop was working around exactly this).
+// Same fix, for the same reason, as the backend's own Solana client
+// (backend/app/services/blockchain.py's _get_solana_client).
+const READ_COMMITMENT = "confirmed" as const;
+
 // Live on-chain state for the public mint storefront (backend also stores
 // price/go-live/creator data from launch time — that never changes, since
 // there's no update-guard feature — but items_redeemed only exists
@@ -244,7 +347,7 @@ candyMachineRouter.get("/:candyMachineId/status", async (req, res) => {
   }
 
   try {
-    const umi = createUmi(SOLANA_NETWORKS[network]).use(mplCandyMachine());
+    const umi = createUmi(SOLANA_NETWORKS[network], READ_COMMITMENT).use(mplCandyMachine());
     const account = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId));
     const itemsAvailable = Number(account.data.itemsAvailable);
     const itemsRedeemed = Number(account.itemsRedeemed);
@@ -258,11 +361,63 @@ candyMachineRouter.get("/:candyMachineId/status", async (req, res) => {
   }
 });
 
+// The drop's guard configuration as it actually is on-chain — the backend
+// checks what a creator claims at record time against this, and never has
+// to trust the client's word for prices, dates, or the allowlist.
+candyMachineRouter.get("/:candyMachineId/guards", async (req, res) => {
+  const network = req.query.network;
+  if (typeof network !== "string" || !isSolanaNetwork(network)) {
+    res.status(400).json({ error: `network must be one of: devnet, mainnet-beta` });
+    return;
+  }
+
+  try {
+    const umi = createUmi(SOLANA_NETWORKS[network], READ_COMMITMENT).use(mplCandyMachine());
+    const candyMachine = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId));
+    const guard = await fetchCandyGuard(umi, candyMachine.mintAuthority);
+    const describe = (guards: typeof guard.guards) => {
+      const solPayment = unwrap(guards.solPayment);
+      const startDate = unwrap(guards.startDate);
+      const endDate = unwrap(guards.endDate);
+      const allowList = unwrap(guards.allowList);
+      return {
+        price_lamports: solPayment ? solPayment.lamports.basisPoints.toString() : null,
+        payment_destination: solPayment ? solPayment.destination : null,
+        start_date: startDate ? new Date(Number(startDate.date) * 1000).toISOString() : null,
+        end_date: endDate ? new Date(Number(endDate.date) * 1000).toISOString() : null,
+        merkle_root: allowList ? Buffer.from(allowList.merkleRoot).toString("hex") : null,
+      };
+    };
+    res.json({
+      default: describe(guard.guards),
+      groups: guard.groups.map((group) => ({ label: group.label, ...describe(group.guards) })),
+    });
+  } catch (error) {
+    res.status(404).json({ error: error instanceof Error ? error.message : "Candy guard not found on-chain" });
+  }
+});
+
+// The merkle root of a wallet list, computed with the same SDK function the
+// allowList guard was configured with — so the backend can compare a
+// claimed allowlist against the root actually on-chain.
+candyMachineRouter.post("/merkle-root", (req, res) => {
+  const addresses = (req.body as { addresses?: unknown }).addresses;
+  if (!Array.isArray(addresses) || addresses.length === 0 || !addresses.every((a) => typeof a === "string")) {
+    res.status(400).json({ error: "addresses must be a non-empty array of strings" });
+    return;
+  }
+  res.json({ merkle_root: Buffer.from(getMerkleRoot(addresses as string[])).toString("hex") });
+});
+
 interface MintBody {
   network?: string;
   minterPublicKey?: string;
   collectionMint?: string;
   creatorPublicKey?: string;
+  // Set for a drop with phases: which guard group to mint through. For the
+  // allowlist group, the full allowlist too, to build the minter's proof.
+  group?: string;
+  allowlist?: string[];
 }
 
 // Builds a buyer's mint transaction — the distinct "buy" flow deferred when
@@ -295,18 +450,47 @@ candyMachineRouter.post("/:candyMachineId/mint", async (req, res) => {
     return;
   }
 
+  if (body.group !== undefined && body.group !== ALLOWLIST_GROUP && body.group !== PUBLIC_GROUP) {
+    res.status(400).json({ error: `group must be "${ALLOWLIST_GROUP}" or "${PUBLIC_GROUP}"` });
+    return;
+  }
+  if (body.group === ALLOWLIST_GROUP && (!Array.isArray(body.allowlist) || !body.allowlist.includes(body.minterPublicKey))) {
+    res.status(400).json({ error: "minterPublicKey is not on this drop's allowlist" });
+    return;
+  }
+
   try {
     const umi = createUmiForWallet(body.network, body.minterPublicKey);
     const asset = generateSigner(umi);
+    const candyMachine = publicKey(req.params.candyMachineId);
+    const group = body.group ? some(body.group) : none<string>();
+    const solPayment = { destination: publicKey(body.creatorPublicKey) as PublicKey };
 
-    const builder = mintV1(umi, {
-      candyMachine: publicKey(req.params.candyMachineId),
+    let builder = mintV1(umi, {
+      candyMachine,
       asset,
       collection: publicKey(body.collectionMint),
-      mintArgs: {
-        solPayment: { destination: publicKey(body.creatorPublicKey) },
-      },
+      group,
+      mintArgs:
+        body.group === ALLOWLIST_GROUP
+          ? { allowList: { merkleRoot: getMerkleRoot(body.allowlist!) }, solPayment }
+          : { solPayment },
     });
+
+    if (body.group === ALLOWLIST_GROUP) {
+      // The allowList guard checks a proof PDA the route instruction
+      // creates — prove membership first, in the same transaction.
+      builder = route(umi, {
+        candyMachine,
+        guard: "allowList",
+        group,
+        routeArgs: {
+          path: "proof",
+          merkleRoot: getMerkleRoot(body.allowlist!),
+          merkleProof: getMerkleProof(body.allowlist!, body.minterPublicKey),
+        },
+      }).add(builder);
+    }
 
     const transaction = await serializeSigned(umi, builder);
     res.json({ transaction, nft_mint: asset.publicKey });

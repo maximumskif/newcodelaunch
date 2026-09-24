@@ -55,11 +55,29 @@ export interface CandyMachineDeployment {
   price_sol: number
   items_available: number
   go_live_date: string
+  // Optional allowlist phase before go_live_date (price_sol/go_live_date
+  // are the public phase). Never includes the wallet list itself.
+  allowlist: AllowlistSummary | null
   creator_wallet: string
   transaction_signatures: string[]
   explorer_url: string | null
   created_at: string
 }
+
+export interface AllowlistSummary {
+  price_sol: number
+  start_date: string
+  size: number
+}
+
+// What a launch sends for an allowlist phase.
+export interface AllowlistPhaseInput {
+  addresses: string[]
+  price_sol: number
+  start_date: string
+}
+
+export type DropPhase = 'upcoming' | 'allowlist' | 'public'
 
 export interface PublicCandyMachineStatus {
   candy_machine: string
@@ -71,6 +89,12 @@ export interface PublicCandyMachineStatus {
   price_sol: number
   go_live_date: string
   is_live: boolean
+  phase: DropPhase
+  allowlist: AllowlistSummary | null
+  // Only when the status was fetched with a wallet: is it on the allowlist?
+  allowlisted: boolean | null
+  // What that wallet would pay right now; null if it can't mint now.
+  mint_price_sol: number | null
   explorer_url: string | null
   items_available: number
   items_redeemed: number
@@ -82,16 +106,27 @@ export interface PublicCandyMachineStatus {
 export interface CreatorDrop extends CandyMachineDeployment {
   collection_name: string | null
   is_live: boolean
+  phase: DropPhase
   live_status_available: boolean
   items_redeemed: number | null
   items_remaining: number | null
-  revenue_sol: number | null
+  // A range: a drop with an allowlist phase has two prices, and the chain
+  // doesn't record which phase each mint came through. Equal for one price.
+  revenue_min_sol: number | null
+  revenue_max_sol: number | null
 }
 
 export interface CreatorDashboard {
   drops: CreatorDrop[]
   // Per network — devnet and mainnet SOL are never summed together.
-  totals_by_network: Partial<Record<SolanaNetworkId, { drops: number; items_redeemed: number; revenue_sol: number }>>
+  totals_by_network: Partial<Record<SolanaNetworkId, NetworkTotals>>
+}
+
+export interface NetworkTotals {
+  drops: number
+  items_redeemed: number
+  revenue_min_sol: number
+  revenue_max_sol: number
 }
 
 export interface PreparedMint {
@@ -109,6 +144,7 @@ export const candyMachineApi = {
       price_sol: number
       go_live_date: string
       seller_fee_bps?: number
+      allowlist?: AllowlistPhaseInput
     },
   ) =>
     request<PrepareCollectionResult>('/mint/prepare-collection', { method: 'POST', body: JSON.stringify(payload) }, token),
@@ -122,6 +158,7 @@ export const candyMachineApi = {
       collection_mint: string
       price_sol: number
       go_live_date: string
+      allowlist?: AllowlistPhaseInput
     },
   ) =>
     request<PrepareCandyMachineResult>(
@@ -143,6 +180,7 @@ export const candyMachineApi = {
       go_live_date: string
       creator_wallet: string
       project_id?: string
+      allowlist?: AllowlistPhaseInput
     },
   ) =>
     request<{ candy_machine: CandyMachineDeployment }>(
@@ -157,8 +195,12 @@ export const candyMachineApi = {
 
   // Public storefront — no token, no account. Anyone with a shared drop
   // link can view status and mint.
-  getPublicStatus: (candyMachineAddress: string) =>
-    request<PublicCandyMachineStatus>(`/mint/public/${candyMachineAddress}`),
+  // With a wallet, the status also says whether it's on the allowlist and
+  // what it would pay right now.
+  getPublicStatus: (candyMachineAddress: string, wallet?: string) =>
+    request<PublicCandyMachineStatus>(
+      `/mint/public/${candyMachineAddress}${wallet ? `?wallet=${encodeURIComponent(wallet)}` : ''}`,
+    ),
 
   prepareMint: (candyMachineAddress: string, minterWallet: string) =>
     request<PreparedMint>(`/mint/public/${candyMachineAddress}/mint`, {

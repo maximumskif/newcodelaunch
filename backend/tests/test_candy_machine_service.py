@@ -22,6 +22,37 @@ class _FakeResponse:
         return self._json_data
 
 
+@pytest.fixture
+def chain_guards(monkeypatch):
+    """Stands in for the sidecar's on-chain guard read-back that
+    record_candy_machine now checks against. Defaults to the single-phase
+    drop these tests record (0.1 SOL, 2026-09-01, paid to VALID_ADDRESS);
+    tests can replace state["guards"] to simulate a mismatch or phases."""
+    state = {
+        "guards": {
+            "default": {
+                "price_lamports": "100000000",
+                "payment_destination": VALID_ADDRESS,
+                "start_date": "2026-09-01T00:00:00.000Z",
+                "end_date": None,
+                "merkle_root": None,
+            },
+            "groups": [],
+        },
+        "merkle_root": "ab" * 32,
+    }
+
+    def fake_sidecar_request(method, path, *, json=None, params=None, timeout):
+        if path.endswith("/guards"):
+            return state["guards"]
+        if path.endswith("/merkle-root"):
+            return {"merkle_root": state["merkle_root"]}
+        raise AssertionError(f"unexpected sidecar call: {method} {path}")
+
+    monkeypatch.setattr(candy_machine, "_sidecar_request", fake_sidecar_request)
+    return state
+
+
 def _make_deployment(collection, *, go_live_delta=timedelta(hours=-1)):
     deployment = CandyMachineDeployment(
         user_id=collection.user_id,
@@ -247,7 +278,7 @@ def test_record_rejects_a_confirmed_transaction_that_does_not_reference_the_cand
             )
 
 
-def test_record_accepts_a_confirmed_transaction_that_references_the_candy_machine(app, monkeypatch):
+def test_record_accepts_a_confirmed_transaction_that_references_the_candy_machine(app, monkeypatch, chain_guards):
     with app.app_context():
         user = _make_user()
         collection = _make_collection(user.id)
@@ -272,7 +303,7 @@ def test_record_accepts_a_confirmed_transaction_that_references_the_candy_machin
         assert deployment.candy_machine == VALID_ADDRESS
 
 
-def test_record_is_idempotent_for_the_same_candy_machine_address(app, monkeypatch):
+def test_record_is_idempotent_for_the_same_candy_machine_address(app, monkeypatch, chain_guards):
     # Regression test: a client retry after a slow/dropped response to a
     # request that actually succeeded server-side used to insert a second
     # row for the same on-chain candy_machine address, which
@@ -342,7 +373,7 @@ def test_record_rejects_a_malformed_go_live_date_with_a_clean_validation_error(a
         assert CandyMachineDeployment.query.filter_by(candy_machine=VALID_ADDRESS).count() == 0
 
 
-def test_record_rejects_a_candy_machine_address_already_recorded_under_a_different_owner(app, monkeypatch):
+def test_record_rejects_a_candy_machine_address_already_recorded_under_a_different_owner(app, monkeypatch, chain_guards):
     # Regression: the idempotency check above was scoped only by the
     # candy_machine address, not by owner — the address is public on-chain
     # data, so a caller who happens to submit an address already recorded
@@ -559,15 +590,18 @@ def test_creator_dashboard_reports_live_sales_and_per_network_totals(app, monkey
         drops = {d["candy_machine"]: d for d in dashboard["drops"]}
 
         assert drops[live.candy_machine]["items_redeemed"] == 1
-        assert drops[live.candy_machine]["revenue_sol"] == 0.25
+        assert drops[live.candy_machine]["revenue_min_sol"] == 0.25
+        assert drops[live.candy_machine]["revenue_max_sol"] == 0.25
         assert drops[live.candy_machine]["is_live"] is True
         assert drops[live.candy_machine]["collection_name"] == "Test Collection"
         # One unreachable drop is reported as such — it doesn't fail the rest.
         assert drops[OTHER_ADDRESS]["live_status_available"] is False
-        assert drops[OTHER_ADDRESS]["revenue_sol"] is None
+        assert drops[OTHER_ADDRESS]["revenue_min_sol"] is None
         assert drops[OTHER_ADDRESS]["is_live"] is False
         # Mainnet and devnet revenue are never summed together.
-        assert dashboard["totals_by_network"] == {"solana_devnet": {"drops": 1, "items_redeemed": 1, "revenue_sol": 0.25}}
+        assert dashboard["totals_by_network"] == {
+            "solana_devnet": {"drops": 1, "items_redeemed": 1, "revenue_min_sol": 0.25, "revenue_max_sol": 0.25}
+        }
 
 
 def test_creator_dashboard_only_shows_your_own_drops(app, client, monkeypatch):

@@ -137,6 +137,7 @@ describe('MintLaunchPage project linking', () => {
         price_sol: 0.1,
         items_available: 1,
         go_live_date: '2026-09-01T00:00:00.000Z',
+        allowlist: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1'],
         explorer_url: null,
@@ -196,6 +197,7 @@ describe('MintLaunchPage project linking', () => {
         price_sol: 0.1,
         items_available: 1,
         go_live_date: '2026-09-01T00:00:00.000Z',
+        allowlist: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1', 'sig-1'],
         explorer_url: null,
@@ -249,6 +251,7 @@ describe('MintLaunchPage project linking', () => {
         price_sol: 0.1,
         items_available: 1,
         go_live_date: '2026-09-01T00:00:00.000Z',
+        allowlist: null,
         creator_wallet: 'CreatorPublicKey11111111111111111111111111',
         transaction_signatures: ['sig-1'],
         explorer_url: null,
@@ -336,3 +339,77 @@ describe('MintLaunchPage collection-fetch race', () => {
     expect(screen.queryByText('Test Collection')).not.toBeInTheDocument()
   })
 })
+
+describe('MintLaunchPage allowlist phase', () => {
+  const FAN = 'FoEsHYn3QLcBMae9YmkYC57ogWamP7zUqKNeuBgh6VwG'
+  const OTHER = '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'
+
+  function mockLaunchApis() {
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: { toBase58: () => 'CreatorPublicKey11111111111111111111111111' },
+      sendTransaction: vi.fn().mockResolvedValue('sig-1'),
+    } as unknown as ReturnType<typeof useWallet>)
+    vi.mocked(nftApi.getCollection).mockResolvedValue({ collection })
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [publishedItem] })
+    vi.mocked(candyMachineApi.prepareCollection).mockResolvedValue({ collection_mint: 'CollMint1', transaction: 'eA==' })
+    vi.mocked(candyMachineApi.prepareCandyMachine).mockResolvedValue({ candy_machine: 'Candy1', transactions: ['eA=='] })
+    vi.mocked(candyMachineApi.create).mockResolvedValue({
+      candy_machine: {
+        id: 'cm-1',
+        nft_collection_id: 'col-1',
+        network: 'solana_devnet',
+        collection_mint: 'CollMint1',
+        candy_machine: 'Candy1',
+        price_sol: 0.1,
+        items_available: 1,
+        go_live_date: '2026-09-02T00:00:00.000Z',
+        allowlist: { price_sol: 0.05, start_date: '2026-09-01T00:00:00.000Z', size: 2 },
+        creator_wallet: 'CreatorPublicKey11111111111111111111111111',
+        transaction_signatures: ['sig-1'],
+        explorer_url: null,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    })
+  }
+
+  it('sends the parsed allowlist phase through every launch step', async () => {
+    mockLaunchApis()
+    const user = userEvent.setup()
+    renderAt('?collection=col-1')
+
+    await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
+    await user.click(screen.getByLabelText(/Add an allowlist phase/))
+    await user.type(screen.getByLabelText(/Allowlisted wallets/), `${FAN}\n${OTHER}, ${FAN}`)
+    expect(screen.getByText('2 wallets (1 duplicate removed)')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Allowlist start'), '2026-09-01T00:00')
+    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+
+    const allowlist = {
+      addresses: [FAN, OTHER],
+      price_sol: 0.05,
+      start_date: new Date('2026-09-01T00:00').toISOString(),
+    }
+    await waitFor(() => expect(candyMachineApi.create).toHaveBeenCalledWith('tok', expect.objectContaining({ allowlist })))
+    expect(candyMachineApi.prepareCollection).toHaveBeenCalledWith('tok', expect.objectContaining({ allowlist }))
+    expect(candyMachineApi.prepareCandyMachine).toHaveBeenCalledWith('tok', expect.objectContaining({ allowlist }))
+  })
+
+  it('blocks launching with an invalid address or an allowlist that starts after public minting', async () => {
+    mockLaunchApis()
+    const user = userEvent.setup()
+    renderAt('?collection=col-1')
+
+    await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
+    await user.click(screen.getByLabelText(/Add an allowlist phase/))
+    await user.type(screen.getByLabelText(/Allowlisted wallets/), '0xNotSolana')
+    expect(screen.getByText(/Not a Solana wallet address: 0xNotSolana/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
+
+    await user.clear(screen.getByLabelText(/Allowlisted wallets/))
+    await user.type(screen.getByLabelText(/Allowlisted wallets/), FAN)
+    await user.type(screen.getByLabelText('Allowlist start'), '2026-09-03T00:00')
+    expect(screen.getByText('The allowlist phase must start before the public go-live date')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
+  })
+})
+

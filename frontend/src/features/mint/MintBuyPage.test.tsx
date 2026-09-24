@@ -38,6 +38,10 @@ const baseStatus: PublicCandyMachineStatus = {
   price_sol: 0.5,
   go_live_date: '2020-01-01T00:00:00Z',
   is_live: true,
+  phase: 'public',
+  allowlist: null,
+  allowlisted: null,
+  mint_price_sol: 0.5,
   explorer_url: null,
   items_available: 10,
   items_redeemed: 10,
@@ -68,6 +72,8 @@ describe('MintBuyPage', () => {
     vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({
       ...baseStatus,
       is_live: false,
+      phase: 'upcoming',
+      mint_price_sol: null,
       items_redeemed: 0,
       items_remaining: 10,
     })
@@ -107,5 +113,55 @@ describe('MintBuyPage', () => {
     expect(await screen.findByText('Minted!')).toBeInTheDocument()
     expect(screen.getByText('MintedAsset1111111111111111111111111111111')).toBeInTheDocument()
     expect(screen.queryByText('Sold out')).not.toBeInTheDocument()
+  })
+
+  describe('during an allowlist phase', () => {
+    const allowlistStatus: PublicCandyMachineStatus = {
+      ...baseStatus,
+      is_live: false,
+      phase: 'allowlist',
+      allowlist: { price_sol: 0.1, start_date: '2020-01-01T00:00:00Z', size: 25 },
+      go_live_date: '2099-01-01T00:00:00Z',
+      items_redeemed: 0,
+      items_remaining: 10,
+    }
+    const BUYER = 'BuyerPublicKey111111111111111111111111111'
+
+    function connectWallet() {
+      vi.mocked(useWallet).mockReturnValue({
+        publicKey: { toBase58: () => BUYER },
+        sendTransaction: vi.fn(),
+      } as unknown as ReturnType<typeof useWallet>)
+    }
+
+    it('shows both phases and asks a visitor to connect to check eligibility', async () => {
+      vi.mocked(useWallet).mockReturnValue({ publicKey: null, sendTransaction: vi.fn() } as unknown as ReturnType<typeof useWallet>)
+      vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({ ...allowlistStatus, allowlisted: null, mint_price_sol: null })
+      renderAt(baseStatus.candy_machine)
+
+      expect(await screen.findByText('Allowlist phase')).toBeInTheDocument()
+      expect(screen.getByText('Allowlist · 25 wallets')).toBeInTheDocument()
+      expect(screen.getByText('0.1 SOL')).toBeInTheDocument()
+      expect(screen.getByText(/connect a Solana wallet above to check/)).toBeInTheDocument()
+      expect(screen.queryByText(/Mint for/)).not.toBeInTheDocument()
+    })
+
+    it('tells a wallet that is not on the list when public opens, with no mint button', async () => {
+      connectWallet()
+      vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({ ...allowlistStatus, allowlisted: false, mint_price_sol: null })
+      renderAt(baseStatus.candy_machine)
+
+      expect(await screen.findByText('Allowlist only for now')).toBeInTheDocument()
+      expect(candyMachineApi.getPublicStatus).toHaveBeenCalledWith(baseStatus.candy_machine, BUYER)
+      expect(screen.queryByText(/Mint for/)).not.toBeInTheDocument()
+    })
+
+    it('lets an allowlisted wallet mint at the allowlist price', async () => {
+      connectWallet()
+      vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({ ...allowlistStatus, allowlisted: true, mint_price_sol: 0.1 })
+      renderAt(baseStatus.candy_machine)
+
+      expect(await screen.findByRole('button', { name: 'Mint for 0.1 SOL' })).toBeEnabled()
+    })
   })
 })

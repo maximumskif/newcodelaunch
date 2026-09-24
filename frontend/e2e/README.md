@@ -172,6 +172,15 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   unauthenticated visitor flow). This is the exact flow this project's own
   docs had only ever verified via `curl`-level checks or a single manual
   devnet pass before this.
+- `candy-machine-phases.spec.ts` — launch a two-item drop through the
+  actual form with an allowlist phase (the fixture wallet + one other, open
+  now; public phase tomorrow). Recording itself proves the on-chain guard
+  groups are right — the backend reads them back and checks prices, dates,
+  payment destination, and the merkle root. Then: a wallet not on the list
+  gets a 403 from the mint API; the listed wallet sees the allowlist phase
+  on the storefront and mints at the allowlist price through a real
+  merkle-proof `route` + mint; the dashboard shows the allowlist phase and a
+  revenue range.
 - `solana-token.spec.ts` — sign in with Solana → fill the Token
   Launchpad's Solana form through the actual UI, including a real logo file
   upload → launch (real Pillow logo check, logo + metadata JSON pinned
