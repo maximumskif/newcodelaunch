@@ -42,3 +42,17 @@ def test_verify_endpoint_rejects_non_string_fields_instead_of_crashing(client):
         json={"wallet_address": 12345, "chain": "evm", "signature": ["not", "a", "string"], "nonce": {}},
     )
     assert response.status_code == 400
+
+
+def test_rate_limited_response_is_json_with_a_readable_error(client):
+    # The frontend surfaces body.error verbatim (lib/http.ts) — Flask-Limiter's
+    # default HTML 429 left it showing "Request to /auth/nonce failed with
+    # status 429" instead.
+    payload = {"wallet_address": "0xRateLimitedWallet", "chain": "evm"}
+    for _ in range(10):
+        client.post("/api/auth/nonce", json=payload)
+
+    blocked = client.post("/api/auth/nonce", json=payload)
+    assert blocked.status_code == 429
+    assert blocked.is_json
+    assert "wait" in blocked.get_json()["error"]

@@ -70,6 +70,18 @@ class Config:
     # only the config attribute name has to match Flask-Limiter exactly.
     RATELIMIT_STORAGE_URI = os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://")
 
+    # On unless explicitly set to "false". Exists for exactly one caller:
+    # the e2e suite (frontend/e2e/setup/run-backend.sh), which signs in the
+    # same wallet from the same IP a dozen-plus times a minute — by design
+    # indistinguishable from the abuse these limits exist to stop, so the
+    # suite kept tripping /auth/nonce's 10/minute per-wallet limit and
+    # failing whichever spec happened to be 11th. The limits themselves stay
+    # covered by pytest (test_auth_routes.py, test_ratelimit_storage.py).
+    # Deliberately left out of .env.example: nothing outside a test harness
+    # should ever turn this off. Same exact-key rule as RATELIMIT_STORAGE_URI
+    # above (flask_limiter.constants.ConfigVars.ENABLED).
+    RATELIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "true").strip().lower() != "false"
+
     # Number of trusted reverse-proxy hops in front of this app (a load
     # balancer, a CDN, etc). 0 by default — meaning ProxyFix does nothing
     # and request.remote_addr (what the rate limiter keys on) is trusted as

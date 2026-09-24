@@ -55,5 +55,14 @@ export FLASK_APP="wsgi.py"
 export OPENAI_API_KEY="sk-e2e-test-not-for-real-use"
 export OPENAI_BASE_URL="http://127.0.0.1:5556/v1"
 
+# Every spec signs in the same anvil wallet from the same IP — a dozen-plus
+# /auth/nonce calls a minute on a full run, past the real 10/minute
+# per-wallet limit. That made whichever EVM spec ran 11th (token-deploy,
+# alphabetically) fail its sign-in with a 429 whenever the suite ran fast
+# enough; CI's retry usually landed in a fresh window and hid it. The
+# limits are covered by pytest instead (see RATELIMIT_ENABLED in
+# backend/app/config.py).
+export RATE_LIMIT_ENABLED="false"
+
 .venv/bin/flask db upgrade
 exec .venv/bin/flask run

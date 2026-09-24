@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
@@ -29,6 +29,14 @@ def create_app(config_object=Config):
     cors.init_app(app, origins=app.config["CORS_ORIGINS"], supports_credentials=True)
     jwt.init_app(app)
     limiter.init_app(app)
+
+    # Flask-Limiter's default 429 is an HTML page, so the frontend's
+    # `body.error ?? ...` fallback (lib/http.ts) showed users the raw
+    # "Request to /auth/nonce failed with status 429" instead of anything
+    # actionable. Every other error this API returns is {"error": ...} JSON.
+    @app.errorhandler(429)
+    def rate_limited(_e):
+        return jsonify(error="Too many requests — please wait a minute and try again."), 429
 
     from . import models  # noqa: F401  (registers models with SQLAlchemy metadata)
 
