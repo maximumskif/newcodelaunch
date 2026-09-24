@@ -90,3 +90,15 @@ def test_upload_json_returns_the_real_pinata_shape(app, monkeypatch):
 
         assert result["hash"] == "QmMeta"
         assert result["url"] == "ipfs://QmMeta"
+
+
+def test_blank_pinata_url_env_vars_fall_back_to_the_real_endpoints(monkeypatch):
+    # backend/.env.example ships PINATA_BASE_URL=/PINATA_GATEWAY_URL= blank,
+    # which python-dotenv loads as "" — that must mean "default", not a
+    # hostless URL.
+    monkeypatch.setenv("PINATA_BASE_URL", "")
+    assert ipfs._url_from_env("PINATA_BASE_URL", "https://api.pinata.cloud") == "https://api.pinata.cloud"
+    monkeypatch.delenv("PINATA_BASE_URL")
+    assert ipfs._url_from_env("PINATA_BASE_URL", "https://api.pinata.cloud") == "https://api.pinata.cloud"
+    monkeypatch.setenv("PINATA_BASE_URL", "http://127.0.0.1:5555")
+    assert ipfs._url_from_env("PINATA_BASE_URL", "https://api.pinata.cloud") == "http://127.0.0.1:5555"

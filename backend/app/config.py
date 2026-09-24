@@ -18,6 +18,20 @@ def _require(name: str) -> str:
     return value
 
 
+def _rpc_url_env(name: str, default: str) -> str:
+    """An RPC URL env var, falling back to `default` when unset *or empty*.
+
+    os.environ.get(name, default) alone only falls back when the variable is
+    missing — but `NAME=` in an env file (docker-compose's env_file, most
+    hosting dashboards' "blank" value) sets it to "", which web3/solana-py
+    would then be handed as the URL. The Candy Machine sidecar had exactly
+    that bug with its own .env.example (see services/candy-machine/src/lib/
+    umi.ts); same normalization here so blanking an override means "use the
+    public default" everywhere.
+    """
+    return os.environ.get(name, "").strip() or default
+
+
 class Config:
     ENV = os.environ.get("FLASK_ENV", "development")
     DEBUG = ENV == "development"
@@ -96,14 +110,14 @@ class Config:
     # Testnets are listed first and are what the frontend network picker
     # defaults to (see NetworkContext.tsx) — mainnet requires the user to
     # deliberately switch networks and confirm before a deploy goes through.
-    SEPOLIA_RPC_URL = os.environ.get("SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com")
-    ETHEREUM_RPC_URL = os.environ.get("ETHEREUM_RPC_URL", "https://eth.llamarpc.com")
-    POLYGON_AMOY_RPC_URL = os.environ.get("POLYGON_AMOY_RPC_URL", "https://rpc-amoy.polygon.technology")
-    POLYGON_RPC_URL = os.environ.get("POLYGON_RPC_URL", "https://polygon-rpc.com")
-    BSC_TESTNET_RPC_URL = os.environ.get("BSC_TESTNET_RPC_URL", "https://bsc-testnet-rpc.publicnode.com")
-    BSC_RPC_URL = os.environ.get("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
-    SOLANA_DEVNET_RPC_URL = os.environ.get("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com")
-    SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+    SEPOLIA_RPC_URL = _rpc_url_env("SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com")
+    ETHEREUM_RPC_URL = _rpc_url_env("ETHEREUM_RPC_URL", "https://eth.llamarpc.com")
+    POLYGON_AMOY_RPC_URL = _rpc_url_env("POLYGON_AMOY_RPC_URL", "https://rpc-amoy.polygon.technology")
+    POLYGON_RPC_URL = _rpc_url_env("POLYGON_RPC_URL", "https://polygon-rpc.com")
+    BSC_TESTNET_RPC_URL = _rpc_url_env("BSC_TESTNET_RPC_URL", "https://bsc-testnet-rpc.publicnode.com")
+    BSC_RPC_URL = _rpc_url_env("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
+    SOLANA_DEVNET_RPC_URL = _rpc_url_env("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com")
+    SOLANA_RPC_URL = _rpc_url_env("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated

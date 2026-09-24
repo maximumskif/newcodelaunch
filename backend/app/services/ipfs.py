@@ -29,13 +29,26 @@ from flask import current_app
 # there's no local-open-source equivalent of "pin something to global IPFS"
 # the way anvil/solana-test-validator are for a real chain. See
 # frontend/e2e/README.md.
-PINATA_BASE_URL = os.environ.get("PINATA_BASE_URL", "https://api.pinata.cloud")
+#
+# `or`, not os.environ.get's default argument: backend/.env.example ships
+# both of these as blank lines ("leave unset for normal use"), and
+# python-dotenv loads a blank line as "", not unset — so copying that file
+# verbatim, as README's setup says to, left both URLs empty and every pin
+# request went to "/pinning/..." with no host (found 2026-09-24 by loading
+# .env.example and printing these; the e2e suite always sets both, which is
+# why it never showed). Same blank-means-default rule as config.py's
+# _rpc_url_env.
+def _url_from_env(name: str, default: str) -> str:
+    return os.environ.get(name, "").strip() or default
+
+
+PINATA_BASE_URL = _url_from_env("PINATA_BASE_URL", "https://api.pinata.cloud")
 # Also overridable, same reason: get_item_metadata() (nft_collections.py)
 # fetches a published item's real pinned JSON back from this URL — the e2e
 # stub serves what it was actually given at pin time, so this needs its own
 # seam distinct from PINATA_BASE_URL (a real Pinata deployment's API and
 # gateway are already different hosts).
-PINATA_GATEWAY = os.environ.get("PINATA_GATEWAY_URL", "https://gateway.pinata.cloud/ipfs/")
+PINATA_GATEWAY = _url_from_env("PINATA_GATEWAY_URL", "https://gateway.pinata.cloud/ipfs/")
 
 
 class IPFSUploadError(RuntimeError):

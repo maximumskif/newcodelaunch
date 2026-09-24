@@ -801,6 +801,40 @@ Sidecar `POST /internal/token/:mint/prepare-action`; backend `prepare_token_acti
 
 **Verified**: pytest 260 passed / 2 skipped; Vitest 150/150; new e2e test launches a token keeping both authorities and, through the panel, mints 500 more, revokes freeze, and fixes the supply — checking the mint account on the validator after each. Full Playwright suite 20/20, retries off.
 
+## Production readiness, host-agnostic part (plan step 2), 2026-09-24
+
+Step 2 of the plan, limited to what doesn't depend on choosing a host: every RPC endpoint configurable, a real readiness check, the maintenance commands actually scheduled, and an ops runbook (`docs/OPERATIONS.md`).
+
+**RPCs.** In the browser, only Sepolia and Solana Devnet had overrides. Ethereum, Polygon, Amoy, BSC and BSC Testnet used viem's public defaults, and Solana mainnet was hard-coded in `candyMachineApi.ts` while `solanaWallets.tsx` separately read `VITE_SOLANA_RPC_URL` for the same network. All of them now live in one module (`frontend/src/lib/rpcUrls.ts`, `VITE_*_RPC_URL` named after the backend's variables). They're forwarded through `frontend/Dockerfile`, and through `docker-compose.yml` via Compose interpolation, since `frontend/.env` isn't in the build context. Checked that a real `vite build` inlines them.
+
+**Two real bugs of the same kind, found while checking the other two services.** A blank line such as `NAME=` in an env file is loaded as `""`, not as unset, and both code paths below only fell back to their default when the variable was unset:
+- The sidecar's own `.env.example` ships `SOLANA_DEVNET_RPC_URL=` and `SOLANA_MAINNET_RPC_URL=` blank. Loading that file verbatim, which is what README says to do, printed `{"devnet":"","mainnet-beta":""}`, so every sidecar Solana call would have gone to an empty URL.
+- `backend/.env.example` ships `PINATA_BASE_URL=` and `PINATA_GATEWAY_URL=` blank ("leave unset for normal use"). Loading it gave `'' ''`, so pin requests went to `/pinning/...` with no host.
+
+Neither showed in e2e, because the harness always exports real values. Both are fixed, and so are the backend's eight RPC variables, which had the same latent issue even though their example values happen to be filled in. The rule everywhere is now: blank means default.
+
+**Readiness.** `/api/health` is unchanged: a dependency-free liveness probe, which Playwright and CI poll. The new `/api/health/ready` runs `SELECT 1` and calls the sidecar's `/health` with a 2-second timeout. It returns 200 with per-check results, or 503 with `failed: [...]`. Response errors are fixed strings, and exception detail only goes to the log. The docstring and runbook explain why it isn't meant as a load-balancer check: a sidecar outage only breaks the Solana features.
+
+**Scheduled maintenance.** `backend/scripts/maintenance-loop.sh` runs `reap-stale-generation-jobs` then `prune-nonces` every `MAINTENANCE_INTERVAL_SECONDS` (default 300). The header explains why it's a sleep loop and not cron: same image, the container's environment inherited, logs on stdout. A failed command is logged and retried next round. SIGTERM is trapped (`sleep & wait`), so `docker stop` doesn't have to wait out its grace period. `--once` exits non-zero on failure, for hosts that bring their own scheduler. A new Compose `scheduler` service runs it, and waits on a new backend healthcheck (python/urllib against `/api/health`; the slim image has no curl or wget). Since gunicorn only starts after `flask db upgrade`, a healthy backend also means migrations have run.
+
+**Verified**:
+- pytest: 269 passed / 2 skipped. New tests:
+  - readiness: all up; sidecar unreachable; sidecar non-200; a genuinely unopenable SQLite database; both failing at once; no exception text or paths in any response; liveness never calls the sidecar
+  - blank-env fallback, and that every network has a configurable RPC
+  - the Pinata fallback
+- Vitest: 154/154. New tests cover the normalization, public defaults for all eight networks when blank, and each override reaching its own wagmi transport or Solana entry. Deliberately miswiring one transport made the test fail.
+- `tsc -b`, oxlint (exit 0, no new warnings), `npm run build` and the sidecar's `tsc --noEmit` are all clean.
+- Readiness against real processes: a real sidecar on a spare port gave 200, and a closed port gave 503 `unreachable`.
+- The maintenance script under `dash` (the image's `/bin/sh`), against a SQLite database migrated with `flask db upgrade`: a seeded stale job was reaped (status `failed`, reaper's message), and an expired nonce was pruned while a fresh one was kept. Against a database with no tables, the loop logged `FAILED` every round and kept going, and `--once` exited 1. SIGTERM stopped it within milliseconds while it was sleeping, and after the in-flight command finished when it wasn't. A non-numeric interval was refused with exit 2.
+
+**Not verified**: none of the Compose changes (the scheduler service, the backend healthcheck, the forwarded build args) have been run under Docker, because there's no Docker in this environment. `docker compose up --build`, then `docker compose logs scheduler` and `docker compose ps` (the backend should show healthy) are the checks still owed. The Playwright suite wasn't run either (reserved ports; the lead session runs it). Nothing it drives should have changed: the e2e harness sets the same two `VITE_*` overrides it did before.
+
+**Not done, recorded in `docs/OPERATIONS.md`'s caveats instead**:
+- NFT images live on the backend's local disk, with no Compose volume, so recreating the container loses unpublished uploads.
+- gunicorn's default 30-second worker timeout is shorter than the 60 to 120-second Pinata upload timeouts.
+- Redis isn't part of readiness, and with Flask-Limiter's default settings a Redis outage probably fails the rate-limited routes. That's inferred from the library's defaults and hasn't been tested.
+
+Each needs a decision (storage, worker sizing) that belongs with choosing the host.
 ## One account across both chains (plan step 4.1), 2026-09-24
 
 An account used to *be* one wallet on one chain (`users` unique on wallet + chain; JWT identity = that row), so the tokens you launched with Phantom weren't there when you signed in with MetaMask. Now accounts span wallets.
