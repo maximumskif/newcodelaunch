@@ -46,6 +46,8 @@ Last updated 2026-09-15 (NFT Generator's "Generate collection" row corrected for
 | Mainnet confirmation checkbox | Real | Required before Deploy is enabled on any mainnet network; re-arms on every network switch. This is a frontend-only gate by architecture, not a backend one — the backend never holds signing authority to gate (see `docs/REBUILD_PROGRESS.md`'s Phase 4 note). |
 | Deploy | Real | Backend compiles via `py-solc-x`; your connected wallet signs and broadcasts client-side — no private key ever reaches the server. |
 | Deployment history | Real | Persisted in Postgres, independently re-verified against the chain (`get_transaction_status`) before being recorded. |
+| Solana SPL token launch (Token Launchpad → "Solana") | Real (optional config) | Added 2026-09-24. Classic SPL token + Metaplex Token Metadata (name, symbol, optional description/logo), built by `services/candy-machine/src/routes/token.ts` in one transaction; your connected Solana wallet signs, pays, receives the full supply, and keeps update authority. Mint and freeze authority are revoked by default (fixed supply, no freezing holders), each opt-out-able. Recording re-verifies on-chain (success, fee payer = your wallet, mint referenced) and reads decimals/supply/authorities back from the mint account itself. Optional config: a description or logo needs Pinata (clean 503 otherwise); a name+symbol-only token needs no IPFS at all. Not linked to Projects yet (projects' token drafts are EVM-template-shaped). |
+| Solana token history | Real | `GET /api/solana-tokens` — your launches, with "Fixed"/"Mintable"/"Freezable" badges from what the chain said at record time. |
 
 ## NFT Collection Generator (`/nft`)
 

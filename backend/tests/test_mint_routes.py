@@ -3,7 +3,7 @@ from flask_jwt_extended import create_access_token
 from app.extensions import db as _db
 from app.models.nft import NFTCollection
 from app.models.user import Chain, User
-from app.services import candy_machine
+from app.services import candy_machine, ipfs
 
 
 def _make_authenticated_collection(app):
@@ -196,3 +196,31 @@ def test_prepare_public_mint_sanitizes_service_errors(client, monkeypatch):
     assert response.status_code == 502
     body = response.get_json()
     assert "CANDY_MACHINE_SHARED_SECRET" not in body["error"]
+
+
+def test_prepare_collection_maps_ipfs_failures_instead_of_500ing(app, client, monkeypatch):
+    # prepare_collection pins metadata to IPFS before calling the sidecar;
+    # a Pinata outage used to escape the route as an unhandled 500.
+    with app.app_context():
+        collection, token = _make_authenticated_collection(app)
+        body = {
+            "collection_id": collection.id,
+            "network": "solana_devnet",
+            "creator_wallet": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
+            "price_sol": 0.1,
+            "go_live_date": "2026-09-01T00:00:00Z",
+        }
+        headers = {"Authorization": f"Bearer {token}"}
+
+        for error, expected_status in [
+            (ipfs.IPFSUploadError("Pinata down"), 502),
+            (ipfs.IPFSNotConfiguredError("Pinata is not configured"), 503),
+        ]:
+
+            def fake_prepare_collection(error=error, **kwargs):
+                raise error
+
+            monkeypatch.setattr(candy_machine, "prepare_collection", fake_prepare_collection)
+            response = client.post("/api/mint/prepare-collection", json=body, headers=headers)
+            assert response.status_code == expected_status
+            assert response.is_json

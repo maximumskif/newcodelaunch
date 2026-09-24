@@ -69,7 +69,7 @@ test.describe('authenticated app shell', () => {
     await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
   })
 
-  for (const route of ['/dashboard', '/tokens', '/nft', '/market', '/defi', '/marketplace']) {
+  for (const route of ['/dashboard', '/tokens', '/tokens?chain=solana', '/nft', '/market', '/defi', '/marketplace']) {
     test(`${route} has no WCAG 2 A/AA violations`, async ({ page }) => {
       await page.goto(route)
       const { violations } = await auditPage(page)

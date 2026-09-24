@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useWallet, type WalletContextState } from '@solana/wallet-adapter-react'
-import { Connection, VersionedTransaction } from '@solana/web3.js'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { Connection } from '@solana/web3.js'
 
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -12,34 +12,11 @@ import { PageHero } from '../../components/ui/PageHero'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type CandyMachineDeployment, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
-import { base64ToBytes } from '../../lib/solana'
+import { signSendAndConfirm } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
-
-// Signs, sends, and confirms one transaction, throwing a clear error if the
-// on-chain program itself rejects it (confirmTransaction only rejects on an
-// RPC/timeout error — a failed transaction resolves normally with
-// `.value.err` set, so this check is what stops a failed step from
-// silently continuing into the next one or getting recorded as success).
-async function signSendAndConfirm(
-  base64Transaction: string,
-  connection: Connection,
-  sendTransaction: WalletContextState['sendTransaction'],
-  label: string,
-  setProgressLabel: (value: string) => void,
-): Promise<string> {
-  setProgressLabel(`Sign ${label} in your wallet…`)
-  const transaction = VersionedTransaction.deserialize(base64ToBytes(base64Transaction))
-  const signature = await sendTransaction(transaction, connection)
-  setProgressLabel(`Confirming ${label}…`)
-  const confirmation = await connection.confirmTransaction(signature, 'confirmed')
-  if (confirmation.value.err) {
-    throw new Error(`${label} failed on-chain: ${JSON.stringify(confirmation.value.err)}`)
-  }
-  return signature
-}
 
 export function MintLaunchPage() {
   const [searchParams] = useSearchParams()

@@ -37,8 +37,10 @@ uptime and rate limits (flaky by design, not a wallet's fault).
   app's actual Sepolia configuration needs to change, just which RPC URL
   it's pointed at.
 - **Solana**: `solana-test-validator` starts empty too (funded via a real
-  `requestAirdrop` in the Candy Machine spec's own `test.beforeAll`, since
-  unlike anvil it doesn't pre-fund anything). The two Metaplex programs this
+  `requestAirdrop` in each Solana spec's own `test.beforeAll` — see
+  `e2e/setup/solanaValidator.ts` — since unlike anvil it doesn't pre-fund
+  anything). Metaplex Token Metadata is cloned the same way, for the Token
+  Launchpad's Solana side (`solana-token.spec.ts`). The two Metaplex programs this
   app actually calls (Core, Core Candy Machine) — plus a third, the Core
   Candy Guard program, that `create()` wires in under the hood without this
   app's own code ever naming it — aren't native programs, so
@@ -151,6 +153,15 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   unauthenticated visitor flow). This is the exact flow this project's own
   docs had only ever verified via `curl`-level checks or a single manual
   devnet pass before this.
+- `solana-token.spec.ts` — sign in with Solana → fill the Token
+  Launchpad's Solana form through the actual UI, including a real logo file
+  upload → launch (real Pillow logo check, logo + metadata JSON pinned
+  through the Pinata stub, real sidecar-built Token Metadata transaction,
+  real signature, real on-chain confirmation, real backend re-verification)
+  → then read the chain directly, independent of anything the app reports:
+  the mint's decimals/supply, mint and freeze authority both revoked, the
+  creator holding the full supply, and a real Token Metadata account
+  carrying the token's name.
 - `nft-generator.spec.ts` — sign in with EVM (auth only; nothing here is
   chain-specific) → create a collection, add a layer, and upload a real
   trait image, all through the actual multi-step upload UI (not seeded via

@@ -9,8 +9,8 @@
 # instruction after that executes against the real, unmodified program
 # logic, entirely offline for the rest of the run.
 #
-# --clone-upgradeable-program, not plain --clone: all three programs below
-# are owned by BPFLoaderUpgradeable, whose actual executable bytecode lives
+# --clone-upgradeable-program, not plain --clone: every program below is
+# owned by BPFLoaderUpgradeable, whose actual executable bytecode lives
 # in a separate ProgramData account (a PDA derived from the program id) —
 # plain --clone only copies the thin program account itself, not that data
 # account. The result LOOKS cloned (getAccountInfo shows executable: true)
@@ -29,6 +29,12 @@
 # load a program that does not exist" from a plain Node script, decoded the
 # failing transaction's account keys, and found this third program id
 # referenced but never cloned.
+#
+# Plus a fourth, Metaplex Token Metadata (metaqbx...), for the Token
+# Launchpad's Solana side (services/candy-machine/src/routes/token.ts) —
+# where an SPL token's name/symbol/logo live. The SPL Token and Associated
+# Token Account programs it also uses are built into every validator, so
+# they need no cloning.
 set -euo pipefail
 
 if ! command -v solana-test-validator >/dev/null 2>&1; then
@@ -46,6 +52,7 @@ exec solana-test-validator \
   --clone-upgradeable-program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d \
   --clone-upgradeable-program CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J \
   --clone-upgradeable-program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ \
+  --clone-upgradeable-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s \
   --url https://api.devnet.solana.com \
   --reset \
   --quiet

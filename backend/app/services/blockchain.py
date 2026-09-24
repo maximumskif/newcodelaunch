@@ -32,6 +32,7 @@ from typing import Optional
 from flask import current_app
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
+from solders.pubkey import Pubkey
 from solders.signature import Signature
 from web3 import HTTPProvider, Web3
 from web3.middleware import ExtraDataToPOAMiddleware
@@ -281,6 +282,52 @@ def _get_solana_transaction_status(network: str, tx_hash: str) -> dict:
                 "fee": meta.fee,
                 "error": str(meta.err) if meta.err else None,
                 "account_keys": account_keys,
+            }
+
+    try:
+        return asyncio.run(_fetch())
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": str(exc)}
+
+
+# Classic SPL Token program — the only token program the Token Launchpad's
+# Solana side creates mints under (services/candy-machine/src/routes/token.ts).
+SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+
+
+def get_solana_mint_info(network: str, mint_address: str) -> dict:
+    """Reads an SPL mint account straight from the chain — decimals, raw
+    supply, and whether its mint/freeze authorities are still set. Used by
+    solana_tokens.record_token_launch so what gets persisted (and shown on
+    the launch history, e.g. "fixed supply") is what's actually on-chain,
+    not whatever the client said it asked for.
+
+    Same {"status": ...} contract as get_transaction_status: never raises
+    for an RPC/lookup problem, reports it instead."""
+    if network not in SOLANA_NETWORKS:
+        return {"status": "error", "error": f"Not a Solana network: {network}"}
+    try:
+        pubkey = Pubkey.from_string(mint_address)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"Invalid mint address: {exc}"}
+
+    async def _fetch() -> dict:
+        async with _get_solana_client(network) as client:
+            resp = await client.get_account_info_json_parsed(pubkey)
+            account = resp.value
+            if account is None:
+                return {"status": "not_found"}
+            parsed = getattr(account.data, "parsed", None)
+            if str(account.owner) != SPL_TOKEN_PROGRAM_ID or not isinstance(parsed, dict) or parsed.get("type") != "mint":
+                return {"status": "not_a_mint"}
+            info = parsed["info"]
+            return {
+                "status": "success",
+                "decimals": info["decimals"],
+                # Raw base units as a string — a u64 overflows a JSON-safe int.
+                "supply": str(info["supply"]),
+                "mint_authority": info.get("mintAuthority"),
+                "freeze_authority": info.get("freezeAuthority"),
             }
 
     try:

@@ -76,6 +76,10 @@ def create_app(config_object=Config):
 
     app.register_blueprint(mint_bp, url_prefix="/api/mint")
 
+    from .blueprints.solana_tokens import solana_tokens_bp
+
+    app.register_blueprint(solana_tokens_bp, url_prefix="/api/solana-tokens")
+
     from .commands import register_cli
 
     register_cli(app)

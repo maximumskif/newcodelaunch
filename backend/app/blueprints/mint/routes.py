@@ -2,7 +2,7 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...extensions import limiter
-from ...services import candy_machine, nft_collections, projects
+from ...services import candy_machine, ipfs, nft_collections, projects
 
 mint_bp = Blueprint("mint", __name__)
 
@@ -54,6 +54,13 @@ def prepare_collection():
         )
     except candy_machine.ValidationError as exc:
         return jsonify(error=str(exc)), 422
+    # prepare_collection pins the collection's metadata JSON to IPFS before
+    # ever calling the sidecar — a Pinata outage or missing config used to
+    # escape as an unhandled 500. Same mapping as nft/routes.py's publish.
+    except ipfs.IPFSNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
+    except ipfs.IPFSUploadError as exc:
+        return jsonify(error=str(exc)), 502
     except candy_machine.CandyMachineServiceError as exc:
         return _handle_candy_machine_service_error(exc)
 

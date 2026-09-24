@@ -1,14 +1,10 @@
 import { Router } from "express";
-import {
-  generateSigner,
-  publicKey,
-  sol,
-  type TransactionBuilder,
-} from "@metaplex-foundation/umi";
+import { generateSigner, publicKey, sol } from "@metaplex-foundation/umi";
 import { createCollection, ruleSet } from "@metaplex-foundation/mpl-core";
 import { addConfigLines, create, fetchCandyMachine, mintV1, mplCandyMachine } from "@metaplex-foundation/mpl-core-candy-machine";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 
+import { serializeSigned } from "../lib/transactions.js";
 import { createUmiForCreator, createUmiForWallet, isSolanaNetwork, SOLANA_NETWORKS } from "../lib/umi.js";
 
 export const candyMachineRouter = Router();
@@ -44,28 +40,6 @@ interface PrepareCandyMachineBody {
 
 function utf8Length(value: string): number {
   return Buffer.byteLength(value, "utf8");
-}
-
-async function serializeSigned(umi: Parameters<TransactionBuilder["buildAndSign"]>[0], builder: TransactionBuilder): Promise<string> {
-  // Force v0 explicitly rather than relying on Umi's default — the frontend
-  // deserializes with @solana/web3.js's VersionedTransaction, which needs a
-  // consistent, known wire format rather than "whatever Umi defaults to".
-  //
-  // setLatestBlockhash(umi) fetches ONE blockhash right now, at the moment
-  // this function runs — and whatever ephemeral signer the caller attached
-  // to `builder` (see generateSigner() calls below) signs over that
-  // blockhash immediately in buildAndSign(). That signature can't be
-  // "refreshed" later: the ephemeral private key exists only in this
-  // process's memory for the duration of this one request and is discarded
-  // right after. This is exactly why /prepare-collection and
-  // /prepare-candy-machine below are two separate endpoints, called
-  // sequentially by the frontend with a real wallet confirmation in
-  // between, instead of one call building everything up front — see
-  // docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md for the full writeup of the
-  // bug this fixes and why a durable-nonce approach was rejected.
-  const withBlockhash = await builder.useV0().setLatestBlockhash(umi);
-  const transaction = await withBlockhash.buildAndSign(umi);
-  return Buffer.from(umi.transactions.serialize(transaction)).toString("base64");
 }
 
 // Two-step launch flow (see docs/CANDY_MACHINE_BLOCKHASH_FIX_SPEC.md for the
