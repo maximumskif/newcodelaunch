@@ -11,7 +11,13 @@ const TOKEN_ABI = parseAbi([
   'function approve(address spender, uint256 amount) returns (bool)',
 ])
 const FACTORY_ABI = parseAbi(['function getPair(address, address) view returns (address)'])
-const PAIR_ABI = parseAbi(['function getReserves() view returns (uint112, uint112, uint32)', 'function token0() view returns (address)'])
+const PAIR_ABI = parseAbi([
+  'function getReserves() view returns (uint112, uint112, uint32)',
+  'function token0() view returns (address)',
+  'function totalSupply() view returns (uint256)',
+  'function balanceOf(address) view returns (uint256)',
+])
+const OWNER: Address = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const ROUTER_ABI = parseAbi([
   'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable',
   'function swapExactTokensForETHSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)',
@@ -125,4 +131,32 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   await page.getByRole('button', { name: `Liquidity for ${token}` }).click()
   await expect(panel.getByText('Pool live')).toBeVisible({ timeout: 15_000 })
   await expect(panel.getByText(/Current price: 1 ADV = /)).toBeVisible()
+
+  // --- Remove 5% of the owner's position through the router. The pull
+  // from the pool is a "buy" for this token (3% tax, and capped by its
+  // 10,000-token transfer limit — so 30% is refused before sending).
+  const removal = panel.getByTestId('liquidity-remove')
+  await removal.getByLabel(/Share of your position/).fill('30')
+  await expect(removal.getByText(/than this token lets move in one transfer/)).toBeVisible()
+  await expect(removal.getByRole('button', { name: /Approve LP tokens|Remove liquidity/ })).toBeDisabled()
+
+  const lpMine = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })
+  const lpTotal = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'totalSupply' })
+  const beforeRemoval = await reserves()
+  const ownerTokensBefore = await balanceOf(OWNER)
+  const marketingBefore = await balanceOf(marketing)
+  const lpOut = (lpMine * 5n) / 100n
+  const tokenOut = (lpOut * beforeRemoval.token) / lpTotal
+  const nativeOut = (lpOut * beforeRemoval.native) / lpTotal
+
+  await removal.getByLabel(/Share of your position/).fill('5')
+  await removal.getByRole('button', { name: 'Approve LP tokens' }).click()
+  await expect(panel.getByText('Approved — now remove the liquidity.')).toBeVisible({ timeout: 20_000 })
+  await removal.getByRole('button', { name: 'Remove liquidity' }).click()
+  await expect(panel.getByText(/Liquidity removed/)).toBeVisible({ timeout: 20_000 })
+
+  const removalTax = (tokenOut * 300n) / 10000n
+  await expect.poll(reserves).toEqual({ token: beforeRemoval.token - tokenOut, native: beforeRemoval.native - nativeOut })
+  await expect.poll(() => balanceOf(OWNER)).toBe(ownerTokensBefore + tokenOut - removalTax)
+  await expect.poll(() => balanceOf(marketing)).toBe(marketingBefore + (removalTax * 60n) / 100n)
 })

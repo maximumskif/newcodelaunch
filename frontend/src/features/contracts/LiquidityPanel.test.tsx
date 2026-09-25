@@ -48,6 +48,8 @@ const writeContractAsync = vi.fn()
 let receipt: { data?: { status: 'success' | 'reverted' } } = { data: undefined }
 
 interface ChainState {
+  lpMine?: bigint
+  lpAllowance?: bigint
   allowance?: bigint
   pair?: string
   reserves?: [bigint, bigint]
@@ -55,7 +57,7 @@ interface ChainState {
   tradingEnabled?: boolean
 }
 
-function mockChain({ allowance = 0n, pair = zeroAddress, reserves = [0n, 0n], pairRegistered = false, tradingEnabled = true }: ChainState = {}) {
+function mockChain({ lpMine = 0n, lpAllowance = 0n, allowance = 0n, pair = zeroAddress, reserves = [0n, 0n], pairRegistered = false, tradingEnabled = true }: ChainState = {}) {
   vi.mocked(useAccount).mockReturnValue({ address: OWNER } as unknown as ReturnType<typeof useAccount>)
   vi.mocked(useChainId).mockReturnValue(11155111)
   vi.mocked(useSwitchChain).mockReturnValue({ switchChainAsync: vi.fn() } as unknown as ReturnType<typeof useSwitchChain>)
@@ -72,10 +74,16 @@ function mockChain({ allowance = 0n, pair = zeroAddress, reserves = [0n, 0n], pa
     totalSupply: parseEther('100'),
     owner: OWNER,
     tradingEnabled,
+    buyTaxRate: 300n,
+    maxTransactionAmount: parseEther('10000'),
+    maxWalletAmount: parseEther('20000'),
   }
+  // The pair's own ERC-20 reads (LP tokens) differ from the token's.
+  const pairValues: Record<string, unknown> = { balanceOf: lpMine, allowance: lpAllowance }
   vi.mocked(usePublicClient).mockReturnValue({
     getBalance: vi.fn(async () => parseEther('10')),
-    readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+    readContract: vi.fn(async ({ address, functionName }: { address: string; functionName: string }) => {
+      if (address === PAIR && functionName in pairValues) return pairValues[functionName]
       if (functionName === 'marketPairs') {
         if (pairRegistered === 'legacy') throw new Error('execution reverted')
         return pairRegistered
@@ -193,5 +201,51 @@ describe('LiquidityPanel', () => {
     mockChain({ pair: PAIR, reserves: [parseEther('50000'), parseEther('2')], pairRegistered: 'legacy' })
     render(<LiquidityPanel deployment={advanced} />)
     expect(await screen.findByText(/earlier template version/)).toBeInTheDocument()
+  })
+
+  it('removes a share of the position at the pool’s ratio: approve the LP tokens, then remove with 1% slippage', async () => {
+    const pool = { pair: PAIR, reserves: [parseEther('50000'), parseEther('2')] as [bigint, bigint] }
+    mockChain({ ...pool, lpMine: parseEther('10') })
+    const user = userEvent.setup()
+    const { unmount } = render(<LiquidityPanel deployment={basic} />)
+    await user.type(await screen.findByLabelText(/Share of your position/), '50')
+    // 5 of 100 LP tokens: 5% of each reserve.
+    expect(screen.getByText(/You get about 2500 TKN \+ 0.1 ETH/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Approve LP tokens' }))
+    expect(writeContractAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ address: PAIR, functionName: 'approve', args: [DEX.router, parseEther('5')] }),
+    )
+    unmount()
+
+    mockChain({ ...pool, lpMine: parseEther('10'), lpAllowance: parseEther('5') })
+    render(<LiquidityPanel deployment={basic} />)
+    await user.type(await screen.findByLabelText(/Share of your position/), '50')
+    await user.click(screen.getByRole('button', { name: 'Remove liquidity' }))
+    const call = writeContractAsync.mock.lastCall![0]
+    expect(call).toMatchObject({ address: DEX.router, functionName: 'removeLiquidityETHSupportingFeeOnTransferTokens' })
+    expect(call.args.slice(0, 5)).toEqual([TOKEN, parseEther('5'), parseEther('2475'), parseEther('0.099'), OWNER])
+  })
+
+  it('warns that an advanced token taxes a removal, and blocks one over its transfer limit', async () => {
+    mockChain({ pair: PAIR, reserves: [parseEther('50000'), parseEther('2')], lpMine: parseEther('100'), lpAllowance: parseEther('100'), pairRegistered: true })
+    const user = userEvent.setup()
+    render(<LiquidityPanel deployment={advanced} />)
+    await user.type(await screen.findByLabelText(/Share of your position/), '10')
+    // 5000 TKN out, less the 3% buy tax.
+    expect(screen.getByText(/You get about 4850 TKN/)).toBeInTheDocument()
+    expect(screen.getByText(/3% buy tax/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove liquidity' })).toBeEnabled()
+
+    await user.clear(screen.getByLabelText(/Share of your position/))
+    await user.type(screen.getByLabelText(/Share of your position/), '30')
+    expect(screen.getByText(/more TKN than this token lets move in one transfer \(10000\)/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove liquidity' })).toBeDisabled()
+  })
+
+  it('offers no removal without a position', async () => {
+    mockChain({ pair: PAIR, reserves: [parseEther('50000'), parseEther('2')] })
+    render(<LiquidityPanel deployment={basic} />)
+    expect(await screen.findByText('Pool live')).toBeInTheDocument()
+    expect(screen.queryByTestId('liquidity-remove')).not.toBeInTheDocument()
   })
 })

@@ -173,7 +173,9 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   wallet fails until trading is enabled; after registering the pool as the
   trading pair (from the panel) and enabling trading, a real buy and a real
   sell through the router are taxed 3% / 5%, split 60/40 to the fee
-  wallets, to the exact wei.
+  wallets, to the exact wei. Finally, a removal over the token's transfer
+  limit is refused in the panel, and a 5% removal through the router pays
+  back exactly its share of both reserves, less the 3% tax on the tokens.
 - `erc20-advanced-owner.spec.ts` — deploy an `erc20_advanced` token
   through the UI, then check its behaviour on-chain with fresh funded
   anvil accounts: holders can't transfer before "Enable trading"; after

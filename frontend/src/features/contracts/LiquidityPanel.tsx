@@ -16,7 +16,7 @@ import { EVM_NETWORKS, isMainnetNetwork } from '../network/NetworkContext'
 import { NETWORK_TO_CHAIN_ID } from './useDeployTemplate'
 import { useOwnerTransaction } from './useOwnerTransaction'
 
-type Action = 'approve' | 'add' | 'register'
+type Action = 'approve' | 'add' | 'register' | 'approveLp' | 'remove'
 
 // How far below the quoted amounts an add into an existing pool may land
 // (someone else's trade can move the price between quote and inclusion).
@@ -66,13 +66,23 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
           ])
         : [0n, 0n, 0n]
 
-      let pool: { address: `0x${string}`; tokenReserve: bigint; nativeReserve: bigint; lpTotal: bigint; lpMine: bigint } | null = null
+      let pool: {
+        address: `0x${string}`
+        tokenReserve: bigint
+        nativeReserve: bigint
+        lpTotal: bigint
+        lpMine: bigint
+        lpAllowance: bigint
+      } | null = null
       if (pairAddress !== zeroAddress) {
-        const [reserves, token0, lpTotal, lpMine] = await Promise.all([
+        const [reserves, token0, lpTotal, lpMine, lpAllowance] = await Promise.all([
           read<readonly [bigint, bigint, number]>({ address: pairAddress, abi: UNISWAP_V2_PAIR_ABI, functionName: 'getReserves' }),
           read<`0x${string}`>({ address: pairAddress, abi: UNISWAP_V2_PAIR_ABI, functionName: 'token0' }),
           read<bigint>({ address: pairAddress, abi: UNISWAP_V2_PAIR_ABI, functionName: 'totalSupply' }),
           address ? read<bigint>({ address: pairAddress, abi: UNISWAP_V2_PAIR_ABI, functionName: 'balanceOf', args: [address] }) : 0n,
+          address
+            ? read<bigint>({ address: pairAddress, abi: UNISWAP_V2_PAIR_ABI, functionName: 'allowance', args: [address, dex!.router] })
+            : 0n,
         ])
         const tokenIsToken0 = token0.toLowerCase() === token.toLowerCase()
         pool = {
@@ -81,22 +91,34 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
           nativeReserve: tokenIsToken0 ? reserves[1] : reserves[0],
           lpTotal,
           lpMine,
+          lpAllowance,
         }
       }
 
       // erc20_advanced only: taxes apply through registered pairs (null =
       // deployed before pairs existed), and holders can't buy until
       // trading is enabled.
-      let advanced: { owner: string; tradingEnabled: boolean; pairRegistered: boolean | null } | null = null
+      let advanced: {
+        owner: string
+        tradingEnabled: boolean
+        pairRegistered: boolean | null
+        buyTaxRate: bigint
+        transferCap: bigint
+      } | null = null
       if (isAdvanced) {
-        const [owner, tradingEnabled, pairRegistered] = await Promise.all([
+        const [owner, tradingEnabled, pairRegistered, buyTaxRate, maxTx, maxWallet] = await Promise.all([
           read<string>({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'owner' }),
           read<boolean>({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'tradingEnabled' }),
           read<boolean>({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'marketPairs', args: [pool?.address ?? zeroAddress] }).catch(
             () => null,
           ),
+          read<bigint>({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'buyTaxRate' }),
+          read<bigint>({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'maxTransactionAmount' }),
+          read<bigint>({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'maxWalletAmount' }),
         ])
-        advanced = { owner, tradingEnabled, pairRegistered }
+        // Removing liquidity moves the tokens pool -> router -> you, and the
+        // first hop is capped by both limits (the router isn't excluded).
+        advanced = { owner, tradingEnabled, pairRegistered, buyTaxRate, transferCap: maxTx < maxWallet ? maxTx : maxWallet }
       }
       return { symbol, decimals, tokenBalance, allowance, nativeBalance, pool, advanced }
     },
@@ -112,6 +134,7 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
   const [nativeInput, setNativeInput] = useState('')
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
   const [recordError, setRecordError] = useState<string | null>(null)
+  const [removePercent, setRemovePercent] = useState('')
 
   const { send, isBusy, error, done } = useOwnerTransaction<Action>({
     chainId,
@@ -119,9 +142,12 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
       approve: 'Approved — now add the liquidity.',
       add: 'Liquidity added.',
       register: 'Pool registered as a trading pair — buys and sells through it are now taxed.',
+      approveLp: 'Approved — now remove the liquidity.',
+      remove: 'Liquidity removed — the tokens and coins are in your wallet.',
     },
     onSettled: ({ action, hash, status }) => {
       void chain.refetch()
+      if (action === 'remove' && status === 'success') setRemovePercent('')
       if (action === 'add' && status === 'success') {
         setTokenInput('')
         setNativeInput('')
@@ -181,6 +207,39 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
         chainId,
       }),
     )
+  // Removing: a share of this wallet's LP tokens, back into both sides at
+  // the pool's current ratio, with the same 1% allowance.
+  const percent = /^\d+$/.test(removePercent.trim()) ? Number(removePercent.trim()) : null
+  const lpToRemove = pool && percent !== null && percent >= 1 && percent <= 100 ? (pool.lpMine * BigInt(percent)) / 100n : null
+  const tokenOut = lpToRemove && pool!.lpTotal > 0n ? (lpToRemove * pool!.tokenReserve) / pool!.lpTotal : null
+  const nativeOut = lpToRemove && pool!.lpTotal > 0n ? (lpToRemove * pool!.nativeReserve) / pool!.lpTotal : null
+  // An advanced token taxes pool -> router as a buy once the pool is a
+  // registered pair, and caps it at its transfer limits.
+  const removalTaxBps = advanced?.pairRegistered ? advanced.buyTaxRate : 0n
+  const overCap = Boolean(advanced && tokenOut !== null && tokenOut > advanced.transferCap)
+  const canRemove = Boolean(address) && lpToRemove !== null && lpToRemove > 0n && !overCap && !isBusy() && (!isMainnet || mainnetConfirmed)
+  const approveLp = () =>
+    send('approveLp', () =>
+      writeContractAsync({ address: pool!.address, abi: UNISWAP_V2_PAIR_ABI, functionName: 'approve', args: [dex.router, lpToRemove!], chainId }),
+    )
+  const remove = () =>
+    send('remove', () =>
+      writeContractAsync({
+        address: dex.router,
+        abi: UNISWAP_V2_ROUTER_ABI,
+        functionName: 'removeLiquidityETHSupportingFeeOnTransferTokens',
+        args: [
+          token,
+          lpToRemove!,
+          (tokenOut! * (100n - SLIPPAGE_PERCENT)) / 100n,
+          (nativeOut! * (100n - SLIPPAGE_PERCENT)) / 100n,
+          address!,
+          BigInt(Math.floor(Date.now() / 1000) + DEADLINE_SECONDS),
+        ],
+        chainId,
+      }),
+    )
+
   const register = () =>
     send('register', () =>
       writeContractAsync({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'setMarketPair', args: [pool!.address, true], chainId }),
@@ -288,6 +347,47 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
             </Button>
           )}
         </>
+      )}
+
+      {address && pool && pool.lpMine > 0n && (
+        <div className="space-y-2 rounded-md border border-border p-3" data-testid="liquidity-remove">
+          <p className="text-xs text-ink-faint">Remove liquidity</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-ink-muted" htmlFor={`lp-remove-${deployment.id}`}>
+              Share of your position (%)
+            </label>
+            <input
+              id={`lp-remove-${deployment.id}`}
+              inputMode="numeric"
+              value={removePercent}
+              disabled={isBusy()}
+              onChange={(e) => setRemovePercent(e.target.value)}
+              className={`${inputClass} w-24`}
+            />
+            {lpToRemove !== null && pool.lpAllowance < lpToRemove ? (
+              <Button variant="secondary" size="sm" disabled={!canRemove} isLoading={isBusy('approveLp')} onClick={() => void approveLp()}>
+                Approve LP tokens
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" disabled={!canRemove} isLoading={isBusy('remove')} onClick={() => void remove()}>
+                Remove liquidity
+              </Button>
+            )}
+          </div>
+          {tokenOut !== null && nativeOut !== null && (
+            <p className="text-ink">
+              You get about {fmt(tokenOut - (tokenOut * removalTaxBps) / 10000n, decimals)} {symbol} + {fmt(nativeOut, 18)} {nativeToken}
+              {removalTaxBps > 0n && (
+                <span className="text-ink-muted"> (after this token's {Number(removalTaxBps) / 100}% buy tax — the router's pull from the pool counts as a buy)</span>
+              )}
+            </p>
+          )}
+          {overCap && (
+            <p className="text-warning">
+              That's more {symbol} than this token lets move in one transfer ({fmt(advanced!.transferCap, decimals)}) — remove a smaller share at a time.
+            </p>
+          )}
+        </div>
       )}
 
       {isBusy() && (
