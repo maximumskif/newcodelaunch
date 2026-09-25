@@ -51,6 +51,7 @@ Optional (default in brackets):
 | `PINATA_BASE_URL`, `PINATA_GATEWAY_URL` (`app/services/ipfs.py`) | [Pinata's API / public gateway] Set the gateway to a dedicated Pinata gateway if you have one. |
 | `OPENAI_BASE_URL` (`app/services/ai_traits.py`) | ["" → the SDK's default] Exists for the e2e stub. |
 | `ETHERSCAN_API_URL` | [Etherscan V2] Exists for the e2e stub. |
+| `DEX_OVERRIDES` | [unset — the built-in, verified Uniswap/PancakeSwap V2 addresses] JSON replacing a network's DEX for adding liquidity, e.g. `{"sepolia": {"name": "…", "router": "0x…", "factory": "0x…", "wrapped_native": "0x…"}}`. For local chains (the e2e suite); leave unset in production. |
 | `MAINTENANCE_INTERVAL_SECONDS` | [300] Read only by the scheduler script, not the app. |
 | `MORALIS_API_KEY`, `SOLSCAN_API_KEY` | Read into config but not used by any code yet. |
 

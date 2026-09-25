@@ -119,6 +119,12 @@ class Config:
     SOLANA_DEVNET_RPC_URL = _rpc_url_env("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com")
     SOLANA_RPC_URL = _rpc_url_env("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 
+    # Replaces a network's DEX (services/liquidity.py) — JSON like
+    # {"sepolia": {"name": "...", "router": "0x...", "factory": "0x...",
+    # "wrapped_native": "0x..."}}. For local chains (the e2e suite deploys
+    # its own Uniswap V2 on anvil); the built-in addresses are the real ones.
+    DEX_OVERRIDES = os.environ.get("DEX_OVERRIDES", "")
+
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
     # too, just at CoinGecko's lower public rate limit. MORALIS/SOLSCAN aren't used yet.

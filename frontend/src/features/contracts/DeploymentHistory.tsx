@@ -1,13 +1,18 @@
-import { EmptyState } from '../../components/ui/EmptyState'
 import { Fragment, useState } from 'react'
 
 import { Button } from '../../components/ui/Button'
+import { EmptyState } from '../../components/ui/EmptyState'
 import type { ContractDeployment } from '../../lib/contractsApi'
 import { Erc20ManagePanel } from './Erc20ManagePanel'
+import { LiquidityPanel } from './LiquidityPanel'
 import { VerifySource } from './VerifySource'
 
 export function DeploymentHistory({ deployments }: { deployments: ContractDeployment[] }) {
-  const [managing, setManaging] = useState<string | null>(null)
+  // One expanded row at a time, showing one of its panels.
+  const [open, setOpen] = useState<{ id: string; panel: 'manage' | 'liquidity' } | null>(null)
+  const toggle = (id: string, panel: 'manage' | 'liquidity') =>
+    setOpen((current) => (current?.id === id && current.panel === panel ? null : { id, panel }))
+  const isOpen = (id: string, panel: 'manage' | 'liquidity') => open?.id === id && open.panel === panel
   if (deployments.length === 0) {
     return (
       <EmptyState
@@ -58,23 +63,36 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                 </td>
                 <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3">
-                  {deployment.template_id === 'erc20_advanced' && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-expanded={managing === deployment.id}
-                      aria-label={`Manage ${deployment.contract_address}`}
-                      onClick={() => setManaging((current) => (current === deployment.id ? null : deployment.id))}
-                    >
-                      {managing === deployment.id ? 'Hide' : 'Manage'}
-                    </Button>
-                  )}
+                  <div className="flex gap-1">
+                    {deployment.template_id === 'erc20_advanced' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={isOpen(deployment.id, 'manage')}
+                        aria-label={`Manage ${deployment.contract_address}`}
+                        onClick={() => toggle(deployment.id, 'manage')}
+                      >
+                        {isOpen(deployment.id, 'manage') ? 'Hide' : 'Manage'}
+                      </Button>
+                    )}
+                    {deployment.contract_type === 'erc20' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={isOpen(deployment.id, 'liquidity')}
+                        aria-label={`Liquidity for ${deployment.contract_address}`}
+                        onClick={() => toggle(deployment.id, 'liquidity')}
+                      >
+                        {isOpen(deployment.id, 'liquidity') ? 'Hide' : 'Liquidity'}
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
-              {managing === deployment.id && (
+              {open?.id === deployment.id && (
                 <tr>
                   <td colSpan={6} className="px-4 pb-4">
-                    <Erc20ManagePanel deployment={deployment} />
+                    {open.panel === 'manage' ? <Erc20ManagePanel deployment={deployment} /> : <LiquidityPanel deployment={deployment} />}
                   </td>
                 </tr>
               )}

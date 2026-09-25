@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import blockchain, contract_templates, contracts, explorer_verification, projects
+from ...services import blockchain, contract_templates, contracts, explorer_verification, liquidity, projects
 
 contracts_bp = Blueprint("contracts", __name__)
 
@@ -162,3 +162,37 @@ def refresh_deployment_verification(deployment_id):
     return _verification_errors(
         lambda: jsonify(deployment=explorer_verification.refresh_verification(deployment).to_dict())
     )
+
+
+@contracts_bp.get("/dexes")
+def list_dexes():
+    """The DEX each EVM network supports for adding liquidity (none listed:
+    not supported there)."""
+    return jsonify(dexes=liquidity.dexes())
+
+
+@contracts_bp.get("/deployments/<deployment_id>/liquidity")
+@jwt_required()
+def list_liquidity(deployment_id):
+    deployment = liquidity.get_owned_erc20(deployment_id, get_jwt_identity())
+    if deployment is None:
+        return jsonify(error="Token deployment not found"), 404
+    return jsonify(provisions=liquidity.list_provisions(deployment))
+
+
+@contracts_bp.post("/deployments/<deployment_id>/liquidity")
+@jwt_required()
+def record_liquidity(deployment_id):
+    """Records an add-liquidity transaction the owner's wallet already sent
+    — read back from the chain before it's stored."""
+    deployment = liquidity.get_owned_erc20(deployment_id, get_jwt_identity())
+    if deployment is None:
+        return jsonify(error="Token deployment not found"), 404
+    transaction_hash = (request.get_json(silent=True) or {}).get("transaction_hash")
+    if not isinstance(transaction_hash, str) or not transaction_hash:
+        return jsonify(error="transaction_hash is required"), 400
+    try:
+        provision = liquidity.record_provision(get_jwt_identity(), deployment, transaction_hash)
+    except liquidity.LiquidityError as exc:
+        return jsonify(error=str(exc)), 422
+    return jsonify(provision=provision.to_dict()), 201

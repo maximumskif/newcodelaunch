@@ -162,6 +162,18 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   is the exact flow
   `useDeployTemplate.ts`'s own code comment flagged as never smoke-tested
   before this.
+- `dex-liquidity.spec.ts` — deploys Uniswap V2 itself onto anvil
+  (`setup/localUniswap.ts`: WETH9, UniswapV2Factory and Router02 from
+  Uniswap's own published build artifacts, at fixed addresses the backend
+  gets as `DEX_OVERRIDES` in run-backend.sh; the pair bytecode hashes to the
+  router's hardcoded init-code hash, so pairs resolve exactly as on
+  mainnet). Then deploys an `erc20_advanced` token through the UI and, from
+  the Liquidity panel, approves and adds 100,000 tokens + 1 ETH — checking
+  the pair's reserves on-chain and the backend's record. A buy from another
+  wallet fails until trading is enabled; after registering the pool as the
+  trading pair (from the panel) and enabling trading, a real buy and a real
+  sell through the router are taxed 3% / 5%, split 60/40 to the fee
+  wallets, to the exact wei.
 - `erc20-advanced-owner.spec.ts` — deploy an `erc20_advanced` token
   through the UI, then check its behaviour on-chain with fresh funded
   anvil accounts: holders can't transfer before "Enable trading"; after

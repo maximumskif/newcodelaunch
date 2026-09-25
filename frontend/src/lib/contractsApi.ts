@@ -68,6 +68,29 @@ export interface CreateDeploymentPayload {
   nft_collection_id?: string
 }
 
+// The DEX a network supports for adding liquidity (backend services/liquidity.py).
+export interface Dex {
+  name: string
+  router: `0x${string}`
+  factory: `0x${string}`
+  wrapped_native: `0x${string}`
+}
+
+// One add-liquidity transaction, as read back from the chain. Amounts are
+// base units (strings — uint256).
+export interface LiquidityProvision {
+  id: string
+  deployment_id: string
+  network: string
+  dex_name: string
+  pair_address: string
+  provider_address: string
+  transaction_hash: string
+  token_amount: string
+  native_amount: string
+  created_at: string
+}
+
 export const contractsApi = {
   listTemplates: (type?: 'erc20' | 'erc721') =>
     request<{ templates: ContractTemplateSummary[] }>(`/contracts/templates${type ? `?type=${type}` : ''}`),
@@ -104,6 +127,18 @@ export const contractsApi = {
 
   listDeployments: (token: string) =>
     request<{ deployments: ContractDeployment[] }>('/contracts/deployments', {}, token),
+
+  listDexes: () => request<{ dexes: Record<string, Dex> }>('/contracts/dexes'),
+
+  listLiquidity: (token: string, deploymentId: string) =>
+    request<{ provisions: LiquidityProvision[] }>(`/contracts/deployments/${deploymentId}/liquidity`, {}, token),
+
+  recordLiquidity: (token: string, deploymentId: string, transactionHash: string) =>
+    request<{ provision: LiquidityProvision }>(
+      `/contracts/deployments/${deploymentId}/liquidity`,
+      { method: 'POST', body: JSON.stringify({ transaction_hash: transactionHash }) },
+      token,
+    ),
 
   getDeployment: (contractAddress: string) =>
     request<{ deployment: ContractDeployment; live_status: Record<string, unknown> | null }>(

@@ -67,6 +67,9 @@ export OPENAI_BASE_URL="http://127.0.0.1:5556/v1"
 # limits are covered by pytest instead (see RATELIMIT_ENABLED in
 # backend/app/config.py).
 export RATE_LIMIT_ENABLED="false"
+# The Uniswap V2 the e2e suite deploys onto anvil itself (e2e/setup/localUniswap.ts —
+# fixed addresses, from a dedicated deployer key at nonces 0-2).
+export DEX_OVERRIDES='{"sepolia": {"name": "Uniswap V2 (local)", "router": "0x494fb8c2Bd7f47cC945fd1054895bAcBf6DeaE4f", "factory": "0x303C579059DB0c79a1da9aD632858E5B755b340b", "wrapped_native": "0xdcF212126CDEB374aFDFb7ba5C35aA9108b353d4"}}'
 
 .venv/bin/flask db upgrade
 exec .venv/bin/flask run

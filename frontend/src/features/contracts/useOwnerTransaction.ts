@@ -12,7 +12,7 @@ export function useOwnerTransaction<Action extends string>({
 }: {
   chainId: number | undefined
   doneMessages: Record<Action, string>
-  onSettled: () => void
+  onSettled: (settled: { action: Action; hash: `0x${string}`; status: 'success' | 'reverted' }) => void
 }) {
   const currentChainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
@@ -23,20 +23,21 @@ export function useOwnerTransaction<Action extends string>({
   const receipt = useWaitForTransactionReceipt({ hash: pending?.hash, chainId })
 
   const pendingAction = pending?.action
+  const pendingHash = pending?.hash
   const receiptStatus = receipt.data?.status
   useEffect(() => {
-    if (!pendingAction || !receiptStatus) return
+    if (!pendingAction || !pendingHash || !receiptStatus) return
     // Reacting to the chain's receipt for the transaction this panel sent —
     // an external event, not state derivable during render.
     // oxlint-disable-next-line react/set-state-in-effect
     setPending(null)
     if (receiptStatus === 'reverted') setError('The transaction reverted on-chain')
     else setDone(doneMessages[pendingAction])
-    onSettled()
+    onSettled({ action: pendingAction, hash: pendingHash, status: receiptStatus })
     // doneMessages/onSettled are per-render values from the caller; the
     // receipt arriving is the only event this reacts to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAction, receiptStatus])
+  }, [pendingAction, pendingHash, receiptStatus])
 
   const send = async (action: Action, write: () => Promise<`0x${string}`>) => {
     setError(null)
