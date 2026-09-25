@@ -10,6 +10,7 @@ as a general-purpose RPC proxy.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Optional
 
 from sqlalchemy import func
@@ -17,12 +18,16 @@ from web3 import Web3
 
 from ..models.deployment import ContractDeployment
 from ..models.solana_token import SolanaTokenLaunch
-from . import blockchain, liquidity
+from . import blockchain, contract_templates, liquidity, solidity
 from .candy_machine import CandyMachineServiceError, _sidecar_network, _sidecar_request
 
 ZERO = "0x0000000000000000000000000000000000000000"
 # Where LP tokens are conventionally sent to burn them.
 DEAD = "0x000000000000000000000000000000000000dEaD"
+# Uniswap V2 (and forks) mint this much LP to address(0) when a pool is
+# created — the protocol's own floor, not a burn by anyone, so it isn't
+# reported as burned.
+MINIMUM_LIQUIDITY = 1000
 
 
 class NotFoundError(ValueError):
@@ -63,7 +68,34 @@ _PAIR_ABI = [
     _fn("totalSupply", ["uint256"]),
     _fn("balanceOf", ["uint256"], ["address"]),
 ]
-_LOCK_ABI = [_fn("lockedAmount", ["uint256"]), _fn("releaseTime", ["uint256"])]
+
+
+@lru_cache(maxsize=256)
+def _runtime_code(contract_code: str, contract_name: str) -> Optional[str]:
+    compiled = solidity.compile_contract(contract_code, contract_name)
+    return compiled.deployed_bytecode.lower() if compiled.success and compiled.deployed_bytecode else None
+
+
+def code_matches_template(w3: Web3, deployment: ContractDeployment) -> Optional[bool]:
+    """Whether the contract at a recorded deployment's address runs exactly
+    the code its template compiles to with its recorded parameters.
+    Recording a deployment proves the transaction created that address, not
+    what code it deployed — so a public page can't take a recorded contract's
+    own answers (lockedAmount(), owner(), ...) on trust without this. Exact
+    comparison works because the templates declare no immutables (a test
+    keeps it that way) and compilation is deterministic (what explorer
+    verification relies on too). None: the recorded parameters no longer
+    render, so it can't be checked."""
+    try:
+        rendered = contract_templates.render_contract(deployment.template_id, deployment.parameters or {})
+    except (contract_templates.UnknownTemplateError, contract_templates.TemplateParameterError):
+        return None
+    expected = _runtime_code(rendered["contract_code"], rendered["contract_name"])
+    if expected is None:
+        return None
+    actual = w3.eth.get_code(Web3.to_checksum_address(deployment.contract_address)).hex()
+    actual = actual if actual.startswith("0x") else "0x" + actual
+    return actual.lower() == expected
 
 
 def _optional(call) -> Any:
@@ -87,19 +119,25 @@ def _evm_pool(w3: Web3, network: str, token: str, chain_time: int) -> Optional[d
     reserve0, reserve1, _ = pair.functions.getReserves().call()
     token_is_0 = pair.functions.token0().call().lower() == token.lower()
     lp_supply = pair.functions.totalSupply().call()
-    burned = pair.functions.balanceOf(Web3.to_checksum_address(DEAD)).call() + pair.functions.balanceOf(ZERO).call()
+    burned = pair.functions.balanceOf(Web3.to_checksum_address(DEAD)).call() + max(
+        0, pair.functions.balanceOf(ZERO).call() - MINIMUM_LIQUIDITY
+    )
 
-    # Token Time-Locks deployed here (by anyone) whose token is this pool's
-    # LP — each read live; only ones still holding LP and not yet due count.
+    # Token Time-Locks deployed here (by anyone) on this pool's LP. Nothing
+    # is taken from the lock contract's own answers: its code must be the
+    # template's for its recorded terms (so its release time is the recorded
+    # one, baked in), and the amount is the LP token's own balance for it.
     locks = []
     candidates = ContractDeployment.query.filter_by(template_id="token_timelock", network=network).all()
     for row in candidates:
-        if str((row.parameters or {}).get("TOKEN", "")).lower() != pair_address.lower():
+        params = row.parameters or {}
+        if str(params.get("TOKEN", "")).lower() != pair_address.lower():
             continue
-        lock = w3.eth.contract(address=Web3.to_checksum_address(row.contract_address), abi=_LOCK_ABI)
-        amount = _optional(lambda: lock.functions.lockedAmount().call())
-        release_time = _optional(lambda: lock.functions.releaseTime().call())
-        if amount and release_time and release_time > chain_time:
+        release_time = int(params.get("RELEASE_TIME", 0) or 0)
+        if release_time <= chain_time or not code_matches_template(w3, row):
+            continue
+        amount = pair.functions.balanceOf(Web3.to_checksum_address(row.contract_address)).call()
+        if amount:
             locks.append({"address": row.contract_address, "amount": str(amount), "release_time": release_time})
     locks.sort(key=lambda item: item["release_time"])
 
@@ -157,6 +195,9 @@ def evm_token_page(network: str, address: str) -> dict[str, Any]:
                 "max_wallet": str(token.functions.maxWalletAmount().call()),
             },
             "source_verified": deployment.verification_status == "verified",
+            # False: the contract isn't what it was recorded as — its answers
+            # below are its own claims (the page says so).
+            "code_matches_template": code_matches_template(w3, deployment),
             "explorer_url": deployment.explorer_url,
             "chain_time": chain_time,
             "pool": _evm_pool(w3, network, token_address, chain_time),

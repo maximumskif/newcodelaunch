@@ -46,6 +46,9 @@ class CompilationResult:
     success: bool
     abi: Optional[list[dict[str, Any]]] = None
     bytecode: Optional[str] = None
+    # The runtime code a deployment of this leaves on-chain (0x-prefixed) —
+    # what services/token_pages.py compares a live contract against.
+    deployed_bytecode: Optional[str] = None
     error_message: Optional[str] = None
 
 
@@ -99,7 +102,12 @@ def compile_contract(source: str, contract_name: str) -> CompilationResult:
     # on-chain with a raw EVM `OpcodeNotFound` (misaligned bytecode) instead
     # of ever compiling into anything. Never caught before because nothing
     # had driven this flow through a real chain until this test existed.
-    bytecode = contract_interface["evm"]["bytecode"]["object"]
-    if not bytecode.startswith("0x"):
-        bytecode = "0x" + bytecode
-    return CompilationResult(success=True, abi=contract_interface["abi"], bytecode=bytecode)
+    def prefixed(code: str) -> str:
+        return code if code.startswith("0x") else "0x" + code
+
+    return CompilationResult(
+        success=True,
+        abi=contract_interface["abi"],
+        bytecode=prefixed(contract_interface["evm"]["bytecode"]["object"]),
+        deployed_bytecode=prefixed(contract_interface["evm"]["deployedBytecode"]["object"]),
+    )

@@ -195,7 +195,10 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   the lock's own history row — the LP back with the owner, to the wei.
   A fresh browser context — no wallet, not signed in — opens the token's
   public page while the lock is active and sees the time-locked share,
-  taxes and trading status (axe-scanned).
+  taxes and trading status (axe-scanned). Before that, a fake lock (a
+  contract answering 42 to every call) is recorded through the real API as
+  a Token Time-Lock on the pool's LP and sent real LP — the page must not
+  count it.
 - `erc20-advanced-owner.spec.ts` — deploy an `erc20_advanced` token
   through the UI, then check its behaviour on-chain with fresh funded
   anvil accounts: holders can't transfer before "Enable trading"; after

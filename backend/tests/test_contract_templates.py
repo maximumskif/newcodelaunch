@@ -186,3 +186,19 @@ def test_token_timelock_compiles_with_no_owner_and_fixed_terms():
 def test_token_timelock_parameters_are_checked(overrides, message):
     with pytest.raises(contract_templates.TemplateParameterError, match=message):
         contract_templates.render_contract("token_timelock", {**TIMELOCK_PARAMS, **overrides})
+
+
+def test_templates_declare_no_immutables():
+    # token_pages.code_matches_template compares a live contract's runtime
+    # code with the compiled template byte for byte — immutables are filled
+    # in at deploy time and would make every comparison fail.
+    for template in contract_templates.get_all_templates():
+        assert " immutable " not in template.solidity_code, template.id
+
+
+def test_compile_returns_the_runtime_code_too():
+    rendered = contract_templates.render_contract("token_timelock", TIMELOCK_PARAMS)
+    compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    assert compiled.deployed_bytecode.startswith("0x") and len(compiled.deployed_bytecode) > 100
+    # Runtime code is the creation code minus the constructor.
+    assert compiled.deployed_bytecode[2:] in compiled.bytecode

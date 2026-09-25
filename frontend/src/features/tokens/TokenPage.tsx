@@ -99,6 +99,13 @@ export function TokenPage() {
         </Button>
       </div>
 
+      {page.chain === 'evm' && page.code_matches_template === false && (
+        <div role="alert" className="max-w-4xl rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm text-ink">
+          This contract's code doesn't match the {page.template} template it was recorded as. What it reports about itself below
+          can't be trusted.
+        </div>
+      )}
+
       <div className="grid max-w-4xl gap-4 md:grid-cols-2">
         <Card padding="lg" rounded="xl">
           <h2 className="mb-3 text-sm font-semibold text-ink">Supply and control</h2>
@@ -116,6 +123,11 @@ export function TokenPage() {
               <>
                 {page.owner !== null && (
                   <Check ok={page.ownership_renounced}>{page.ownership_renounced ? 'Ownership renounced — no one can change its settings' : 'Has an owner who can change its settings'}</Check>
+                )}
+                {page.code_matches_template !== null && (
+                  <Check ok={page.code_matches_template}>
+                    {page.code_matches_template ? `Code matches this app's ${page.template} template` : `Code does not match the ${page.template} template`}
+                  </Check>
                 )}
                 <Check ok={page.source_verified}>{page.source_verified ? 'Source code verified on the explorer' : 'Source code not verified yet'}</Check>
                 {page.advanced && (

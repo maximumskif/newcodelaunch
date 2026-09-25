@@ -23,6 +23,8 @@ export interface EvmTokenPage {
   ownership_renounced: boolean
   advanced: { trading_enabled: boolean; buy_tax_bps: number; sell_tax_bps: number; max_transaction: string; max_wallet: string } | null
   source_verified: boolean
+  // null: couldn't be checked (the recorded parameters no longer render).
+  code_matches_template: boolean | null
   explorer_url: string | null
   chain_time: number
   pool: (PoolBase & { burned_lp?: string; locks?: { address: string; amount: string; release_time: number }[] }) | null

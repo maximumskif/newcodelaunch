@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { parseAbi, parseEther, parseUnits, zeroAddress, type Address } from 'viem'
 
-import { anvil, ANVIL_RPC_URL, deployAdvancedToken, freshAddress, fundedWallet, installEvmWallet, publicClient, testClient } from './setup/evmToken'
+import { anvil, ANVIL_RPC_URL, deployAdvancedToken, freshAddress, fundedWallet, installEvmWallet, ownerWallet, publicClient, testClient } from './setup/evmToken'
+import { API_BASE_URL, AUTH_STORAGE_KEY } from './setup/seed'
 import { expectNoA11yViolations } from './setup/axe'
 import { ensureLocalUniswap, LOCAL_UNISWAP } from './setup/localUniswap'
 
@@ -17,6 +18,7 @@ const PAIR_ABI = parseAbi([
   'function token0() view returns (address)',
   'function totalSupply() view returns (uint256)',
   'function balanceOf(address) view returns (uint256)',
+  'function transfer(address to, uint256 amount) returns (bool)',
 ])
 const LOCK_ABI = parseAbi(['function lockedAmount() view returns (uint256)', 'function release()'])
 const OWNER: Address = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
@@ -189,8 +191,32 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   await expect.poll(() => publicClient.readContract({ address: lock, abi: LOCK_ABI, functionName: 'lockedAmount' })).toBe(locked)
   await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock - locked)
 
-  // A buyer — a fresh browser, no wallet, not signed in — sees the lock on
-  // the token's public page, read from the chain.
+  // An attempt to fake a lock: the owner deploys a contract that answers 42
+  // to every call (so lockedAmount() would look like a lock), records it
+  // through the real API as a Token Time-Lock on this pool's LP, and even
+  // sends it real LP. Recording only proves the transaction created that
+  // address — the public page must check the code and ignore it.
+  const fakeHash = await ownerWallet.sendTransaction({ data: '0x600a600c600039600a6000f3602a60005260206000f3' })
+  const fakeReceipt = await publicClient.waitForTransactionReceipt({ hash: fakeHash })
+  const fake = fakeReceipt.contractAddress!
+  const auth = JSON.parse((await page.evaluate((key) => localStorage.getItem(key), AUTH_STORAGE_KEY))!) as { accessToken: string }
+  const recorded = await page.request.post(`${API_BASE_URL}/contracts/deployments`, {
+    headers: { Authorization: `Bearer ${auth.accessToken}` },
+    data: {
+      template_id: 'token_timelock',
+      network: 'sepolia',
+      contract_address: fake,
+      transaction_hash: fakeHash,
+      deployer_address: OWNER,
+      parameters: { TOKEN: pair, BENEFICIARY: OWNER, RELEASE_TIME: '4102444800' },
+    },
+  })
+  expect(recorded.status()).toBe(201)
+  const fakeLp = await ownerWallet.writeContract({ address: pair, abi: PAIR_ABI, functionName: 'transfer', args: [fake, 1_000_000n] })
+  await publicClient.waitForTransactionReceipt({ hash: fakeLp })
+
+  // A buyer — a fresh browser, no wallet, not signed in — sees the real lock
+  // (and only it) on the token's public page, read from the chain.
   const lpSupplyNow = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'totalSupply' })
   const stranger = await browser.newContext()
   const publicPage = await stranger.newPage()
@@ -200,6 +226,8 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   await expect(publicPage.getByText(/Buy tax 3% · sell tax 5%/)).toBeVisible()
   await expect(publicPage.getByText(`${((Number(locked) / Number(lpSupplyNow)) * 100).toFixed(2)}% of the pool's liquidity is time-locked`)).toBeVisible()
   await expect(publicPage.getByTestId('token-page-pool')).toContainText(lock)
+  await expect(publicPage.getByTestId('token-page-pool')).not.toContainText(fake)
+  await expect(publicPage.getByText("Code matches this app's Advanced ERC-20 Token template")).toBeVisible()
   await expectNoA11yViolations(publicPage, 'public token page (EVM)')
   await stranger.close()
 
@@ -208,18 +236,21 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
 
   // A buyer can check what it is: its source verifies on the explorer
   // (the local verifying Etherscan stub recompiles and compares bytecode).
-  await lockRow.getByRole('button', { name: 'Verify source' }).click()
-  await expect(lockRow.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
+  // (Pinned to the real lock's row: the fake above is a Token Time-Lock row too.)
+  const realLockRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: `Manage ${lock}` }) })
+  await realLockRow.getByRole('button', { name: 'Verify source' }).click()
+  await expect(realLockRow.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
 
   // Once the release time has passed (anvil's clock moved forward), anyone
   // can trigger the release — and it pays only the beneficiary, the owner.
   await testClient.increaseTime({ seconds: 10 * 60 })
   await testClient.mine({ blocks: 1 })
   await page.reload()
-  await page.getByRole('row', { name: /Token Time-Lock/ }).first().getByRole('button', { name: `Manage ${lock}` }).click()
+  await page.getByRole('button', { name: `Manage ${lock}` }).click()
   const lockPanel = page.getByTestId('token-lock')
   await lockPanel.getByRole('button', { name: 'Release to beneficiary' }).click()
   await expect(lockPanel.getByText('Released to the beneficiary.')).toBeVisible({ timeout: 20_000 })
-  await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock)
+  // Everything back with the owner, less the LP it sent to the fake lock.
+  await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock - 1_000_000n)
   await expect.poll(() => publicClient.readContract({ address: lock, abi: LOCK_ABI, functionName: 'lockedAmount' })).toBe(0n)
 })

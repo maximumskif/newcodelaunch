@@ -32,6 +32,7 @@ const evm: EvmTokenPage = {
   ownership_renounced: true,
   advanced: { trading_enabled: true, buy_tax_bps: 300, sell_tax_bps: 500, max_transaction: '10000000000000000000000', max_wallet: '20000000000000000000000' },
   source_verified: false,
+  code_matches_template: true,
   explorer_url: 'https://sepolia.etherscan.io/address/0x5FbDB2315678afecb367f032d93F642f64180aa3',
   chain_time: 1_790_000_000,
   pool: {
@@ -99,5 +100,12 @@ describe('TokenPage', () => {
     vi.mocked(tokenPagesApi.get).mockRejectedValue(new Error('No token launched with this app at that address'))
     renderAt('/token/sepolia/0xnope')
     expect(await screen.findByText("This link doesn't match a token launched here")).toBeInTheDocument()
+  })
+
+  it('warns loudly when the contract isn’t the code it was recorded as', async () => {
+    vi.mocked(tokenPagesApi.get).mockResolvedValue({ ...evm, code_matches_template: false })
+    renderAt(`/token/sepolia/${evm.address}`)
+    expect(await screen.findByRole('alert')).toHaveTextContent("doesn't match the Advanced ERC-20 Token template")
+    expect(screen.getByText('Code does not match the Advanced ERC-20 Token template')).toBeInTheDocument()
   })
 })
