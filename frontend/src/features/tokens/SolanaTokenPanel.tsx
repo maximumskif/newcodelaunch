@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Connection } from '@solana/web3.js'
+import { Link } from 'react-router-dom'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -13,6 +14,7 @@ import { isSolanaMainnet, SOLANA_NETWORKS, type SolanaNetworkId } from '../../li
 import { signSendAndConfirm } from '../../lib/solana'
 import { formatTokenAmount, solanaTokensApi, validateTokenForm, type SolanaTokenLaunch } from '../../lib/solanaTokensApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
+import { tokenPagePath } from '../../lib/tokenPagesApi'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { SolanaLiquidityPanel } from './SolanaLiquidityPanel'
@@ -462,6 +464,13 @@ function SolanaTokenHistory({
                         {isOpen(launch.id, 'manage') ? 'Hide' : 'Manage'}
                       </Button>
                     )}
+                    <Link
+                      to={tokenPagePath(launch.network, launch.mint_address)}
+                      aria-label={`Public page for ${launch.symbol}`}
+                      className="self-center px-2 text-xs text-accent-400 hover:underline"
+                    >
+                      Public page
+                    </Link>
                     <Button
                       variant="ghost"
                       size="sm"

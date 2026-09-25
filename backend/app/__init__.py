@@ -80,6 +80,10 @@ def create_app(config_object=Config):
 
     app.register_blueprint(solana_tokens_bp, url_prefix="/api/solana-tokens")
 
+    from .blueprints.token_pages import token_pages_bp
+
+    app.register_blueprint(token_pages_bp, url_prefix="/api/token-pages")
+
     from .commands import register_cli
 
     register_cli(app)

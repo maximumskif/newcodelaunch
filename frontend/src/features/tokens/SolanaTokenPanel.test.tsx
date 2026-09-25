@@ -170,11 +170,20 @@ describe('SolanaTokenPanel', () => {
     vi.mocked(solanaTokensApi.list).mockResolvedValue({
       tokens: [{ ...launched, mint_authority_revoked: false, freeze_authority_revoked: false }],
     })
-    render(<SolanaTokenPanel />)
+    render(
+      <MemoryRouter>
+        <SolanaTokenPanel />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText('Mintable')).toBeInTheDocument()
     expect(screen.getByText('Freezable')).toBeInTheDocument()
     expect(screen.getByText('1,000')).toBeInTheDocument()
+    // Each launch links to its public page.
+    expect(screen.getByRole('link', { name: `Public page for ${launched.symbol}` })).toHaveAttribute(
+      'href',
+      `/token/${launched.network}/${launched.mint_address}`,
+    )
   })
 
   describe('in a project', () => {

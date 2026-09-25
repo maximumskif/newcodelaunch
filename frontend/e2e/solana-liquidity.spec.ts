@@ -40,6 +40,7 @@ test.beforeEach(async ({ page }) => {
 
 test('Raydium liquidity for a launched SPL token: pool created, traded by another wallet, added to, withdrawn from and locked — on the real CPMM and lock programs', async ({
   page,
+  browser,
 }) => {
   test.setTimeout(150_000)
 
@@ -188,4 +189,15 @@ test('Raydium liquidity for a launched SPL token: pool created, traded by anothe
   const lockedPercent = ((Number(lpAfter) / Number(withdrawn.lpSupply)) * 100).toFixed(2)
   await expect(panel.getByText(`${lockedPercent}% locked forever`)).toBeVisible()
   await expect(panel.getByTestId('solana-liquidity-withdraw')).toBeHidden()
+
+  // A buyer's view: the public page, in a fresh browser with no wallet.
+  const stranger = await browser.newContext()
+  const publicPage = await stranger.newPage()
+  await publicPage.goto(`/token/solana_devnet/${mint.toBase58()}`)
+  await expect(publicPage.getByRole('heading', { name: 'Pool Token (POOLT)' })).toBeVisible({ timeout: 20_000 })
+  await expect(publicPage.getByText('Supply is fixed — no one can mint more')).toBeVisible()
+  await expect(publicPage.getByText('No one can freeze holders’ tokens')).toBeVisible()
+  await expect(publicPage.getByText(`${lockedPercent}% of the pool's liquidity is locked forever`, { exact: false })).toBeVisible()
+  await expectNoA11yViolations(publicPage, 'public token page (Solana)')
+  await stranger.close()
 })

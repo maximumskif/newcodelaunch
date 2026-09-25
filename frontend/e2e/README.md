@@ -171,7 +171,9 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   withdraws half the position, then locks the rest for good through
   Raydium's Burn & Earn program (also cloned) — reserves, LP balances, the
   lock authority's LP, the creator's new Fee Key NFT and the backend's
-  records each checked. Scans the panel and the lock confirmation with axe.
+  records each checked. Scans the panel and the lock confirmation with axe,
+  then opens the token's public page in a fresh, wallet-less browser and
+  checks the fixed supply, revoked freeze authority and locked share.  records each checked. Scans the panel and the lock confirmation with axe.
 - `dex-liquidity.spec.ts` — deploys Uniswap V2 itself onto anvil
   (`setup/localUniswap.ts`: WETH9, UniswapV2Factory and Router02 from
   Uniswap's own published build artifacts, at fixed addresses the backend
@@ -191,6 +193,9 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   contract reverts), verifies the lock's source through the Etherscan
   stub, moves anvil's clock past the release time, and releases it from
   the lock's own history row — the LP back with the owner, to the wei.
+  A fresh browser context — no wallet, not signed in — opens the token's
+  public page while the lock is active and sees the time-locked share,
+  taxes and trading status (axe-scanned).
 - `erc20-advanced-owner.spec.ts` — deploy an `erc20_advanced` token
   through the UI, then check its behaviour on-chain with fresh funded
   anvil accounts: holders can't transfer before "Enable trading"; after

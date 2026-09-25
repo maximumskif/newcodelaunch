@@ -1,8 +1,10 @@
 import { Fragment, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import type { ContractDeployment } from '../../lib/contractsApi'
+import { tokenPagePath } from '../../lib/tokenPagesApi'
 import { Erc20ManagePanel } from './Erc20ManagePanel'
 import { LiquidityPanel } from './LiquidityPanel'
 import { TokenLockPanel } from './TokenLockPanel'
@@ -75,6 +77,15 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                       >
                         {isOpen(deployment.id, 'manage') ? 'Hide' : 'Manage'}
                       </Button>
+                    )}
+                    {deployment.contract_type === 'erc20' && (
+                      <Link
+                        to={tokenPagePath(deployment.network, deployment.contract_address)}
+                        aria-label={`Public page for ${deployment.contract_address}`}
+                        className="self-center px-2 text-xs text-accent-400 hover:underline"
+                      >
+                        Public page
+                      </Link>
                     )}
                     {deployment.contract_type === 'erc20' && (
                       <Button

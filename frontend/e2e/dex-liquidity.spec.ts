@@ -36,6 +36,7 @@ test.beforeEach(async ({ page }) => installEvmWallet(page))
 
 test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from the UI, registered as the trading pair, real swaps taxed, then LP time-locked and released', async ({
   page,
+  browser,
 }) => {
   test.setTimeout(240_000)
   const marketing = freshAddress()
@@ -187,6 +188,20 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   const locked = lpBeforeLock / 2n
   await expect.poll(() => publicClient.readContract({ address: lock, abi: LOCK_ABI, functionName: 'lockedAmount' })).toBe(locked)
   await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock - locked)
+
+  // A buyer — a fresh browser, no wallet, not signed in — sees the lock on
+  // the token's public page, read from the chain.
+  const lpSupplyNow = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'totalSupply' })
+  const stranger = await browser.newContext()
+  const publicPage = await stranger.newPage()
+  await publicPage.goto(`/token/sepolia/${token}`)
+  await expect(publicPage.getByRole('heading', { name: 'Advanced E2E (ADV)' })).toBeVisible({ timeout: 20_000 })
+  await expect(publicPage.getByText('Trading is enabled')).toBeVisible()
+  await expect(publicPage.getByText(/Buy tax 3% · sell tax 5%/)).toBeVisible()
+  await expect(publicPage.getByText(`${((Number(locked) / Number(lpSupplyNow)) * 100).toFixed(2)}% of the pool's liquidity is time-locked`)).toBeVisible()
+  await expect(publicPage.getByTestId('token-page-pool')).toContainText(lock)
+  await expectNoA11yViolations(publicPage, 'public token page (EVM)')
+  await stranger.close()
 
   // Nobody can release it early — not even by calling the contract directly.
   await expect(buyer.writeContract({ address: lock, abi: LOCK_ABI, functionName: 'release' })).rejects.toThrow(/Tokens are still locked/)
