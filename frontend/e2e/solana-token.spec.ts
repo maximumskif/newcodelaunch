@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import { Connection, PublicKey } from '@solana/web3.js'
 
+import { expectNoA11yViolations } from './setup/axe'
 import {
   FIXTURE_WALLET_PUBLIC_KEY as CREATOR_PUBLIC_KEY,
   fundFixtureWallet,
@@ -159,7 +160,9 @@ test('owner tools on a token that kept its authorities: mint more, revoke freeze
   await expect(panel).toContainText('1,500')
 
   // Revoke freeze, then fix the supply — each behind a confirmation.
+  await expectNoA11yViolations(page, 'Solana token history with its Manage panel')
   await panel.getByRole('button', { name: 'Revoke freeze authority…' }).click()
+  await expectNoA11yViolations(page, 'revoke confirmation dialog')
   await page.getByRole('dialog').getByRole('button', { name: 'Revoke freeze authority' }).click()
   await expect(panel.getByText('Freeze authority revoked.')).toBeVisible({ timeout: 30_000 })
   expect((await readMint(mint)).freezeAuthority).toBeNull()

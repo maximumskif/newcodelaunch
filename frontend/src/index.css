@@ -66,7 +66,12 @@
   --color-success-strong: var(--color-emerald-500);
   --color-warning: var(--color-amber-400);
   --color-danger: var(--color-red-400);
-  --color-danger-strong: var(--color-red-500);
+  /* Solid fill behind white text (the danger Button): red-600 is 4.8:1
+     against white, red-700 (hover) 6.4:1. red-500 measured 3.8:1 in a real
+     axe scan of the revoke-confirmation dialog — under AA for 12px text —
+     and the old hover (red-400) was lighter still. */
+  --color-danger-strong: var(--color-red-600);
+  --color-danger-stronger: var(--color-red-700);
   --color-info: var(--color-sky-400);
 
   --color-canvas: var(--color-zinc-950);

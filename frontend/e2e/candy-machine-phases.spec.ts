@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import { Connection, Keypair } from '@solana/web3.js'
 
+import { expectNoA11yViolations } from './setup/axe'
 import { API_BASE_URL, AUTH_STORAGE_KEY, seedPublishedCollection } from './setup/seed'
 import {
   CORE_CANDY_GUARD_PROGRAM_ID,
@@ -64,6 +65,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await page.getByLabel('Allowlist price (SOL)').fill('0.05')
   await page.getByLabel('Allowlist start').fill(localInput(new Date(Date.now() - 24 * 3600_000)))
   await page.getByLabel(/Max mints per wallet/).fill('1')
+  await expectNoA11yViolations(page, 'launch form with an allowlist phase')
   await page.getByRole('button', { name: 'Launch Candy Machine' }).click()
 
   // Recording now reads the guard groups back from the chain and checks
@@ -87,6 +89,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await expect(page).toHaveURL(/\/mint\/buy\//)
   await expect(page.getByText('Allowlist phase', { exact: true })).toBeVisible()
   await expect(page.getByText('Allowlist · 2 wallets')).toBeVisible()
+  await expectNoA11yViolations(page, 'storefront in its allowlist phase')
   await page.getByRole('button', { name: 'Mint for 0.05 SOL' }).click()
   await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('1 of 2 remaining')).toBeVisible({ timeout: 10_000 })
@@ -110,6 +113,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await expect(row).toContainText('Allowlist phase')
   await expect(row).toContainText('0.05–0.2 SOL')
   await expect(row).toContainText('Max 1 per wallet')
+  await expectNoA11yViolations(page, 'creator dashboard with a live drop')
 
   // Edit the live drop's phases: drop the allowlist, open public minting an
   // hour ago at a new 0.15 SOL price. One creator-signed guard update; the
@@ -125,6 +129,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   // wallet (1 allowlist mint so far) gets exactly one more.
   await expect(dialog.getByLabel(/Max mints per wallet/)).toHaveValue('1')
   await dialog.getByLabel(/Max mints per wallet/).fill('2')
+  await expectNoA11yViolations(page, 'edit-phases dialog')
   await dialog.getByRole('button', { name: 'Save phases' }).click()
   await expect(dialog).toBeHidden({ timeout: 45_000 })
 

@@ -281,6 +281,14 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   it just hadn't been pointed at axe yet. Found and fixed a real, systemic
   color-contrast failure (see the root `README.md`'s verification-status
   note) — not a hypothetical the review had flagged as merely unverified.
+  It also deploys a real `erc20_advanced` token and scans the populated
+  history row, the Manage panel, and the Liquidity panel (new pool, then
+  live pool with removal controls). Specs that already build real state
+  scan it in place with `setup/axe.ts`'s `expectNoA11yViolations`: the
+  ERC-721 deploy page with its Manage panel, the Solana token Manage panel
+  and its revoke dialog, the Candy Machine launch form with an allowlist,
+  the storefront mid-phase, the creator dashboard, the edit-phases dialog,
+  and the renounce-ownership dialog.
 
 ## What isn't covered yet
 

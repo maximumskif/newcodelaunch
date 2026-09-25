@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
+import { anvil, ANVIL_RPC_URL, deployAdvancedToken, freshAddress, installEvmWallet } from './setup/evmToken'
+import { ensureLocalUniswap } from './setup/localUniswap'
+
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 // A real axe-core scan in a real Chromium browser — the "run axe DevTools
@@ -76,4 +79,39 @@ test.describe('authenticated app shell', () => {
       expect(violations, describeViolations(violations)).toEqual([])
     })
   }
+})
+
+// The empty-state scans above never see the panels that only exist once
+// something is deployed. This one deploys a real erc20_advanced on anvil,
+// opens its owner tools and its liquidity panel (on the suite's local
+// Uniswap V2), funds a pool so the removal controls render too, and scans
+// the page in each state.
+test('a deployed token’s history row, Manage and Liquidity panels have no WCAG 2 A/AA violations', async ({ page }) => {
+  test.setTimeout(120_000)
+  await ensureLocalUniswap(anvil, ANVIL_RPC_URL)
+  await installEvmWallet(page)
+  const token = await deployAdvancedToken(page, { marketing: freshAddress(), liquidity: freshAddress() })
+  const scan = async (state: string) => {
+    const { violations } = await auditPage(page)
+    expect(violations, `${state}:\n${describeViolations(violations)}`).toEqual([])
+  }
+  await scan('deploy result + populated history')
+
+  await page.getByRole('button', { name: `Manage ${token}` }).click()
+  await expect(page.getByTestId('erc20-manage').getByText('Trading not enabled')).toBeVisible({ timeout: 15_000 })
+  await scan('Manage panel')
+
+  await page.getByRole('button', { name: `Liquidity for ${token}` }).click()
+  const panel = page.getByTestId('liquidity-panel')
+  await expect(panel.getByText('No liquidity yet')).toBeVisible({ timeout: 15_000 })
+  await panel.getByLabel(/ADV to add/).fill('1000')
+  await panel.getByLabel(/ETH to add/).fill('0.01')
+  await scan('Liquidity panel, new pool')
+
+  await panel.getByRole('button', { name: 'Approve ADV' }).click()
+  await expect(panel.getByRole('button', { name: 'Add liquidity' })).toBeEnabled({ timeout: 20_000 })
+  await panel.getByRole('button', { name: 'Add liquidity' }).click()
+  await expect(panel.getByTestId('liquidity-remove')).toBeVisible({ timeout: 20_000 })
+  await panel.getByLabel(/Share of your position/).fill('10')
+  await scan('Liquidity panel, live pool with removal')
 })

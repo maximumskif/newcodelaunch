@@ -22,7 +22,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
     'bg-[image:var(--gradient-accent)] bg-[length:200%_200%] bg-left-top text-white hover:bg-right-bottom hover:shadow-glow-accent',
   secondary: 'border border-border text-ink hover:border-border-strong hover:bg-surface-hover',
   ghost: 'text-ink-muted hover:text-ink hover:bg-surface-hover',
-  danger: 'bg-danger-strong text-white hover:bg-danger',
+  danger: 'bg-danger-strong text-white hover:bg-danger-stronger',
 }
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

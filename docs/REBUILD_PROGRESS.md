@@ -922,3 +922,11 @@ Adding real money to a pool with no way to take it out from the same place wasn'
 **Found while designing it — advanced tokens tax their own liquidity removal.** The router pulls the tokens out of the pool (pool → router) before passing them on, and once the pool is a registered pair that first hop is a "buy": it pays the buy tax and is held to the max-transaction and max-wallet limits (the router isn't fee-excluded). So a large removal simply reverts. Excluding the router would fix both, but opens a known hole: buy with the router as recipient (untaxed), then sweep the router's balance out with a dust-sized removal — a tax-free buy for anyone. So the panel doesn't offer that; it shows what the tax takes before sending, and refuses a removal over the limits with a message to remove a smaller share at a time.
 
 **Verified**: Vitest 28 in the contracts panels (3 new: approve-then-remove with exact mins, the tax note and over-limit block, no removal without a position); `dex-liquidity.spec.ts` now also sees a 30% removal refused and a 5% one return exactly its share of both reserves through the real router, less the 3% tax, split to the fee wallets.
+
+## Accessibility scans of populated states, 2026-09-25
+
+The axe scans only ever covered each page's empty state; every panel that exists only once something is deployed — owner tools, liquidity, the Candy Machine dashboard and phase editor, the confirmation dialogs — had never been scanned (this doc's 2026-09-24 ERC-721 entry already listed the populated deploy page as not scanned). Now: a new accessibility test deploys a real advanced token and scans its history row, Manage panel and Liquidity panel (new pool, then a live pool with removal controls), and the specs that already build real state scan it in place (`e2e/setup/axe.ts`) — ERC-721 deploy + Manage, Solana token Manage + revoke dialog, Candy Machine launch form with an allowlist, storefront mid-phase, creator dashboard, edit-phases dialog, renounce dialog.
+
+**Found one real failure**: the danger button (every can't-be-undone confirmation) was white on red-500 — 3.8:1 at 12px, under AA's 4.5:1 — and its hover (red-400) was lighter still. Now red-600 (4.8:1), red-700 on hover (6.4:1). Everything else passed as built.
+
+**Verified**: full Playwright suite 26/26 on two consecutive runs, retries off; Vitest 184/184.

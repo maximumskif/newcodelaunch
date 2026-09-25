@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test'
 import { createPublicClient, createWalletClient, defineChain, http, parseAbi, parseEther, type Address } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
+import { expectNoA11yViolations } from './setup/axe'
 import { AUTH_STORAGE_KEY, seedPublishedCollection } from './setup/seed'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -146,6 +147,7 @@ test('a real ERC-721 deploy of a generated collection: metadata folder pinned, d
   const panel = page.getByTestId('erc721-manage')
   await expect(panel).toContainText('2 / 2 minted')
   await expect(panel).toContainText('0.02 ETH')
+  await expectNoA11yViolations(page, 'populated ERC-721 deploy page with its Manage panel')
 
   const creatorBefore = await publicClient.getBalance({ address: CREATOR_ADDRESS })
   await panel.getByRole('button', { name: 'Withdraw to owner' }).click()

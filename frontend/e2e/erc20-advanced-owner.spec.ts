@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { parseAbi, parseUnits, zeroAddress, type Address } from 'viem'
 
+import { expectNoA11yViolations } from './setup/axe'
 import { deployAdvancedToken, freshAddress, fundedWallet, installEvmWallet, ownerWallet, publicClient } from './setup/evmToken'
 
 const TOKEN_ABI = parseAbi([
@@ -92,6 +93,7 @@ test('an advanced ERC-20: trading gate, pair-based taxes split to the fee wallet
 
   // Renouncing: confirmed in a dialog, then nobody owns it.
   await panel.getByRole('button', { name: 'Renounce ownership…' }).click()
+  await expectNoA11yViolations(page, 'renounce-ownership dialog')
   await page.getByRole('dialog').getByRole('button', { name: 'Renounce ownership' }).click()
   await expect(panel.getByText('Ownership renounced', { exact: true })).toBeVisible({ timeout: 20_000 })
   await expect.poll(() => read<Address>('owner')).toBe(zeroAddress)
