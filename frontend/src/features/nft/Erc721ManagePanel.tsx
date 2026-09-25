@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { formatEther } from 'viem'
 import { useQuery } from '@tanstack/react-query'
-import { useAccount, useBalance, useChainId, usePublicClient, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
+import { useAccount, useBalance, usePublicClient, useWriteContract } from 'wagmi'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -13,6 +13,7 @@ import { nftApi } from '../../lib/nftApi'
 import { priceToWei } from '../../lib/nftEvm'
 import { useAuth } from '../auth/AuthContext'
 import { NETWORK_TO_CHAIN_ID } from '../contracts/useDeployTemplate'
+import { useOwnerTransaction } from '../contracts/useOwnerTransaction'
 import { EVM_NETWORKS, isMainnetNetwork } from '../network/NetworkContext'
 
 const READS = ['owner', 'totalSupply', 'maxSupply', 'mintPrice', 'maxMintsPerWallet', 'mintingEnabled', 'baseURI'] as const
@@ -30,8 +31,6 @@ const inputClass = 'w-full rounded-md border border-border bg-surface px-3 py-1.
 export function Erc721ManagePanel({ deployment, collectionId }: { deployment: ContractDeployment; collectionId: string }) {
   const { accessToken } = useAuth()
   const { address } = useAccount()
-  const currentChainId = useChainId()
-  const { switchChainAsync } = useSwitchChain()
   const { writeContractAsync } = useWriteContract()
 
   const chainId = NETWORK_TO_CHAIN_ID[deployment.network]
@@ -54,41 +53,23 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
   })
   const balance = useBalance({ address: contract, chainId })
 
-  const [pending, setPending] = useState<{ action: Action; hash: `0x${string}` } | null>(null)
-  const [busyAction, setBusyAction] = useState<Action | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<string | null>(null)
   const [newPrice, setNewPrice] = useState('')
   const [newLimit, setNewLimit] = useState('')
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
-  const receipt = useWaitForTransactionReceipt({ hash: pending?.hash, chainId })
-
-  const { refetch: refetchReads } = reads
-  const { refetch: refetchBalance } = balance
-  const pendingAction = pending?.action
-  const receiptStatus = receipt.data?.status
-  useEffect(() => {
-    if (!pendingAction || !receiptStatus) return
-    // Reacting to the chain's receipt for the transaction this panel sent —
-    // an external event, not state derivable during render.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setPending(null)
-    if (receiptStatus === 'reverted') {
-      setError('The transaction reverted on-chain')
-    } else {
-      setDone(
-        {
-          withdraw: 'Proceeds withdrawn to the owner wallet.',
-          toggle: 'Minting status updated.',
-          price: 'Mint price updated.',
-          limit: 'Per-wallet limit updated.',
-          baseUri: 'Metadata link updated.',
-        }[pendingAction],
-      )
-    }
-    void refetchReads()
-    void refetchBalance()
-  }, [pendingAction, receiptStatus, refetchReads, refetchBalance])
+  const { send, isBusy, pending, error, done } = useOwnerTransaction<Action>({
+    chainId,
+    doneMessages: {
+      withdraw: 'Proceeds withdrawn to the owner wallet.',
+      toggle: 'Minting status updated.',
+      price: 'Mint price updated.',
+      limit: 'Per-wallet limit updated.',
+      baseUri: 'Metadata link updated.',
+    },
+    onSettled: () => {
+      void reads.refetch()
+      void balance.refetch()
+    },
+  })
 
   const value = <T,>(index: number) => reads.data?.[index] as T | undefined
   const owner = value<string>(0)
@@ -99,22 +80,8 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
   const mintingEnabled = value<boolean>(5)
   const baseUri = value<string>(6)
   const isOwner = Boolean(owner && address && owner.toLowerCase() === address.toLowerCase())
-  const busy = busyAction !== null || pending !== null
+  const busy = isBusy()
   const canAct = isOwner && !busy && (!isMainnet || mainnetConfirmed)
-
-  const send = async (action: Action, write: () => Promise<`0x${string}`>) => {
-    setError(null)
-    setDone(null)
-    setBusyAction(action)
-    try {
-      if (chainId && currentChainId !== chainId) await switchChainAsync({ chainId })
-      setPending({ action, hash: await write() })
-    } catch (err) {
-      setError(err instanceof Error ? err.message.split('\n')[0] : 'Transaction failed')
-    } finally {
-      setBusyAction(null)
-    }
-  }
 
   const call = (action: Action, functionName: 'withdraw' | 'setMintingEnabled' | 'setMintPrice' | 'setMaxMintsPerWallet' | 'setBaseURI', args: readonly unknown[]) =>
     send(action, () =>
@@ -161,7 +128,7 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
           variant="primary"
           size="sm"
           disabled={!canAct || !balance.data?.value}
-          isLoading={busyAction === 'withdraw' || pending?.action === 'withdraw'}
+          isLoading={isBusy('withdraw')}
           onClick={() => void call('withdraw', 'withdraw', [])}
         >
           Withdraw to owner
@@ -186,7 +153,7 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
                   variant="secondary"
                   size="sm"
                   disabled={!canAct || !newPriceWei}
-                  isLoading={busyAction === 'price' || pending?.action === 'price'}
+                  isLoading={isBusy('price')}
                   onClick={() => void call('price', 'setMintPrice', [BigInt(newPriceWei!)])}
                 >
                   Set price
@@ -203,7 +170,7 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
                   variant="secondary"
                   size="sm"
                   disabled={!canAct || !newLimitValid}
-                  isLoading={busyAction === 'limit' || pending?.action === 'limit'}
+                  isLoading={isBusy('limit')}
                   onClick={() => void call('limit', 'setMaxMintsPerWallet', [BigInt(newLimit.trim())])}
                 >
                   Set limit
@@ -216,7 +183,7 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
               variant="secondary"
               size="sm"
               disabled={!canAct}
-              isLoading={busyAction === 'toggle' || pending?.action === 'toggle'}
+              isLoading={isBusy('toggle')}
               onClick={() => void call('toggle', 'setMintingEnabled', [!mintingEnabled])}
             >
               {mintingEnabled ? 'Pause minting' : 'Resume minting'}
@@ -225,7 +192,7 @@ export function Erc721ManagePanel({ deployment, collectionId }: { deployment: Co
               variant="ghost"
               size="sm"
               disabled={!canAct}
-              isLoading={busyAction === 'baseUri' || pending?.action === 'baseUri'}
+              isLoading={isBusy('baseUri')}
               onClick={() => void refreshBaseUri()}
             >
               Re-pin metadata &amp; update link

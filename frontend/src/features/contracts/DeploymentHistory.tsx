@@ -1,8 +1,13 @@
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Fragment, useState } from 'react'
+
+import { Button } from '../../components/ui/Button'
 import type { ContractDeployment } from '../../lib/contractsApi'
+import { Erc20ManagePanel } from './Erc20ManagePanel'
 import { VerifySource } from './VerifySource'
 
 export function DeploymentHistory({ deployments }: { deployments: ContractDeployment[] }) {
+  const [managing, setManaging] = useState<string | null>(null)
   if (deployments.length === 0) {
     return (
       <EmptyState
@@ -23,32 +28,57 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
             <th className="px-4 py-3 font-medium">Contract</th>
             <th className="px-4 py-3 font-medium">Source</th>
             <th className="px-4 py-3 font-medium">Deployed</th>
+            <th className="px-4 py-3 font-medium">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {deployments.map((deployment) => (
-            <tr key={deployment.id} className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
-              <td className="px-4 py-3 text-ink">{deployment.template_name}</td>
-              <td className="px-4 py-3 text-ink">{deployment.network}</td>
-              <td className="px-4 py-3 font-mono text-ink">
-                {deployment.explorer_url ? (
-                  <a
-                    href={deployment.explorer_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-accent-400 hover:underline"
-                  >
-                    {deployment.contract_address.slice(0, 10)}…
-                  </a>
-                ) : (
-                  `${deployment.contract_address.slice(0, 10)}…`
-                )}
-              </td>
-              <td className="px-4 py-3 text-sm">
-                <VerifySource deployment={deployment} compact />
-              </td>
-              <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
-            </tr>
+            <Fragment key={deployment.id}>
+              <tr className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
+                <td className="px-4 py-3 text-ink">{deployment.template_name}</td>
+                <td className="px-4 py-3 text-ink">{deployment.network}</td>
+                <td className="px-4 py-3 font-mono text-ink">
+                  {deployment.explorer_url ? (
+                    <a
+                      href={deployment.explorer_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-accent-400 hover:underline"
+                    >
+                      {deployment.contract_address.slice(0, 10)}…
+                    </a>
+                  ) : (
+                    `${deployment.contract_address.slice(0, 10)}…`
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <VerifySource deployment={deployment} compact />
+                </td>
+                <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3">
+                  {deployment.template_id === 'erc20_advanced' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={managing === deployment.id}
+                      aria-label={`Manage ${deployment.contract_address}`}
+                      onClick={() => setManaging((current) => (current === deployment.id ? null : deployment.id))}
+                    >
+                      {managing === deployment.id ? 'Hide' : 'Manage'}
+                    </Button>
+                  )}
+                </td>
+              </tr>
+              {managing === deployment.id && (
+                <tr>
+                  <td colSpan={6} className="px-4 pb-4">
+                    <Erc20ManagePanel deployment={deployment} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

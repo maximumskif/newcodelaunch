@@ -187,6 +187,12 @@ contract {{CONTRACT_NAME}} {
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
     mapping(address => bool) private _isExcludedFromFees;
+    // DEX pair contracts (e.g. the Uniswap/PancakeSwap pair for this token)
+    // registered by the owner: buying is a transfer *from* a pair, selling
+    // is a transfer *to* one. Before this, "buy"/"sell" meant a transfer
+    // from/to this token contract itself — which no DEX trade ever is, so
+    // the advertised taxes never applied where they'd matter.
+    mapping(address => bool) public marketPairs;
 
     address public owner;
     address public marketingWallet;
@@ -204,6 +210,8 @@ contract {{CONTRACT_NAME}} {
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event TaxCollected(uint256 amount, string taxType);
+    event MarketPairSet(address indexed pair, bool isPair);
+    event OwnershipRenounced(address indexed previousOwner);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not the owner");
@@ -211,6 +219,15 @@ contract {{CONTRACT_NAME}} {
     }
 
     constructor() {
+        // Same caps the owner setters enforce — a deploy used to accept any
+        // tax (up to 100%), and a marketing share over 100 made every taxed
+        // transfer revert (the liquidity share underflowed).
+        require(buyTaxRate <= 1000 && sellTaxRate <= 1000, "Tax cannot exceed 10%");
+        require(marketingFee <= 100, "Marketing fee is a percentage of the tax (0-100)");
+        // The split is computed as marketing + "the rest"; requiring the
+        // stated liquidity share to be that rest keeps what the deployer
+        // entered true (30 used to quietly mean 40 next to a 60).
+        require(marketingFee + liquidityFee == 100, "Marketing and liquidity fees must add up to 100");
         owner = msg.sender;
         marketingWallet = {{MARKETING_WALLET}};
         liquidityWallet = {{LIQUIDITY_WALLET}};
@@ -268,7 +285,9 @@ contract {{CONTRACT_NAME}} {
         if (!_isExcludedFromFees[sender] && !_isExcludedFromFees[recipient]) {
             require(amount <= maxTransactionAmount, "Transfer amount exceeds maximum");
 
-            if (recipient != address(this)) {
+            // A pair holds the pool's whole side of liquidity — capping it
+            // like a wallet would make every sell revert once the pool grew.
+            if (recipient != address(this) && !marketPairs[recipient]) {
                 require(_balances[recipient] + amount <= maxWalletAmount, "Wallet amount exceeds maximum");
             }
         }
@@ -276,9 +295,9 @@ contract {{CONTRACT_NAME}} {
         uint256 taxAmount = 0;
 
         if (!_isExcludedFromFees[sender] && !_isExcludedFromFees[recipient]) {
-            if (sender == address(this)) {
+            if (marketPairs[sender]) {
                 taxAmount = (amount * buyTaxRate) / 10000;
-            } else if (recipient == address(this)) {
+            } else if (marketPairs[recipient]) {
                 taxAmount = (amount * sellTaxRate) / 10000;
             }
         }
@@ -323,6 +342,7 @@ contract {{CONTRACT_NAME}} {
     }
 
     function updateWallets(address _marketing, address _liquidity) external onlyOwner {
+        require(_marketing != address(0) && _liquidity != address(0), "Wallets cannot be the zero address");
         marketingWallet = _marketing;
         liquidityWallet = _liquidity;
     }
@@ -334,6 +354,25 @@ contract {{CONTRACT_NAME}} {
 
     function excludeFromFees(address account, bool excluded) external onlyOwner {
         _isExcludedFromFees[account] = excluded;
+    }
+
+    function isExcludedFromFees(address account) external view returns (bool) {
+        return _isExcludedFromFees[account];
+    }
+
+    function setMarketPair(address pair, bool isPair) external onlyOwner {
+        require(pair != address(0), "Pair cannot be the zero address");
+        marketPairs[pair] = isPair;
+        emit MarketPairSet(pair, isPair);
+    }
+
+    // Gives up every owner power for good: taxes, limits, wallets, and
+    // pairs are then fixed as they are. Trading must already be enabled —
+    // renouncing first would leave the token untradable forever.
+    function renounceOwnership() external onlyOwner {
+        require(tradingEnabled, "Enable trading before renouncing ownership");
+        emit OwnershipRenounced(owner);
+        owner = address(0);
     }
 }
 '''
@@ -604,10 +643,10 @@ _TEMPLATES: dict[str, ContractTemplate] = {
             {"name": "TOKEN_SYMBOL", "type": "string", "required": True},
             {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18},
             {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True},
-            {"name": "BUY_TAX", "type": "uint256", "required": True, "default": 300, "description": "Buy tax in basis points (300 = 3%)"},
-            {"name": "SELL_TAX", "type": "uint256", "required": True, "default": 500, "description": "Sell tax in basis points (500 = 5%)"},
-            {"name": "MARKETING_FEE", "type": "uint256", "required": True, "default": 60, "description": "Marketing fee percentage of tax"},
-            {"name": "LIQUIDITY_FEE", "type": "uint256", "required": True, "default": 40, "description": "Liquidity fee percentage of tax"},
+            {"name": "BUY_TAX", "type": "uint256", "required": True, "default": 300, "max": 1000, "description": "Buy tax in basis points (300 = 3%, max 1000 = 10%)"},
+            {"name": "SELL_TAX", "type": "uint256", "required": True, "default": 500, "max": 1000, "description": "Sell tax in basis points (500 = 5%, max 1000 = 10%)"},
+            {"name": "MARKETING_FEE", "type": "uint256", "required": True, "default": 60, "max": 100, "description": "Marketing share of the tax, in percent (the rest goes to liquidity)"},
+            {"name": "LIQUIDITY_FEE", "type": "uint256", "required": True, "default": 40, "max": 100, "description": "Liquidity share of the tax, in percent (marketing + liquidity must equal 100)"},
             {"name": "MAX_TX_AMOUNT", "type": "uint256", "required": True, "description": "Maximum transaction amount"},
             {"name": "MAX_WALLET_AMOUNT", "type": "uint256", "required": True, "description": "Maximum wallet amount"},
             {"name": "MARKETING_WALLET", "type": "address", "required": True, "description": "Marketing wallet address"},
@@ -721,6 +760,10 @@ def _coerce_parameter(param: dict[str, Any], value: Any) -> str:
             raise InvalidParametersError(f"{name} must be a whole number")
         if int(text) >= 2 ** _UINT_BITS[param_type]:
             raise InvalidParametersError(f"{name} is too large for a {param_type}")
+        # A template's own on-chain cap (e.g. taxes), checked before a wallet
+        # prompt rather than surfacing as a reverted deploy.
+        if "max" in param and int(text) > param["max"]:
+            raise InvalidParametersError(f"{name} can be at most {param['max']}")
         return str(int(text))
 
     if param_type == "address":

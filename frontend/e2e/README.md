@@ -162,6 +162,16 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   is the exact flow
   `useDeployTemplate.ts`'s own code comment flagged as never smoke-tested
   before this.
+- `erc20-advanced-owner.spec.ts` — deploy an `erc20_advanced` token
+  through the UI, then check its behaviour on-chain with fresh funded
+  anvil accounts: holders can't transfer before "Enable trading"; after
+  it, wallet-to-wallet transfers are untaxed, a sell to a pair registered
+  in the panel pays the 5% sell tax and a buy from it the 3% buy tax,
+  each split 60/40 to the fee wallets; new limits set in the panel reject
+  an oversized transfer and an over-full wallet while the pair stays
+  uncapped; renouncing leaves `owner()` at the zero address. Reads after
+  each UI action are polled — anvil can briefly answer `eth_call` from the
+  previous block right after a receipt.
 - `candy-machine.spec.ts` — sign in with Solana (real nonce + real
   ed25519 `signMessage` + real backend verification) → seed a collection/
   layer/trait/generated-item/publish via direct API calls (no wallet

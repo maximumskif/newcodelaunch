@@ -131,3 +131,31 @@ def test_invalid_parameter_values_are_rejected(bad):
 )
 def test_contract_identifier(display_name, expected):
     assert contract_templates.contract_identifier(display_name, fallback="ERC20") == expected
+
+
+ADVANCED_PARAMS = {
+    "TOKEN_NAME": "Taxed",
+    "TOKEN_SYMBOL": "TAX",
+    "TOKEN_SUPPLY": 1000000,
+    "MAX_TX_AMOUNT": 10000,
+    "MAX_WALLET_AMOUNT": 20000,
+    "MARKETING_WALLET": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+    "LIQUIDITY_WALLET": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+}
+
+
+def test_advanced_erc20_compiles_with_pair_based_taxes_and_owner_tools():
+    rendered = contract_templates.render_contract("erc20_advanced", ADVANCED_PARAMS)
+    compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    assert compiled.success, compiled.error_message
+    functions = {entry.get("name") for entry in compiled.abi if entry.get("type") == "function"}
+    assert {"marketPairs", "setMarketPair", "isExcludedFromFees", "renounceOwnership", "enableTrading"} <= functions
+    # Taxes key off registered pairs, not transfers to/from the token itself.
+    assert "marketPairs[sender]" in rendered["contract_code"]
+    assert "sender == address(this)" not in rendered["contract_code"]
+
+
+@pytest.mark.parametrize("param, value", [("BUY_TAX", 1001), ("SELL_TAX", 5000), ("MARKETING_FEE", 101), ("LIQUIDITY_FEE", 150)])
+def test_advanced_erc20_caps_are_checked_before_deploy(param, value):
+    with pytest.raises(contract_templates.TemplateParameterError, match=f"{param} can be at most"):
+        contract_templates.render_contract("erc20_advanced", {**ADVANCED_PARAMS, param: value})
