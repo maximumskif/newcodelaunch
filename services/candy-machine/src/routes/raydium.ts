@@ -4,6 +4,7 @@ import { getMint, NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   CpmmConfigInfoLayout,
   getCpmmPdaPoolId,
+  getPdaLpMint,
   getPdaVault,
   Percent,
   Raydium,
@@ -24,16 +25,29 @@ export const raydiumRouter = Router();
 // config is the standard 0.25% fee tier (index 0) on both clusters. Its
 // fees and pool-creation fee are read from the chain on every request, not
 // hardcoded.
-const CPMM: Record<SolanaNetwork, { programId: PublicKey; configId: PublicKey; poolFeeAccount: PublicKey }> = {
+//
+// The lock program is Raydium's "Burn & Earn": LP tokens sent to it are
+// locked for good — it has no unlock — and the locker gets a Fee Key NFT
+// that can claim the position's trading fees. Its program and authority
+// (the SDK's LOCK_CPMM_PROGRAM / LOCK_CPMM_AUTH) were checked on both
+// clusters the same way.
+const CPMM: Record<
+  SolanaNetwork,
+  { programId: PublicKey; configId: PublicKey; poolFeeAccount: PublicKey; lockProgramId: PublicKey; lockAuthority: PublicKey }
+> = {
   devnet: {
     programId: new PublicKey("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"),
     configId: new PublicKey("5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy"),
     poolFeeAccount: new PublicKey("3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy"),
+    lockProgramId: new PublicKey("DRay25Usp3YJAi7beckgpGUC7mGJ2cR1AVPxhYfwVCUX"),
+    lockAuthority: new PublicKey("7qWVV8UY2bRJfDLP4s37YzBPKUkVB46DStYJBpYbQzu3"),
   },
   "mainnet-beta": {
     programId: new PublicKey("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"),
     configId: new PublicKey("D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2"),
     poolFeeAccount: new PublicKey("DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8"),
+    lockProgramId: new PublicKey("LockrWmn6K5twhz3y9w1dQERbmgSaRkfnTeTKbpofwE"),
+    lockAuthority: new PublicKey("3f7GcQFG397GAaEnv51zR6tsTVihYRydnydDD1cXekxH"),
   },
 };
 
@@ -141,10 +155,16 @@ async function readPool(connection: Connection, network: SolanaNetwork, mint: Pu
       tokenReserve: BigInt((tokenIsA ? data.baseReserve : data.quoteReserve).toString()),
       solReserve: BigInt((tokenIsA ? data.quoteReserve : data.baseReserve).toString()),
       lpSupply: BigInt(data.lpAmount.toString()),
+      lpDecimals: data.lpDecimals,
       openTime: Number(data.openTime.toString()),
       tokenIsA,
     },
   };
+}
+
+async function lpBalance(connection: Connection, owner: PublicKey, lpMint: PublicKey): Promise<bigint> {
+  const accounts = await connection.getParsedTokenAccountsByOwner(owner, { mint: lpMint });
+  return accounts.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
 }
 
 function serialize(transaction: VersionedTransaction): string {
@@ -177,10 +197,11 @@ raydiumRouter.get(
     const [config, { poolId, pool }] = await Promise.all([readConfig(connection, network), readPool(connection, network, mint)]);
     let ownerLp: string | null = null;
     if (pool && typeof req.query.owner === "string") {
-      const owner = parseKey(req.query.owner, "owner");
-      const accounts = await connection.getParsedTokenAccountsByOwner(owner, { mint: pool.lpMint });
-      ownerLp = accounts.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n).toString();
+      ownerLp = (await lpBalance(connection, parseKey(req.query.owner, "owner"), pool.lpMint)).toString();
     }
+    // Everything anyone has locked in this pool through Burn & Earn: the
+    // lock authority's LP balance. Public — the trust figure buyers check.
+    const lockedLp = pool ? (await lpBalance(connection, CPMM[network].lockAuthority, pool.lpMint)).toString() : null;
     res.json({
       programId: CPMM[network].programId.toBase58(),
       config,
@@ -190,9 +211,11 @@ raydiumRouter.get(
         tokenReserve: pool.tokenReserve.toString(),
         solReserve: pool.solReserve.toString(),
         lpSupply: pool.lpSupply.toString(),
+        lpDecimals: pool.lpDecimals,
         openTime: pool.openTime,
       },
       ownerLp,
+      lockedLp,
     });
   }),
 );
@@ -323,6 +346,37 @@ raydiumRouter.post(
   }),
 );
 
+// Lock `lpAmount` of the owner's LP tokens for good with Raydium's Burn &
+// Earn — no unlock exists. The owner gets a Fee Key NFT for the position.
+// The NFT's mint is a new keypair the SDK generates and signs with here
+// (single-use, never stored); the owner's wallet signs the rest.
+raydiumRouter.post(
+  "/pool/prepare-lock",
+  handle(async (req, res) => {
+    const network = parseNetwork(req.body?.network);
+    const owner = parseKey(req.body?.owner, "owner");
+    const mint = parseKey(req.body?.mint, "mint");
+    const lpAmount = parseAmount(req.body?.lpAmount, "lpAmount");
+    const connection = connectionFor(network);
+
+    const { poolId, pool } = await readPool(connection, network, mint);
+    if (!pool) throw new BadRequest("This token has no Raydium pool");
+    if ((await lpBalance(connection, owner, pool.lpMint)) < lpAmount) throw new BadRequest("That's more LP tokens than this wallet holds");
+    const raydium = await loadRaydium(connection, network, owner);
+    const { poolInfo, poolKeys } = await raydium.cpmm.getPoolInfoFromRpc(poolId.toBase58());
+    const { transaction, extInfo } = await raydium.cpmm.lockLp({
+      poolInfo,
+      poolKeys,
+      lpAmount: new BN(lpAmount.toString()),
+      programId: CPMM[network].lockProgramId,
+      authProgram: CPMM[network].lockAuthority,
+      withMetadata: true,
+      txVersion: TxVersion.V0,
+    });
+    res.json({ transaction: serialize(transaction), feeNftMint: extInfo.nftMint.toBase58() });
+  }),
+);
+
 // What a confirmed transaction did to a token's pool, read from the chain
 // for the backend to judge: success, fee payer, whether the CPMM program
 // ran, and how much each of the pool's two vaults gained or lost (from the
@@ -356,10 +410,20 @@ raydiumRouter.get(
     };
     const tokenVault = delta(vault(mint));
     const solVault = delta(vault(NATIVE_MINT));
+    // LP newly held by the lock authority for this pool's LP mint.
+    const lpMint = getPdaLpMint(programId, poolId).publicKey.toBase58();
+    const lockAuthority = CPMM[network].lockAuthority.toBase58();
+    const lockedBalance = (balances: typeof tx.meta.postTokenBalances) =>
+      (balances ?? [])
+        .filter((b) => b.mint === lpMint && b.owner === lockAuthority)
+        .reduce((sum, b) => sum + BigInt(b.uiTokenAmount.amount), 0n);
+    const lockedDelta = lockedBalance(tx.meta.postTokenBalances) - lockedBalance(tx.meta.preTokenBalances);
     res.json({
       status: tx.meta.err ? "failed" : "success",
       feePayer: all[0],
       cpmmInvoked: all.includes(programId.toBase58()),
+      lockInvoked: all.includes(CPMM[network].lockProgramId.toBase58()),
+      lockedDelta: lockedDelta.toString(),
       poolId: poolId.toBase58(),
       tokenDelta: tokenVault.delta,
       solDelta: solVault.delta,

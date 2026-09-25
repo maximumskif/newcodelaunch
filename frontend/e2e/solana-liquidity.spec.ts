@@ -12,6 +12,8 @@ import {
   fundFixtureWallet,
   RAYDIUM_CPMM_CONFIG_ID,
   RAYDIUM_CPMM_PROGRAM_ID,
+  RAYDIUM_LOCK_AUTHORITY,
+  RAYDIUM_LOCK_PROGRAM_ID,
   TOKEN_METADATA_PROGRAM_ID,
   VALIDATOR_RPC_URL,
   waitForClonedPrograms,
@@ -28,7 +30,7 @@ const tokenBalance = async (owner: PublicKey, mint: PublicKey) => {
 }
 
 test.beforeAll(async () => {
-  await waitForClonedPrograms(connection, [TOKEN_METADATA_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID])
+  await waitForClonedPrograms(connection, [TOKEN_METADATA_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID, RAYDIUM_LOCK_PROGRAM_ID])
   await fundFixtureWallet(connection)
 })
 
@@ -36,7 +38,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript({ path: path.join(here, '.generated', 'injectedSolanaWallet.bundle.js') })
 })
 
-test('Raydium liquidity for a launched SPL token: pool created, traded by another wallet, added to and withdrawn from — on the real CPMM program', async ({
+test('Raydium liquidity for a launched SPL token: pool created, traded by another wallet, added to, withdrawn from and locked — on the real CPMM and lock programs', async ({
   page,
 }) => {
   test.setTimeout(150_000)
@@ -148,7 +150,7 @@ test('Raydium liquidity for a launched SPL token: pool created, traded by anothe
   // --- ...and withdraws half of the position.
   const lpBefore = await tokenBalance(creator, deposited.lpMint)
   await expect(panel.getByTestId('solana-liquidity-withdraw')).toBeVisible()
-  await panel.getByLabel(/Share of your position/).fill('50')
+  await panel.getByLabel('Share of your position (%)', { exact: true }).fill('50')
   await expectNoA11yViolations(page, 'Solana liquidity panel, live pool with withdrawal')
   await panel.getByRole('button', { name: 'Withdraw' }).click()
   await expect(panel.getByText('Liquidity withdrawn.')).toBeVisible({ timeout: 60_000 })
@@ -158,4 +160,32 @@ test('Raydium liquidity for a launched SPL token: pool created, traded by anothe
   const withdrawn = await reserves()
   expect(withdrawn.lpSupply).toBe(deposited.lpSupply - lpBefore / 2n)
   expect(withdrawn.token).toBe(deposited.token - ((lpBefore / 2n) * deposited.token) / deposited.lpSupply)
+
+  // --- Lock the rest of the position for good (Raydium Burn & Earn), behind
+  // a can't-be-undone confirmation. The LP moves to the lock authority, and
+  // the creator gets a Fee Key NFT.
+  const nftsBefore = (await connection.getParsedTokenAccountsByOwner(creator, { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') })).value.filter(
+    (a) => a.account.data.parsed.info.tokenAmount.decimals === 0 && a.account.data.parsed.info.tokenAmount.amount === '1',
+  ).length
+  const lock = panel.getByTestId('solana-liquidity-lock')
+  await lock.getByLabel('Share of your position to lock (%)').fill('100')
+  await lock.getByRole('button', { name: 'Lock forever…' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText("This can't be undone.")
+  await expectNoA11yViolations(page, 'lock-forever confirmation')
+  await dialog.getByRole('button', { name: 'Lock forever' }).click()
+  await expect(panel.getByText('Liquidity locked for good.')).toBeVisible({ timeout: 60_000 })
+  await expect(panel.getByTestId('solana-liquidity-history')).toContainText('LP tokens for good')
+
+  expect(await tokenBalance(creator, withdrawn.lpMint)).toBe(0n)
+  expect(await tokenBalance(RAYDIUM_LOCK_AUTHORITY, withdrawn.lpMint)).toBe(lpAfter)
+  const nftsAfter = (await connection.getParsedTokenAccountsByOwner(creator, { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') })).value.filter(
+    (a) => a.account.data.parsed.info.tokenAmount.decimals === 0 && a.account.data.parsed.info.tokenAmount.amount === '1',
+  ).length
+  expect(nftsAfter).toBe(nftsBefore + 1)
+  // Everyone sees how much of the pool is locked; the creator has nothing
+  // left to withdraw.
+  const lockedPercent = ((Number(lpAfter) / Number(withdrawn.lpSupply)) * 100).toFixed(2)
+  await expect(panel.getByText(`${lockedPercent}% locked forever`)).toBeVisible()
+  await expect(panel.getByTestId('solana-liquidity-withdraw')).toBeHidden()
 })

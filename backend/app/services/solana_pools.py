@@ -18,7 +18,7 @@ from ..models.user import Chain, User, WalletIdentity
 from .candy_machine import _sidecar_network, _sidecar_request
 from .solana_tokens import ValidationError
 
-ACTIONS = ("create", "deposit", "withdraw")
+ACTIONS = ("create", "deposit", "withdraw", "lock")
 U64_MAX = (1 << 64) - 1
 _SIGNATURE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{64,90}$")
 
@@ -59,8 +59,9 @@ def prepare(
     sol_amount: Any = None,
     lp_amount: Any = None,
 ) -> dict[str, Any]:
-    """Builds a create/deposit/withdraw transaction for one of this
-    account's own Solana wallets to sign."""
+    """Builds a create/deposit/withdraw/lock transaction for one of this
+    account's own Solana wallets to sign. A lock is permanent (Raydium's
+    Burn & Earn has no unlock); the frontend confirms that explicitly."""
     if action not in ACTIONS:
         raise ValidationError(f"action must be one of: {', '.join(ACTIONS)}")
     if owner not in _account_solana_wallets(user_id):
@@ -71,7 +72,7 @@ def prepare(
         payload["solAmount"] = _raw_amount(sol_amount, "sol_amount")
     elif action == "deposit":
         payload["tokenAmount"] = _raw_amount(token_amount, "token_amount")
-    else:
+    else:  # withdraw / lock
         payload["lpAmount"] = _raw_amount(lp_amount, "lp_amount")
     return _sidecar_request("POST", f"/internal/raydium/pool/prepare-{action}", json=payload, timeout=60)
 
@@ -81,8 +82,9 @@ def record(launch: SolanaTokenLaunch, user_id: str, signature: Any) -> SolanaPoo
     confirmed success, paid for by one of this account's Solana wallets, in
     which Raydium's CPMM program ran and this token's own pool (derived from
     its mint, never taken from the client) gained both sides (create /
-    deposit) or lost both (withdraw). Amounts are the pool vaults' own
-    changes. A swap moves the two sides in opposite directions and isn't
+    deposit) or lost both (withdraw) — or, with Raydium's lock program, in
+    which the lock authority newly holds this pool's LP tokens (lock).
+    Amounts are the pool vaults' own changes (and the LP locked). A swap moves the two sides in opposite directions and isn't
     recorded."""
     if not isinstance(signature, str) or not _SIGNATURE.match(signature):
         raise ValidationError("signature must be a transaction signature")
@@ -103,16 +105,24 @@ def record(launch: SolanaTokenLaunch, user_id: str, signature: Any) -> SolanaPoo
         raise ValidationError(f"Transaction is not a confirmed success on-chain (status: {facts.get('status')})")
     if facts.get("feePayer") not in _account_solana_wallets(user_id):
         raise ValidationError("The transaction wasn't paid for by a wallet on this account")
-    if not facts.get("cpmmInvoked"):
-        raise ValidationError("The transaction didn't use Raydium's pool program")
 
     token_delta, sol_delta = int(facts["tokenDelta"]), int(facts["solDelta"])
-    if token_delta > 0 and sol_delta > 0:
+    locked_delta = int(facts.get("lockedDelta") or 0)
+    lp_amount = None
+    if locked_delta > 0:
+        # LP newly held by Raydium's lock authority for this pool — and the
+        # lock program ran — is a Burn & Earn lock.
+        if not facts.get("lockInvoked"):
+            raise ValidationError("The transaction didn't use Raydium's lock program")
+        kind, lp_amount = "lock", str(locked_delta)
+    elif not facts.get("cpmmInvoked"):
+        raise ValidationError("The transaction didn't use Raydium's pool program")
+    elif token_delta > 0 and sol_delta > 0:
         kind = "create" if facts.get("poolCreated") else "deposit"
     elif token_delta < 0 and sol_delta < 0:
         kind = "withdraw"
     else:
-        raise ValidationError("The transaction didn't add liquidity to or withdraw it from this token's pool")
+        raise ValidationError("The transaction didn't add, withdraw or lock liquidity in this token's pool")
 
     action = SolanaPoolAction(
         user_id=user_id,
@@ -124,6 +134,7 @@ def record(launch: SolanaTokenLaunch, user_id: str, signature: Any) -> SolanaPoo
         wallet=facts["feePayer"],
         token_amount=str(abs(token_delta)),
         sol_amount=str(abs(sol_delta)),
+        lp_amount=lp_amount,
     )
     db.session.add(action)
     db.session.commit()

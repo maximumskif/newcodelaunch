@@ -56,6 +56,7 @@ exec solana-test-validator \
   --clone-upgradeable-program DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb \
   --clone 5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy \
   --clone 3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy \
+  --clone-upgradeable-program DRay25Usp3YJAi7beckgpGUC7mGJ2cR1AVPxhYfwVCUX \
   --url https://api.devnet.solana.com \
   --reset \
   --quiet

@@ -83,11 +83,13 @@ class SolanaPoolAction(db.Model):
     )
     network = db.Column(db.String(32), nullable=False)
     pool_id = db.Column(db.String(64), nullable=False)
-    kind = db.Column(db.String(16), nullable=False)  # 'create' | 'deposit' | 'withdraw'
+    kind = db.Column(db.String(16), nullable=False)  # 'create' | 'deposit' | 'withdraw' | 'lock'
     signature = db.Column(db.String(128), nullable=False, unique=True, index=True)
     wallet = db.Column(db.String(64), nullable=False)
     token_amount = db.Column(db.String(32), nullable=False)
     sol_amount = db.Column(db.String(32), nullable=False)
+    # LP tokens locked for good (kind 'lock' only; its token/sol amounts are 0).
+    lp_amount = db.Column(db.String(32), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
 
     def to_dict(self) -> dict:
@@ -101,5 +103,6 @@ class SolanaPoolAction(db.Model):
             "wallet": self.wallet,
             "token_amount": self.token_amount,
             "sol_amount": self.sol_amount,
+            "lp_amount": self.lp_amount,
             "created_at": self.created_at.isoformat(),
         }

@@ -4,6 +4,7 @@ import { Connection } from '@solana/web3.js'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/Dialog'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { parseAmount } from '../../lib/amounts'
@@ -19,7 +20,7 @@ const DEPOSIT_SLIPPAGE_PERCENT = 1
 const inputClass = 'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-ink'
 const sol = (lamports: string | bigint) => formatTokenAmount(String(lamports), SOL_DECIMALS)
 
-const KIND_LABEL = { create: 'Created the pool with', deposit: 'Added', withdraw: 'Withdrew' } as const
+const KIND_LABEL = { create: 'Created the pool with', deposit: 'Added', withdraw: 'Withdrew', lock: 'Locked' } as const
 
 // Raydium liquidity for a token launched here: its CPMM pool against SOL
 // (0.25% fee tier). Create it — which sets the starting price and costs
@@ -39,6 +40,8 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
   const [tokenInput, setTokenInput] = useState('')
   const [solInput, setSolInput] = useState('')
   const [withdrawPercent, setWithdrawPercent] = useState('')
+  const [lockPercent, setLockPercent] = useState('')
+  const [confirmingLock, setConfirmingLock] = useState(false)
   const [busy, setBusy] = useState<PoolActionInput['action'] | null>(null)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -76,6 +79,10 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
   const ownerLp = BigInt(state.ownerLp ?? '0')
   const percent = /^\d+$/.test(withdrawPercent.trim()) ? Number(withdrawPercent.trim()) : null
   const lpToWithdraw = percent !== null && percent >= 1 && percent <= 100 ? (ownerLp * BigInt(percent)) / 100n : null
+  const lockShare = /^\d+$/.test(lockPercent.trim()) ? Number(lockPercent.trim()) : null
+  const lpToLock = lockShare !== null && lockShare >= 1 && lockShare <= 100 ? (ownerLp * BigInt(lockShare)) / 100n : null
+  const lockedLp = BigInt(state.lockedLp ?? '0')
+  const share = (lp: bigint) => (pool && BigInt(pool.lpSupply) > 0n ? `${((Number(lp) / Number(pool.lpSupply)) * 100).toFixed(2)}%` : '0%')
   const price = hasReserves
     ? Number(sol(pool!.solReserve).replace(/,/g, '')) / Number(formatTokenAmount(pool!.tokenReserve, launch.decimals).replace(/,/g, ''))
     : tokenAmount !== null && solAmount !== null
@@ -102,6 +109,7 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
       setTokenInput('')
       setSolInput('')
       setWithdrawPercent('')
+      setLockPercent('')
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Transaction failed')
@@ -121,9 +129,8 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
             <Badge tone="neutral">
               {formatTokenAmount(pool!.tokenReserve, launch.decimals)} {launch.symbol} + {sol(pool!.solReserve)} SOL
             </Badge>
-            {ownerLp > 0n && (
-              <Badge tone="neutral">Your share {((Number(ownerLp) / Number(pool!.lpSupply)) * 100).toFixed(2)}%</Badge>
-            )}
+            {ownerLp > 0n && <Badge tone="neutral">Your share {share(ownerLp)}</Badge>}
+            {lockedLp > 0n && <Badge tone="success">{share(lockedLp)} locked forever</Badge>}
           </>
         ) : (
           <Badge tone="warning">No pool yet</Badge>
@@ -240,6 +247,38 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
               )}
             </div>
           )}
+
+          {ownerLp > 0n && hasReserves && (
+            <div className="space-y-2 rounded-md border border-border p-3" data-testid="solana-liquidity-lock">
+              <p className="text-xs text-ink-faint">Lock liquidity (Raydium Burn &amp; Earn)</p>
+              <p className="text-xs text-ink-muted">
+                Locked liquidity can never be withdrawn — by anyone, including you — which is what tells buyers the pool can't be
+                pulled. You receive a Fee Key NFT that claims the locked position's trading fees on Raydium.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-ink-muted" htmlFor={`sol-lp-lock-${launch.id}`}>
+                  Share of your position to lock (%)
+                </label>
+                <input
+                  id={`sol-lp-lock-${launch.id}`}
+                  inputMode="numeric"
+                  value={lockPercent}
+                  disabled={Boolean(busy)}
+                  onChange={(e) => setLockPercent(e.target.value)}
+                  className={`${inputClass} w-24`}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!canSend || lpToLock === null || lpToLock === 0n}
+                  isLoading={busy === 'lock'}
+                  onClick={() => setConfirmingLock(true)}
+                >
+                  Lock forever…
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -251,13 +290,29 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
       {done && <p className="text-success">{done}</p>}
       {error && <InlineError>{error}</InlineError>}
 
+      <ConfirmDialog
+        open={confirmingLock}
+        title="Lock this liquidity forever?"
+        description={`${lockShare ?? 0}% of your position (${share(lpToLock ?? 0n)} of the pool) goes into Raydium's lock for good. No one — including you — can ever withdraw it. You keep a Fee Key NFT for its trading fees. This can't be undone.`}
+        confirmLabel="Lock forever"
+        isConfirming={busy === 'lock'}
+        onConfirm={() => {
+          setConfirmingLock(false)
+          if (wallet && lpToLock) void run({ action: 'lock', owner: wallet, lp_amount: String(lpToLock) }, 'the lock', 'Liquidity locked for good.')
+        }}
+        onCancel={() => setConfirmingLock(false)}
+      />
+
       {state.history.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs text-ink-faint">From this app</p>
           <ul className="space-y-1 text-xs text-ink-muted" data-testid="solana-liquidity-history">
             {state.history.map((item) => (
               <li key={item.id}>
-                {KIND_LABEL[item.kind]} {formatTokenAmount(item.token_amount, launch.decimals)} {launch.symbol} + {sol(item.sol_amount)} SOL ·{' '}
+                {item.kind === 'lock'
+                  ? `Locked ${formatTokenAmount(item.lp_amount ?? '0', pool?.lpDecimals ?? 0)} LP tokens for good`
+                  : `${KIND_LABEL[item.kind]} ${formatTokenAmount(item.token_amount, launch.decimals)} ${launch.symbol} + ${sol(item.sol_amount)} SOL`}{' '}
+                ·{' '}
                 {new Date(item.created_at).toLocaleString()}
               </li>
             ))}

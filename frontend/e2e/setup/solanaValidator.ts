@@ -21,6 +21,10 @@ export const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkY
 // accounts the sidecar's raydium.ts uses for devnet.
 export const RAYDIUM_CPMM_PROGRAM_ID = new PublicKey('DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb')
 export const RAYDIUM_CPMM_CONFIG_ID = new PublicKey('5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy')
+// Raydium's Burn & Earn LP lock on devnet (also cloned), and the authority
+// that holds locked LP tokens.
+export const RAYDIUM_LOCK_PROGRAM_ID = new PublicKey('DRay25Usp3YJAi7beckgpGUC7mGJ2cR1AVPxhYfwVCUX')
+export const RAYDIUM_LOCK_AUTHORITY = new PublicKey('7qWVV8UY2bRJfDLP4s37YzBPKUkVB46DStYJBpYbQzu3')
 
 // Playwright's webServer `port: 8899` readiness check (playwright.config.ts)
 // only confirms solana-test-validator's RPC port is accepting connections —

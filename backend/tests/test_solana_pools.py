@@ -144,9 +144,9 @@ def test_a_linked_wallet_counts(app, client, setup, monkeypatch):
         (_facts(feePayer=STRANGER), "wallet on this account"),
         (_facts(cpmmInvoked=False), "pool program"),
         # A swap: one side in, the other out.
-        (_facts(tokenDelta="-100", solDelta="5"), "didn't add liquidity"),
+        (_facts(tokenDelta="-100", solDelta="5"), "didn't add, withdraw or lock"),
         # Nothing happened to this token's pool (e.g. another pool's deposit).
-        (_facts(tokenDelta="0", solDelta="0"), "didn't add liquidity"),
+        (_facts(tokenDelta="0", solDelta="0"), "didn't add, withdraw or lock"),
     ],
 )
 def test_refuses_what_the_chain_doesnt_back(client, setup, monkeypatch, facts, message):
@@ -175,3 +175,31 @@ def test_owner_only(app, client, setup, monkeypatch):
     assert client.post(f"{base}/prepare", json={"action": "deposit"}, headers=headers).status_code == 404
     assert client.post(f"{base}/record", json={"signature": SIG}, headers=headers).status_code == 404
     assert client.get(base).status_code == 401
+
+
+def test_prepare_lock_sends_the_lp_amount(client, setup, monkeypatch):
+    fake = _sidecar(monkeypatch, {"/internal/raydium/pool/prepare-lock": {"transaction": "dHg=", "feeNftMint": "x"}})
+    response = client.post(
+        f"/api/solana-tokens/{setup['launch_id']}/pool/prepare",
+        json={"action": "lock", "owner": CREATOR, "lp_amount": "42"},
+        headers=setup["headers"],
+    )
+    assert response.status_code == 200
+    assert fake.calls[0]["json"] == {"network": "devnet", "owner": CREATOR, "mint": MINT, "lpAmount": "42"}
+
+
+def test_records_a_lock_from_the_lock_authoritys_new_lp(client, setup, monkeypatch):
+    _sidecar(monkeypatch, {"/internal/raydium/transaction/": _facts(
+        cpmmInvoked=False, lockInvoked=True, lockedDelta="5499999950", tokenDelta="0", solDelta="0",
+    )})
+    response = client.post(f"/api/solana-tokens/{setup['launch_id']}/pool/record", json={"signature": SIG}, headers=setup["headers"])
+    assert response.status_code == 201, response.get_json()
+    action = response.get_json()["action"]
+    assert (action["kind"], action["lp_amount"], action["token_amount"], action["sol_amount"]) == ("lock", "5499999950", "0", "0")
+
+
+def test_lp_reaching_the_lock_authority_without_the_lock_program_isnt_a_lock(client, setup, monkeypatch):
+    _sidecar(monkeypatch, {"/internal/raydium/transaction/": _facts(lockInvoked=False, lockedDelta="10", tokenDelta="0", solDelta="0")})
+    response = client.post(f"/api/solana-tokens/{setup['launch_id']}/pool/record", json={"signature": SIG}, headers=setup["headers"])
+    assert response.status_code == 422
+    assert "lock program" in response.get_json()["error"]

@@ -947,3 +947,15 @@ The Solana half of liquidity: "Liquidity" on a launched SPL token creates its Ra
 **Not done**: LP locking (Raydium has a lock program — the SDK's `lockLp` — a candidate next step), other fee tiers, pairs other than SOL.
 
 **Verified**: pytest 22 new (sidecar calls carry only the launch's own mint/network; bad actions, foreign owners and bad amounts refused before the sidecar; create/deposit/withdraw classified from vault changes; idempotent; a linked wallet counts; failed, foreign-payer, non-Raydium, swap and no-change transactions refused; path-injection in the signature refused; owner-only); Vitest 5 new; new `solana-liquidity.spec.ts` (see e2e/README) passes against the real program.
+
+## Permanent LP locks on Raydium (Burn & Earn), 2026-09-25
+
+The last liquidity leftover. Buyers of a new token check whether its pool's liquidity is locked — whether the creator can pull it. Raydium's own answer is Burn & Earn: LP tokens sent to its lock program stay there for good (confirmed in Raydium's docs, and the SDK has no unlock instruction), and the locker receives a transferable Fee Key NFT that can claim the locked position's trading fees. Using Raydium's program, not one of ours, means this app never custodies anyone's LP.
+
+**Checked first.** The lock program and its authority (the SDK's `LOCK_CPMM_PROGRAM` / `LOCK_CPMM_AUTH`) exist on devnet and mainnet as expected. On a local validator with the program cloned: `lockLp` moved the LP to the lock authority's vault and minted the Fee Key NFT to the creator; the SDK signs with the NFT mint's fresh keypair itself, so the wallet only adds its own signature. The SDK defaults to the *mainnet* lock program, so the sidecar passes each cluster's program and authority explicitly.
+
+**What's built.** A "Lock forever…" control on a position (whole-percent share), behind a confirmation that says the liquidity can never be withdrawn by anyone, and a "N% locked forever" badge any viewer sees — the lock authority's LP balance for this pool over the LP supply, read from the chain. Recording (new `lp_amount` column, migration `a4bbdf1eea63`) classifies a transaction as a lock only if the lock program ran and the lock authority newly holds this pool's LP; LP reaching that authority any other way is refused.
+
+**Not done**: claiming Fee Key fees in-app. The SDK's `harvestLockLp` needs the claimable amount, which comes from the lock program's position state — a layout the SDK doesn't include, and not something to guess at. The panel says fees are claimed on Raydium.
+
+**Verified**: pytest 3 new (lock action passes only the LP amount; a lock recorded from the lock authority's new LP; LP arriving there without the lock program refused); Vitest 2 new (nothing sent before the confirmation; the locked share shown to anyone, even without a position); `solana-liquidity.spec.ts` now locks the rest of the position through the real lock program and checks the lock authority's LP, the creator's zero LP, the new Fee Key NFT and the badge — plus an axe scan of the confirmation.

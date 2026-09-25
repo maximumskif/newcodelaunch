@@ -50,15 +50,16 @@ const noPool: TokenPoolState = {
   poolId: 'Pool111111111111111111111111111111111111111',
   pool: null,
   ownerLp: null,
+  lockedLp: null,
   history: [],
 }
 
 // 100,000 POOL + 1 SOL; the creator holds 1,000 of 10,000 LP.
 const livePool: TokenPoolState = {
   ...noPool,
-  pool: { lpMint: 'Lp11111111111111111111111111111111111111111', tokenReserve: '100000000000', solReserve: '1000000000', lpSupply: '10000000000', openTime: 0 },
+  pool: { lpMint: 'Lp11111111111111111111111111111111111111111', tokenReserve: '100000000000', solReserve: '1000000000', lpSupply: '10000000000', lpDecimals: 9, openTime: 0 },
   ownerLp: '1000000000',
-  history: [{ id: 'a1', kind: 'create', signature: 's', wallet: CREATOR, token_amount: '100000000000', sol_amount: '1000000000', created_at: '2026-09-25T00:00:00Z' }],
+  history: [{ id: 'a1', kind: 'create', signature: 's', wallet: CREATOR, token_amount: '100000000000', sol_amount: '1000000000', lp_amount: null, created_at: '2026-09-25T00:00:00Z' }],
 }
 
 const sendTransaction = vi.fn()
@@ -116,7 +117,7 @@ describe('SolanaLiquidityPanel', () => {
     )
     await screen.findByText('Liquidity added.')
 
-    await user.type(screen.getByLabelText(/Share of your position/), '50')
+    await user.type(screen.getByLabelText('Share of your position (%)'), '50')
     // Half of 1,000 LP = 5% of the pool.
     expect(screen.getByText('You get about 5,000 POOL + 0.05 SOL')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Withdraw' }))
@@ -149,5 +150,39 @@ describe('SolanaLiquidityPanel', () => {
     render(<SolanaLiquidityPanel launch={launch} />)
     expect(await screen.findByText('Pool live')).toBeInTheDocument()
     expect(screen.queryByTestId('solana-liquidity-withdraw')).not.toBeInTheDocument()
+  })
+
+  it('locks a share of the position only after a can’t-be-undone confirmation, and shows what’s locked', async () => {
+    vi.mocked(solanaTokensApi.getPool)
+      .mockResolvedValueOnce(livePool)
+      .mockResolvedValue({
+        ...livePool,
+        ownerLp: '0',
+        lockedLp: '1000000000',
+        history: [{ ...livePool.history[0], id: 'a2', kind: 'lock', token_amount: '0', sol_amount: '0', lp_amount: '1000000000' }, ...livePool.history],
+      })
+    const user = userEvent.setup()
+    render(<SolanaLiquidityPanel launch={launch} />)
+    await user.type(await screen.findByLabelText(/Share of your position to lock/), '100')
+    await user.click(screen.getByRole('button', { name: 'Lock forever…' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('100% of your position (10.00% of the pool)')
+    expect(dialog).toHaveTextContent("This can't be undone.")
+    expect(solanaTokensApi.preparePoolAction).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Lock forever' }))
+
+    await waitFor(() =>
+      expect(solanaTokensApi.preparePoolAction).toHaveBeenCalledWith('tok', 'launch-1', { action: 'lock', owner: CREATOR, lp_amount: '1000000000' }),
+    )
+    expect(await screen.findByText('Liquidity locked for good.')).toBeInTheDocument()
+    expect(screen.getByText('10.00% locked forever')).toBeInTheDocument()
+    expect(screen.getByTestId('solana-liquidity-history')).toHaveTextContent('Locked 1 LP tokens for good')
+  })
+
+  it('shows the locked share to anyone, even without a position', async () => {
+    vi.mocked(solanaTokensApi.getPool).mockResolvedValue({ ...livePool, ownerLp: '0', lockedLp: '5000000000' })
+    render(<SolanaLiquidityPanel launch={launch} />)
+    expect(await screen.findByText('50.00% locked forever')).toBeInTheDocument()
+    expect(screen.queryByTestId('solana-liquidity-lock')).not.toBeInTheDocument()
   })
 })

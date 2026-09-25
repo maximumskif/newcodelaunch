@@ -30,18 +30,21 @@ export interface TokenPoolState {
   programId: string
   config: { tradeFeeRate: number; createPoolFee: string; disableCreatePool: boolean }
   poolId: string
-  pool: { lpMint: string; tokenReserve: string; solReserve: string; lpSupply: string; openTime: number } | null
+  pool: { lpMint: string; tokenReserve: string; solReserve: string; lpSupply: string; lpDecimals: number; openTime: number } | null
   ownerLp: string | null
+  // LP locked for good in Raydium's Burn & Earn, by anyone.
+  lockedLp: string | null
   history: PoolAction[]
 }
 
 export interface PoolAction {
   id: string
-  kind: 'create' | 'deposit' | 'withdraw'
+  kind: 'create' | 'deposit' | 'withdraw' | 'lock'
   signature: string
   wallet: string
   token_amount: string
   sol_amount: string
+  lp_amount: string | null
   created_at: string
 }
 
@@ -49,6 +52,7 @@ export type PoolActionInput =
   | { action: 'create'; owner: string; token_amount: string; sol_amount: string }
   | { action: 'deposit'; owner: string; token_amount: string }
   | { action: 'withdraw'; owner: string; lp_amount: string }
+  | { action: 'lock'; owner: string; lp_amount: string }
 
 // A token's current metadata: on-chain name/symbol/URI + update authority,
 // and the description/logo from its off-chain JSON when readable.
