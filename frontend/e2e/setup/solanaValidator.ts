@@ -16,6 +16,11 @@ export const CORE_CANDY_MACHINE_PROGRAM_ID = new PublicKey('CMACYFENjoBMHzapRXyo
 // weren't enough).
 export const CORE_CANDY_GUARD_PROGRAM_ID = new PublicKey('CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ')
 export const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
+// Raydium's CPMM program on devnet, with its 0.25% fee config and pool-fee
+// receiver cloned alongside it (run-solana-validator.sh) — the same
+// accounts the sidecar's raydium.ts uses for devnet.
+export const RAYDIUM_CPMM_PROGRAM_ID = new PublicKey('DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb')
+export const RAYDIUM_CPMM_CONFIG_ID = new PublicKey('5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy')
 
 // Playwright's webServer `port: 8899` readiness check (playwright.config.ts)
 // only confirms solana-test-validator's RPC port is accepting connections —

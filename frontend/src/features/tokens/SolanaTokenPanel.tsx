@@ -15,6 +15,7 @@ import { formatTokenAmount, solanaTokensApi, validateTokenForm, type SolanaToken
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
+import { SolanaLiquidityPanel } from './SolanaLiquidityPanel'
 import { SolanaTokenManage } from './SolanaTokenManage'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
@@ -392,7 +393,11 @@ function SolanaTokenHistory({
   launches: SolanaTokenLaunch[]
   onUpdated: (token: SolanaTokenLaunch) => void
 }) {
-  const [managing, setManaging] = useState<string | null>(null)
+  // One expanded row at a time, showing one of its panels.
+  const [open, setOpen] = useState<{ id: string; panel: 'manage' | 'liquidity' } | null>(null)
+  const toggle = (id: string, panel: 'manage' | 'liquidity') =>
+    setOpen((current) => (current?.id === id && current.panel === panel ? null : { id, panel }))
+  const isOpen = (id: string, panel: 'manage' | 'liquidity') => open?.id === id && open.panel === panel
   if (launches.length === 0) {
     return (
       <EmptyState
@@ -445,23 +450,38 @@ function SolanaTokenHistory({
                 </td>
                 <td className="px-4 py-3 text-ink-faint">{new Date(launch.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3">
-                  {!(launch.mint_authority_revoked && launch.freeze_authority_revoked && launch.metadata_locked) && (
+                  <div className="flex gap-1">
+                    {!(launch.mint_authority_revoked && launch.freeze_authority_revoked && launch.metadata_locked) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={isOpen(launch.id, 'manage')}
+                        aria-label={`Manage ${launch.symbol}`}
+                        onClick={() => toggle(launch.id, 'manage')}
+                      >
+                        {isOpen(launch.id, 'manage') ? 'Hide' : 'Manage'}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
-                      aria-expanded={managing === launch.id}
-                      aria-label={`Manage ${launch.symbol}`}
-                      onClick={() => setManaging((current) => (current === launch.id ? null : launch.id))}
+                      aria-expanded={isOpen(launch.id, 'liquidity')}
+                      aria-label={`Liquidity for ${launch.symbol}`}
+                      onClick={() => toggle(launch.id, 'liquidity')}
                     >
-                      {managing === launch.id ? 'Hide' : 'Manage'}
+                      {isOpen(launch.id, 'liquidity') ? 'Hide' : 'Liquidity'}
                     </Button>
-                  )}
+                  </div>
                 </td>
               </tr>
-              {managing === launch.id && (
+              {open?.id === launch.id && (
                 <tr>
                   <td colSpan={6} className="px-4 pb-4">
-                    <SolanaTokenManage launch={launch} onUpdated={onUpdated} />
+                    {open.panel === 'manage' ? (
+                      <SolanaTokenManage launch={launch} onUpdated={onUpdated} />
+                    ) : (
+                      <SolanaLiquidityPanel launch={launch} />
+                    )}
                   </td>
                 </tr>
               )}

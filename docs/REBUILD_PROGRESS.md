@@ -930,3 +930,20 @@ The axe scans only ever covered each page's empty state; every panel that exists
 **Found one real failure**: the danger button (every can't-be-undone confirmation) was white on red-500 — 3.8:1 at 12px, under AA's 4.5:1 — and its hover (red-400) was lighter still. Now red-600 (4.8:1), red-700 on hover (6.4:1). Everything else passed as built.
 
 **Verified**: full Playwright suite 26/26 on two consecutive runs, retries off; Vitest 184/184.
+
+## Solana liquidity pools on Raydium (4.6, Solana side), 2026-09-25
+
+The Solana half of liquidity: "Liquidity" on a launched SPL token creates its Raydium CPMM pool against SOL, adds to it, or withdraws a share of the position. As everywhere else on Solana here, the sidecar builds each transaction for the owner's wallet to sign (the wallet is only ever a public key to it) and reads confirmed transactions back; the backend decides who may ask and what gets recorded.
+
+**Checked before building on it.** Program IDs, the fee receiver and the fee config come from the Raydium SDK's own constants and Raydium's config API, and each was confirmed on its chain (devnet and mainnet): the program executable and upgradeable, the fee receiver a token account, the config owned by the program. Fees and the pool-creation fee (0.15 SOL on both) are read from the config account on every request. Then the whole cycle — create, add, a swap from another wallet, withdraw — was run against the real program on a local validator with those accounts cloned. Found there:
+
+- **A pool can't be traded in the same second it's created** (`NotApproved`: the program's open time). The panel says trading opens "a few seconds later"; the e2e waits.
+- **The SDK's add-liquidity takes the slippage off the deposit** — asking for 10,000 tokens deposited 9,900. The sidecar computes the LP amount itself and passes it in, so the deposit is the amount asked (less LP-unit rounding: 9,999.999991 after a trade in the e2e run — a few base units stay in the wallet, never more than asked), with at most 1% more SOL than quoted.
+- **The SDK caches the wallet's token accounts at load**, so an instance loaded before LP tokens existed can't withdraw them. The sidecar loads it per request.
+- **Raydium accepts mints that still have a freeze authority.** The panel warns (the creator can freeze holders — buyers and Raydium's UI flag that) but doesn't block.
+
+**Recording** (`solana_pool_actions`, migration `22c85dec71ba`): the sidecar reports what a transaction did — success, fee payer, whether the CPMM program ran, and each of this pool's two vaults' balance change from the transaction's own pre/post token balances, with the pool and vaults derived from the mint. The backend records it only if the fee payer is one of the account's Solana wallets and both vaults moved the same way: both up is a create (vaults created in that transaction) or deposit, both down a withdraw; a swap (opposite directions) or anything touching another pool is refused. The signature is format-checked before it's used in a sidecar URL. Account merges move these rows.
+
+**Not done**: LP locking (Raydium has a lock program — the SDK's `lockLp` — a candidate next step), other fee tiers, pairs other than SOL.
+
+**Verified**: pytest 22 new (sidecar calls carry only the launch's own mint/network; bad actions, foreign owners and bad amounts refused before the sidecar; create/deposit/withdraw classified from vault changes; idempotent; a linked wallet counts; failed, foreign-payer, non-Raydium, swap and no-change transactions refused; path-injection in the signature refused; owner-only); Vitest 5 new; new `solana-liquidity.spec.ts` (see e2e/README) passes against the real program.

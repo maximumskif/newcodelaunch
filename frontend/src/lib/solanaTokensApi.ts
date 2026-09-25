@@ -23,6 +23,33 @@ export interface SolanaTokenLaunch {
 
 export type TokenAction = 'mint' | 'revokeMint' | 'revokeFreeze'
 
+// A launched token's Raydium CPMM pool against SOL, as the chain has it
+// (backend services/solana_pools.py). Amounts are base units / lamports as
+// strings (u64).
+export interface TokenPoolState {
+  programId: string
+  config: { tradeFeeRate: number; createPoolFee: string; disableCreatePool: boolean }
+  poolId: string
+  pool: { lpMint: string; tokenReserve: string; solReserve: string; lpSupply: string; openTime: number } | null
+  ownerLp: string | null
+  history: PoolAction[]
+}
+
+export interface PoolAction {
+  id: string
+  kind: 'create' | 'deposit' | 'withdraw'
+  signature: string
+  wallet: string
+  token_amount: string
+  sol_amount: string
+  created_at: string
+}
+
+export type PoolActionInput =
+  | { action: 'create'; owner: string; token_amount: string; sol_amount: string }
+  | { action: 'deposit'; owner: string; token_amount: string }
+  | { action: 'withdraw'; owner: string; lp_amount: string }
+
 // A token's current metadata: on-chain name/symbol/URI + update authority,
 // and the description/logo from its off-chain JSON when readable.
 export interface TokenMetadata {
@@ -170,6 +197,17 @@ export const solanaTokensApi = {
       token,
     )
   },
+
+  // Raydium liquidity: read the pool, build a create/deposit/withdraw for
+  // the owner's wallet to sign, then record the confirmed signature.
+  getPool: (token: string, launchId: string, owner?: string) =>
+    request<TokenPoolState>(`/solana-tokens/${launchId}/pool${owner ? `?owner=${owner}` : ''}`, {}, token),
+
+  preparePoolAction: (token: string, launchId: string, input: PoolActionInput) =>
+    request<{ transaction: string }>(`/solana-tokens/${launchId}/pool/prepare`, { method: 'POST', body: JSON.stringify(input) }, token),
+
+  recordPoolAction: (token: string, launchId: string, signature: string) =>
+    request<{ action: PoolAction }>(`/solana-tokens/${launchId}/pool/record`, { method: 'POST', body: JSON.stringify({ signature }) }, token),
 
   refresh: (token: string, launchId: string) =>
     request<LiveTokenState>(`/solana-tokens/${launchId}/refresh`, { method: 'POST' }, token),

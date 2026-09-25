@@ -15,13 +15,13 @@ from ..models.deployment import ContractDeployment
 from ..models.liquidity import LiquidityProvision
 from ..models.nft import NFTCollection
 from ..models.project import Project
-from ..models.solana_token import SolanaTokenLaunch
+from ..models.solana_token import SolanaPoolAction, SolanaTokenLaunch
 from ..models.user import User, WalletIdentity
 
 # Every table whose rows belong to an account. A merge moves all of them;
 # a new user-owned table has to be added here too (see test_accounts.py,
 # which checks this list against every users.id foreign key).
-OWNED_MODELS = (Project, NFTCollection, ContractDeployment, CandyMachineDeployment, SolanaTokenLaunch, LiquidityProvision)
+OWNED_MODELS = (Project, NFTCollection, ContractDeployment, CandyMachineDeployment, SolanaTokenLaunch, LiquidityProvision, SolanaPoolAction)
 
 
 class AccountError(ValueError):

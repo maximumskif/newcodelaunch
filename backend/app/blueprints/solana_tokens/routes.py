@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ...services import candy_machine, ipfs, projects, solana_tokens
+from ...services import candy_machine, ipfs, projects, solana_pools, solana_tokens
 
 solana_tokens_bp = Blueprint("solana_tokens", __name__)
 
@@ -187,3 +187,68 @@ def prepare_metadata_update(launch_id):
     except candy_machine.CandyMachineServiceError as exc:
         status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
         return jsonify(error=str(exc)), status
+
+
+# --- Raydium liquidity ------------------------------------------------------------
+
+
+def _sidecar_error(exc):
+    status = exc.status_code if exc.status_code and 400 <= exc.status_code < 500 else 502
+    return jsonify(error=str(exc)), status
+
+
+@solana_tokens_bp.get("/<launch_id>/pool")
+@jwt_required()
+def get_token_pool(launch_id):
+    """The token's Raydium pool as the chain has it, with this app's record
+    of liquidity changes. ?owner= adds that wallet's LP balance."""
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    try:
+        return jsonify(solana_pools.get_pool(launch, request.args.get("owner") or None))
+    except candy_machine.CandyMachineServiceError as exc:
+        return _sidecar_error(exc)
+
+
+@solana_tokens_bp.post("/<launch_id>/pool/prepare")
+@jwt_required()
+def prepare_pool_action(launch_id):
+    """Builds a create / deposit / withdraw for the owner's wallet to sign;
+    then POST .../pool/record with the confirmed signature."""
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(
+            solana_pools.prepare(
+                launch,
+                get_jwt_identity(),
+                str(data.get("action", "")),
+                str(data.get("owner", "")),
+                token_amount=data.get("token_amount"),
+                sol_amount=data.get("sol_amount"),
+                lp_amount=data.get("lp_amount"),
+            )
+        )
+    except solana_tokens.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        return _sidecar_error(exc)
+
+
+@solana_tokens_bp.post("/<launch_id>/pool/record")
+@jwt_required()
+def record_pool_action(launch_id):
+    launch, error = _owned_launch_or_404(launch_id)
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    try:
+        action = solana_pools.record(launch, get_jwt_identity(), data.get("signature"))
+    except solana_tokens.ValidationError as exc:
+        return jsonify(error=str(exc)), 422
+    except candy_machine.CandyMachineServiceError as exc:
+        return _sidecar_error(exc)
+    return jsonify(action=action.to_dict()), 201

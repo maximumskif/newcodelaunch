@@ -63,3 +63,43 @@ class SolanaTokenLaunch(db.Model):
             "explorer_url": self.explorer_url,
             "created_at": self.created_at.isoformat(),
         }
+
+
+class SolanaPoolAction(db.Model):
+    """One liquidity change on a launched token's Raydium pool (create,
+    deposit or withdraw), recorded after services/solana_pools.py read the
+    transaction back from the chain. Amounts are what the pool's own vaults
+    gained or lost in that transaction, in base units (strings — u64)."""
+
+    __tablename__ = "solana_pool_actions"
+
+    id = db.Column(db.String(36), primary_key=True, default=_uuid)
+    user_id = db.Column(db.String(36), db.ForeignKey("users.id", name="fk_solana_pool_actions_user_id"), nullable=False, index=True)
+    launch_id = db.Column(
+        db.String(36),
+        db.ForeignKey("solana_token_launches.id", name="fk_solana_pool_actions_launch_id"),
+        nullable=False,
+        index=True,
+    )
+    network = db.Column(db.String(32), nullable=False)
+    pool_id = db.Column(db.String(64), nullable=False)
+    kind = db.Column(db.String(16), nullable=False)  # 'create' | 'deposit' | 'withdraw'
+    signature = db.Column(db.String(128), nullable=False, unique=True, index=True)
+    wallet = db.Column(db.String(64), nullable=False)
+    token_amount = db.Column(db.String(32), nullable=False)
+    sol_amount = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "launch_id": self.launch_id,
+            "network": self.network,
+            "pool_id": self.pool_id,
+            "kind": self.kind,
+            "signature": self.signature,
+            "wallet": self.wallet,
+            "token_amount": self.token_amount,
+            "sol_amount": self.sol_amount,
+            "created_at": self.created_at.isoformat(),
+        }

@@ -162,6 +162,14 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   is the exact flow
   `useDeployTemplate.ts`'s own code comment flagged as never smoke-tested
   before this.
+- `solana-liquidity.spec.ts` — Raydium's devnet CPMM program, its 0.25%
+  fee config and its pool-fee receiver are cloned into the local validator
+  (run-solana-validator.sh). Launches a token through the UI, then from its
+  Liquidity panel creates the pool (100,000 tokens + 1 SOL) and checks it
+  on-chain at the address Raydium derives; a second wallet buys from it with
+  Raydium's own swap; the creator adds 10,000 more at the new price and
+  withdraws half the position — reserves, LP balances and the backend's
+  records each checked. Scans the panel with axe in both states.
 - `dex-liquidity.spec.ts` — deploys Uniswap V2 itself onto anvil
   (`setup/localUniswap.ts`: WETH9, UniswapV2Factory and Router02 from
   Uniswap's own published build artifacts, at fixed addresses the backend

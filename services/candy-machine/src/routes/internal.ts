@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { candyMachineRouter } from "./candyMachine.js";
+import { raydiumRouter } from "./raydium.js";
 import { tokenRouter } from "./token.js";
 
 export const internalRouter = Router();
@@ -17,3 +18,5 @@ internalRouter.use("/candy-machine", candyMachineRouter);
 // SPL token launch (Token Launchpad's Solana side) — same partially-signed,
 // creator-wallet-signs-client-side model as the Candy Machine routes above.
 internalRouter.use("/token", tokenRouter);
+
+internalRouter.use("/raydium", raydiumRouter);
