@@ -3,9 +3,9 @@ import pytest
 from app.services import contract_templates, solidity
 
 
-def test_get_all_templates_returns_the_three_real_templates():
+def test_get_all_templates_returns_the_real_templates():
     templates = contract_templates.get_all_templates()
-    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic"}
+    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock"}
 
 
 def test_get_all_templates_filters_by_type():
@@ -159,3 +159,30 @@ def test_advanced_erc20_compiles_with_pair_based_taxes_and_owner_tools():
 def test_advanced_erc20_caps_are_checked_before_deploy(param, value):
     with pytest.raises(contract_templates.TemplateParameterError, match=f"{param} can be at most"):
         contract_templates.render_contract("erc20_advanced", {**ADVANCED_PARAMS, param: value})
+
+
+TIMELOCK_PARAMS = {
+    "TOKEN": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+    "BENEFICIARY": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "RELEASE_TIME": "4102444800",
+}
+
+
+def test_token_timelock_compiles_with_no_owner_and_fixed_terms():
+    rendered = contract_templates.render_contract("token_timelock", TIMELOCK_PARAMS)
+    assert rendered["contract_name"] == "TokenTimeLock"
+    # Addresses land checksummed (Solidity rejects anything else).
+    assert "0x5FbDB2315678afecb367f032d93F642f64180aa3" in rendered["contract_code"]
+    compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    assert compiled.success, compiled.error_message
+    functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
+    assert functions == {"token", "beneficiary", "releaseTime", "lockedAmount", "release"}
+
+
+@pytest.mark.parametrize(
+    "overrides, message",
+    [({"TOKEN": "0x123"}, "TOKEN"), ({"BENEFICIARY": ""}, "BENEFICIARY"), ({"RELEASE_TIME": "soon"}, "RELEASE_TIME")],
+)
+def test_token_timelock_parameters_are_checked(overrides, message):
+    with pytest.raises(contract_templates.TemplateParameterError, match=message):
+        contract_templates.render_contract("token_timelock", {**TIMELOCK_PARAMS, **overrides})

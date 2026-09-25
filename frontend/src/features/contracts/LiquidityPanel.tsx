@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { formatUnits, zeroAddress } from 'viem'
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
@@ -10,13 +10,14 @@ import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckb
 import { contractsApi, type ContractDeployment } from '../../lib/contractsApi'
 import { ERC20_ADVANCED_ABI } from '../../lib/erc20AdvancedAbi'
 import { parseAmount } from '../../lib/amounts'
+import { TOKEN_TIMELOCK_ABI } from '../../lib/tokenTimelockAbi'
 import { ERC20_ABI, UNISWAP_V2_FACTORY_ABI, UNISWAP_V2_PAIR_ABI, UNISWAP_V2_ROUTER_ABI } from '../../lib/uniswapV2Abi'
 import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, isMainnetNetwork } from '../network/NetworkContext'
-import { NETWORK_TO_CHAIN_ID } from './useDeployTemplate'
+import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from './useDeployTemplate'
 import { useOwnerTransaction } from './useOwnerTransaction'
 
-type Action = 'approve' | 'add' | 'register' | 'approveLp' | 'remove'
+type Action = 'approve' | 'add' | 'register' | 'approveLp' | 'remove' | 'fundLock'
 
 // How far below the quoted amounts an add into an existing pool may land
 // (someone else's trade can move the price between quote and inclusion).
@@ -120,7 +121,8 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
         // first hop is capped by both limits (the router isn't excluded).
         advanced = { owner, tradingEnabled, pairRegistered, buyTaxRate, transferCap: maxTx < maxWallet ? maxTx : maxWallet }
       }
-      return { symbol, decimals, tokenBalance, allowance, nativeBalance, pool, advanced }
+      const readAt = Number((await client.getBlock()).timestamp)
+      return { symbol, decimals, tokenBalance, allowance, nativeBalance, pool, advanced, readAt }
     },
   })
 
@@ -135,6 +137,43 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
   const [recordError, setRecordError] = useState<string | null>(null)
   const [removePercent, setRemovePercent] = useState('')
+  const [lockPercent, setLockPercent] = useState('')
+  const [lockUntil, setLockUntil] = useState('')
+
+  // This pool's time-locks: Token Time-Lock deployments by this account
+  // whose token is the pool's LP token, each read live from its contract.
+  const pairAddress = chain.data?.pool?.address
+  const locks = useQuery({
+    queryKey: ['pool-locks', deployment.network, pairAddress],
+    enabled: Boolean(accessToken && pairAddress && publicClient),
+    queryFn: async () => {
+      const { deployments } = await contractsApi.listDeployments(accessToken!)
+      const forPool = deployments.filter(
+        (d) =>
+          d.template_id === 'token_timelock' &&
+          d.network === deployment.network &&
+          String(d.parameters?.TOKEN ?? '').toLowerCase() === pairAddress!.toLowerCase(),
+      )
+      // The chain's clock, as the lock contract sees it (see TokenLockPanel).
+      const readAt = Number((await publicClient!.getBlock()).timestamp)
+      return Promise.all(
+        forPool.map(async (d) => {
+          const address = d.contract_address as `0x${string}`
+          const [releaseTime, locked] = await Promise.all([
+            publicClient!.readContract({ address, abi: TOKEN_TIMELOCK_ABI, functionName: 'releaseTime' }),
+            publicClient!.readContract({ address, abi: TOKEN_TIMELOCK_ABI, functionName: 'lockedAmount' }),
+          ])
+          return { address, releaseTime: Number(releaseTime), locked, readAt }
+        }),
+      )
+    },
+  })
+  const lockDeploy = useDeployTemplate()
+  useEffect(() => {
+    if (lockDeploy.step === 'done') void locks.refetch()
+    // Refetch once each time a lock deployment finishes recording.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockDeploy.step])
 
   const { send, isBusy, error, done } = useOwnerTransaction<Action>({
     chainId,
@@ -144,10 +183,15 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
       register: 'Pool registered as a trading pair — buys and sells through it are now taxed.',
       approveLp: 'Approved — now remove the liquidity.',
       remove: 'Liquidity removed — the tokens and coins are in your wallet.',
+      fundLock: 'LP tokens moved into the lock.',
     },
     onSettled: ({ action, hash, status }) => {
       void chain.refetch()
       if (action === 'remove' && status === 'success') setRemovePercent('')
+      if (action === 'fundLock') {
+        void locks.refetch()
+        if (status === 'success') setLockPercent('')
+      }
       if (action === 'add' && status === 'success') {
         setTokenInput('')
         setNativeInput('')
@@ -240,6 +284,24 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
       }),
     )
 
+  // Locking: a share of this wallet's LP into one of this pool's locks.
+  const lockShare = /^\d+$/.test(lockPercent.trim()) ? Number(lockPercent.trim()) : null
+  const lpToLock = pool && lockShare !== null && lockShare >= 1 && lockShare <= 100 ? (pool.lpMine * BigInt(lockShare)) / 100n : null
+  const releaseAt = lockUntil ? Math.floor(new Date(lockUntil).getTime() / 1000) : null
+  // The chain's clock (the contract re-checks "in the future" at deploy anyway).
+  const nowSeconds = locks.data?.[0]?.readAt ?? chain.data.readAt
+  const releaseValid = releaseAt !== null && Number.isFinite(releaseAt) && releaseAt > nowSeconds + 60
+  const lockBusy = lockDeploy.step === 'compiling' || lockDeploy.step === 'deploying' || lockDeploy.step === 'confirming' || lockDeploy.step === 'recording'
+  const activeLocks = (locks.data ?? []).filter((l) => l.locked > 0n && l.releaseTime > nowSeconds)
+  const lockedLp = activeLocks.reduce((sum, l) => sum + l.locked, 0n)
+  const lpShare = (lp: bigint) => (pool && pool.lpTotal > 0n ? `${((Number(lp) / Number(pool.lpTotal)) * 100).toFixed(2)}%` : '0%')
+  const createLock = () =>
+    lockDeploy.deploy('token_timelock', { TOKEN: pool!.address, BENEFICIARY: address!, RELEASE_TIME: String(releaseAt) }, deployment.network)
+  const fundLock = (lockAddress: `0x${string}`) =>
+    send('fundLock', () =>
+      writeContractAsync({ address: pool!.address, abi: UNISWAP_V2_PAIR_ABI, functionName: 'transfer', args: [lockAddress, lpToLock!], chainId }),
+    )
+
   const register = () =>
     send('register', () =>
       writeContractAsync({ address: token, abi: ERC20_ADVANCED_ABI, functionName: 'setMarketPair', args: [pool!.address, true], chainId }),
@@ -265,6 +327,7 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
             {pool!.lpTotal > 0n && (
               <Badge tone="neutral">Your share {((Number(pool!.lpMine) / Number(pool!.lpTotal)) * 100).toFixed(2)}%</Badge>
             )}
+            {lockedLp > 0n && <Badge tone="success">{lpShare(lockedLp)} time-locked</Badge>}
           </>
         ) : (
           <Badge tone="warning">No liquidity yet</Badge>
@@ -347,6 +410,56 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
             </Button>
           )}
         </>
+      )}
+
+      {address && pool && hasReserves && (pool.lpMine > 0n || (locks.data?.length ?? 0) > 0) && (
+        <div className="space-y-2 rounded-md border border-border p-3" data-testid="liquidity-lock">
+          <p className="text-xs text-ink-faint">Lock LP tokens</p>
+          <p className="text-xs text-ink-muted">
+            Moves a share of your LP tokens into a small time-lock contract deployed from your own wallet: no one — including you —
+            can take them out before the release date, and then they can only go back to you. Buyers can read the contract
+            (verify its source from its history row).
+          </p>
+          {pool.lpMine > 0n && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="block text-xs text-ink-muted" htmlFor={`lp-lock-share-${deployment.id}`}>
+                  Share of your position to lock (%)
+                </label>
+                <input id={`lp-lock-share-${deployment.id}`} inputMode="numeric" value={lockPercent} disabled={isBusy() || lockBusy} onChange={(e) => setLockPercent(e.target.value)} className={inputClass} />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs text-ink-muted" htmlFor={`lp-lock-until-${deployment.id}`}>
+                  Locked until
+                </label>
+                <input id={`lp-lock-until-${deployment.id}`} type="datetime-local" value={lockUntil} disabled={isBusy() || lockBusy} onChange={(e) => setLockUntil(e.target.value)} className={inputClass} />
+              </div>
+            </div>
+          )}
+          {pool.lpMine > 0n && (
+            <Button variant="secondary" size="sm" disabled={!releaseValid || lockBusy || isBusy() || (isMainnet && !mainnetConfirmed)} isLoading={lockBusy} onClick={() => void createLock()}>
+              Create a lock until this date
+            </Button>
+          )}
+          {lockDeploy.error && <InlineError>{lockDeploy.error}</InlineError>}
+          {(locks.data ?? []).length > 0 && (
+            <ul className="space-y-1" data-testid="liquidity-locks">
+              {locks.data!.map((l) => (
+                <li key={l.address} className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink">
+                  <span>
+                    {l.locked > 0n ? `${lpShare(l.locked)} of the pool` : 'Empty lock'} ·{' '}
+                    {l.releaseTime > nowSeconds ? `locked until ${new Date(l.releaseTime * 1000).toLocaleString()}` : 'unlocked — release it from its history row'}
+                  </span>
+                  {l.releaseTime > nowSeconds && pool.lpMine > 0n && (
+                    <Button variant="ghost" size="sm" disabled={lpToLock === null || lpToLock === 0n || isBusy() || (isMainnet && !mainnetConfirmed)} isLoading={isBusy('fundLock')} onClick={() => void fundLock(l.address)}>
+                      Move {lockShare ?? 0}% of your LP here
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {address && pool && pool.lpMine > 0n && (

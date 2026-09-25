@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { parseAbi, parseEther, parseUnits, zeroAddress, type Address } from 'viem'
 
-import { anvil, ANVIL_RPC_URL, deployAdvancedToken, freshAddress, fundedWallet, installEvmWallet, publicClient } from './setup/evmToken'
+import { anvil, ANVIL_RPC_URL, deployAdvancedToken, freshAddress, fundedWallet, installEvmWallet, publicClient, testClient } from './setup/evmToken'
+import { expectNoA11yViolations } from './setup/axe'
 import { ensureLocalUniswap, LOCAL_UNISWAP } from './setup/localUniswap'
 
 const TOKEN_ABI = parseAbi([
@@ -17,6 +18,7 @@ const PAIR_ABI = parseAbi([
   'function totalSupply() view returns (uint256)',
   'function balanceOf(address) view returns (uint256)',
 ])
+const LOCK_ABI = parseAbi(['function lockedAmount() view returns (uint256)', 'function release()'])
 const OWNER: Address = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const ROUTER_ABI = parseAbi([
   'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable',
@@ -32,10 +34,10 @@ const amountOut = (amountIn: bigint, reserveIn: bigint, reserveOut: bigint) =>
 test.beforeAll(async () => ensureLocalUniswap(anvil, ANVIL_RPC_URL))
 test.beforeEach(async ({ page }) => installEvmWallet(page))
 
-test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from the UI, registered as the trading pair, and real swaps taxed', async ({
+test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from the UI, registered as the trading pair, real swaps taxed, then LP time-locked and released', async ({
   page,
 }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(240_000)
   const marketing = freshAddress()
   const liquidity = freshAddress()
   const buyer = await fundedWallet()
@@ -159,4 +161,50 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   await expect.poll(reserves).toEqual({ token: beforeRemoval.token - tokenOut, native: beforeRemoval.native - nativeOut })
   await expect.poll(() => balanceOf(OWNER)).toBe(ownerTokensBefore + tokenOut - removalTax)
   await expect.poll(() => balanceOf(marketing)).toBe(marketingBefore + (removalTax * 60n) / 100n)
+
+  // --- Time-lock half of the remaining LP: a Token Time-Lock contract
+  // deployed from the owner's wallet (release a few minutes out), then the
+  // LP moved into it.
+  const lpBeforeLock = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })
+  const lockSection = panel.getByTestId('liquidity-lock')
+  const releaseAt = new Date(Date.now() + 5 * 60_000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const local = `${releaseAt.getFullYear()}-${pad(releaseAt.getMonth() + 1)}-${pad(releaseAt.getDate())}T${pad(releaseAt.getHours())}:${pad(releaseAt.getMinutes())}`
+  await lockSection.getByLabel('Locked until').fill(local)
+  await lockSection.getByRole('button', { name: 'Create a lock until this date' }).click()
+  await expect(lockSection.getByTestId('liquidity-locks')).toContainText('Empty lock', { timeout: 45_000 })
+  await lockSection.getByLabel('Share of your position to lock (%)').fill('50')
+  await lockSection.getByRole('button', { name: 'Move 50% of your LP here' }).click()
+  await expect(panel.getByText('LP tokens moved into the lock.')).toBeVisible({ timeout: 20_000 })
+  await expect(panel.getByText(/time-locked$/)).toBeVisible({ timeout: 15_000 })
+  await expectNoA11yViolations(page, 'liquidity panel with a time-lock')
+
+  // The lock's own history row (after a reload, the history re-reads).
+  await page.reload()
+  const lockRow = page.getByRole('row', { name: /Token Time-Lock/ }).first()
+  const manageLock = lockRow.getByRole('button', { name: /^Manage 0x/ })
+  const lock = (await manageLock.getAttribute('aria-label'))!.replace('Manage ', '') as Address
+  const locked = lpBeforeLock / 2n
+  await expect.poll(() => publicClient.readContract({ address: lock, abi: LOCK_ABI, functionName: 'lockedAmount' })).toBe(locked)
+  await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock - locked)
+
+  // Nobody can release it early — not even by calling the contract directly.
+  await expect(buyer.writeContract({ address: lock, abi: LOCK_ABI, functionName: 'release' })).rejects.toThrow(/Tokens are still locked/)
+
+  // A buyer can check what it is: its source verifies on the explorer
+  // (the local verifying Etherscan stub recompiles and compares bytecode).
+  await lockRow.getByRole('button', { name: 'Verify source' }).click()
+  await expect(lockRow.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
+
+  // Once the release time has passed (anvil's clock moved forward), anyone
+  // can trigger the release — and it pays only the beneficiary, the owner.
+  await testClient.increaseTime({ seconds: 10 * 60 })
+  await testClient.mine({ blocks: 1 })
+  await page.reload()
+  await page.getByRole('row', { name: /Token Time-Lock/ }).first().getByRole('button', { name: `Manage ${lock}` }).click()
+  const lockPanel = page.getByTestId('token-lock')
+  await lockPanel.getByRole('button', { name: 'Release to beneficiary' }).click()
+  await expect(lockPanel.getByText('Released to the beneficiary.')).toBeVisible({ timeout: 20_000 })
+  await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock)
+  await expect.poll(() => publicClient.readContract({ address: lock, abi: LOCK_ABI, functionName: 'lockedAmount' })).toBe(0n)
 })

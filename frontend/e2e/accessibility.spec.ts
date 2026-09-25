@@ -112,6 +112,6 @@ test('a deployed token’s history row, Manage and Liquidity panels have no WCAG
   await expect(panel.getByRole('button', { name: 'Add liquidity' })).toBeEnabled({ timeout: 20_000 })
   await panel.getByRole('button', { name: 'Add liquidity' }).click()
   await expect(panel.getByTestId('liquidity-remove')).toBeVisible({ timeout: 20_000 })
-  await panel.getByLabel(/Share of your position/).fill('10')
+  await panel.getByLabel('Share of your position (%)', { exact: true }).fill('10')
   await scan('Liquidity panel, live pool with removal')
 })

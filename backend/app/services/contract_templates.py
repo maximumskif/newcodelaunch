@@ -616,6 +616,47 @@ contract {{CONTRACT_NAME}} is IERC721, IERC165 {
 }
 '''
 
+# A time-lock for one ERC-20 balance — e.g. a DEX pool's LP tokens, so
+# buyers can see the liquidity can't be pulled before a date. One contract
+# per lock, deployed by the locker's own wallet: token, beneficiary and
+# release time are fixed at deploy (constants — nothing to configure later),
+# there's no owner or admin, and `release()` can only ever pay the
+# beneficiary, only once the release time has passed. Anyone may call it —
+# the tokens still go to the beneficiary. Tokens other than TOKEN sent here
+# by mistake can't be recovered.
+_TOKEN_TIMELOCK_SOURCE = '''// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+}
+
+contract {{CONTRACT_NAME}} {
+    IERC20 public constant token = IERC20({{TOKEN}});
+    address public constant beneficiary = {{BENEFICIARY}};
+    uint256 public constant releaseTime = {{RELEASE_TIME}};
+
+    event Released(address indexed beneficiary, uint256 amount);
+
+    constructor() {
+        require(releaseTime > block.timestamp, "Release time must be in the future");
+    }
+
+    function lockedAmount() external view returns (uint256) {
+        return token.balanceOf(address(this));
+    }
+
+    function release() external {
+        require(block.timestamp >= releaseTime, "Tokens are still locked");
+        uint256 amount = token.balanceOf(address(this));
+        require(amount > 0, "Nothing to release");
+        require(token.transfer(beneficiary, amount), "Token transfer failed");
+        emit Released(beneficiary, amount);
+    }
+}
+'''
+
 _TEMPLATES: dict[str, ContractTemplate] = {
     "erc20_basic": ContractTemplate(
         id="erc20_basic",
@@ -671,6 +712,20 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         ],
         features=["ERC-721 Standard", "Public Minting", "Owner Minting", "Metadata Support", "Withdraw Funds"],
         gas_estimate=3_500_000,
+    ),
+    "token_timelock": ContractTemplate(
+        id="token_timelock",
+        name="Token Time-Lock",
+        type="lock",
+        description="Locks an ERC-20 balance (e.g. DEX LP tokens) until a release date — no owner, no early exit",
+        solidity_code=_TOKEN_TIMELOCK_SOURCE,
+        deployment_params=[
+            {"name": "TOKEN", "type": "address", "required": True, "description": "The ERC-20 to lock (for liquidity: the pool's LP token)"},
+            {"name": "BENEFICIARY", "type": "address", "required": True, "description": "Who receives the tokens once released"},
+            {"name": "RELEASE_TIME", "type": "uint256", "required": True, "description": "Release time as a Unix timestamp (seconds); must be in the future"},
+        ],
+        features=["Time-Locked", "No Owner", "Anyone Can Trigger Release", "Pays Only the Beneficiary"],
+        gas_estimate=400_000,
     ),
 }
 
@@ -815,8 +870,12 @@ def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, A
             contract_code = contract_code.replace(f'"{{{{{param["name"]}}}}}"', rendered)
         contract_code = contract_code.replace(f"{{{{{param['name']}}}}}", rendered)
 
-    display_param = _DISPLAY_NAME_PARAM[template.type]
-    contract_name = contract_identifier(str(parameters[display_param]), fallback=template.type.upper())
+    display_param = _DISPLAY_NAME_PARAM.get(template.type)
+    contract_name = (
+        contract_identifier(str(parameters[display_param]), fallback=template.type.upper())
+        if display_param
+        else "TokenTimeLock"
+    )
     contract_code = contract_code.replace("{{CONTRACT_NAME}}", contract_name)
 
     return {"contract_code": contract_code, "contract_name": contract_name, "template": template}

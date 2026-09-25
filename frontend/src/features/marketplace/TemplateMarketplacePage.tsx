@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
-import { IconCoin, IconLayers } from '../../components/ui/icons'
+import { IconCoin, IconLayers, IconShield } from '../../components/ui/icons'
 import { contractsApi, type ContractTemplateSummary } from '../../lib/contractsApi'
 
 // Browse-only gallery over the templates that actually exist — no fake
@@ -57,9 +57,9 @@ export function TemplateMarketplacePage() {
             <Card key={template.id} padding="lg" rounded="xl" interactive className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
-                  {template.type === 'erc20' ? <IconCoin /> : <IconLayers />}
+                  {template.type === 'erc20' ? <IconCoin /> : template.type === 'lock' ? <IconShield /> : <IconLayers />}
                 </span>
-                <Badge tone="accent">{template.type === 'erc20' ? 'ERC-20' : 'ERC-721'}</Badge>
+                <Badge tone="accent">{template.type === 'erc20' ? 'ERC-20' : template.type === 'lock' ? 'Time-lock' : 'ERC-721'}</Badge>
               </div>
 
               <h3 className="font-display font-medium text-ink">{template.name}</h3>

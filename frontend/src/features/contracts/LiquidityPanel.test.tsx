@@ -3,7 +3,7 @@ import { render as rtlRender, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import userEvent from '@testing-library/user-event'
 import { parseEther, zeroAddress } from 'viem'
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
+import { useAccount, useChainId, useDeployContract, usePublicClient, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { parseAmount } from '../../lib/amounts'
@@ -13,6 +13,7 @@ import { LiquidityPanel } from './LiquidityPanel'
 vi.mock('wagmi', () => ({
   useAccount: vi.fn(),
   useChainId: vi.fn(),
+  useDeployContract: vi.fn(),
   usePublicClient: vi.fn(),
   useSwitchChain: vi.fn(),
   useWaitForTransactionReceipt: vi.fn(),
@@ -27,13 +28,15 @@ vi.mock('../../lib/contractsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/contractsApi')>()
   return {
     ...actual,
-    contractsApi: { ...actual.contractsApi, listDexes: vi.fn(), listLiquidity: vi.fn(), recordLiquidity: vi.fn() },
+    contractsApi: { ...actual.contractsApi, listDexes: vi.fn(), listLiquidity: vi.fn(), recordLiquidity: vi.fn(), listDeployments: vi.fn(), compile: vi.fn() },
   }
 })
 
 const OWNER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3'
 const PAIR = '0x1111111111111111111111111111111111111111'
+const LOCK = '0x5555555555555555555555555555555555555555'
+const FAR_FUTURE = 4_102_444_800n // 2100-01-01
 const DEX = {
   name: 'Uniswap V2',
   router: '0x2222222222222222222222222222222222222222',
@@ -45,6 +48,7 @@ const basic = { id: 'dep-1', network: 'sepolia', contract_address: TOKEN, templa
 const advanced = { ...basic, template_id: 'erc20_advanced' } as ContractDeployment
 
 const writeContractAsync = vi.fn()
+const deployContractAsync = vi.fn()
 let receipt: { data?: { status: 'success' | 'reverted' } } = { data: undefined }
 
 interface ChainState {
@@ -62,6 +66,7 @@ function mockChain({ lpMine = 0n, lpAllowance = 0n, allowance = 0n, pair = zeroA
   vi.mocked(useChainId).mockReturnValue(11155111)
   vi.mocked(useSwitchChain).mockReturnValue({ switchChainAsync: vi.fn() } as unknown as ReturnType<typeof useSwitchChain>)
   vi.mocked(useWriteContract).mockReturnValue({ writeContractAsync } as unknown as ReturnType<typeof useWriteContract>)
+  vi.mocked(useDeployContract).mockReturnValue({ deployContractAsync } as unknown as ReturnType<typeof useDeployContract>)
   vi.mocked(useWaitForTransactionReceipt).mockImplementation(() => receipt as ReturnType<typeof useWaitForTransactionReceipt>)
   const values: Record<string, unknown> = {
     symbol: 'TKN',
@@ -82,8 +87,10 @@ function mockChain({ lpMine = 0n, lpAllowance = 0n, allowance = 0n, pair = zeroA
   const pairValues: Record<string, unknown> = { balanceOf: lpMine, allowance: lpAllowance }
   vi.mocked(usePublicClient).mockReturnValue({
     getBalance: vi.fn(async () => parseEther('10')),
+    getBlock: vi.fn(async () => ({ timestamp: BigInt(Math.floor(Date.now() / 1000)) })),
     readContract: vi.fn(async ({ address, functionName }: { address: string; functionName: string }) => {
       if (address === PAIR && functionName in pairValues) return pairValues[functionName]
+      if (address === LOCK) return functionName === 'releaseTime' ? FAR_FUTURE : parseEther('25')
       if (functionName === 'marketPairs') {
         if (pairRegistered === 'legacy') throw new Error('execution reverted')
         return pairRegistered
@@ -115,6 +122,7 @@ describe('LiquidityPanel', () => {
     writeContractAsync.mockResolvedValue('0xhash')
     vi.mocked(contractsApi.listDexes).mockResolvedValue({ dexes: { sepolia: DEX } })
     vi.mocked(contractsApi.listLiquidity).mockResolvedValue({ provisions: [] })
+    vi.mocked(contractsApi.listDeployments).mockResolvedValue({ deployments: [] })
   })
 
   it('says so on a network without a DEX', async () => {
@@ -208,7 +216,7 @@ describe('LiquidityPanel', () => {
     mockChain({ ...pool, lpMine: parseEther('10') })
     const user = userEvent.setup()
     const { unmount } = render(<LiquidityPanel deployment={basic} />)
-    await user.type(await screen.findByLabelText(/Share of your position/), '50')
+    await user.type(await screen.findByLabelText('Share of your position (%)'), '50')
     // 5 of 100 LP tokens: 5% of each reserve.
     expect(screen.getByText(/You get about 2500 TKN \+ 0.1 ETH/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Approve LP tokens' }))
@@ -219,7 +227,7 @@ describe('LiquidityPanel', () => {
 
     mockChain({ ...pool, lpMine: parseEther('10'), lpAllowance: parseEther('5') })
     render(<LiquidityPanel deployment={basic} />)
-    await user.type(await screen.findByLabelText(/Share of your position/), '50')
+    await user.type(await screen.findByLabelText('Share of your position (%)'), '50')
     await user.click(screen.getByRole('button', { name: 'Remove liquidity' }))
     const call = writeContractAsync.mock.lastCall![0]
     expect(call).toMatchObject({ address: DEX.router, functionName: 'removeLiquidityETHSupportingFeeOnTransferTokens' })
@@ -230,14 +238,14 @@ describe('LiquidityPanel', () => {
     mockChain({ pair: PAIR, reserves: [parseEther('50000'), parseEther('2')], lpMine: parseEther('100'), lpAllowance: parseEther('100'), pairRegistered: true })
     const user = userEvent.setup()
     render(<LiquidityPanel deployment={advanced} />)
-    await user.type(await screen.findByLabelText(/Share of your position/), '10')
+    await user.type(await screen.findByLabelText('Share of your position (%)'), '10')
     // 5000 TKN out, less the 3% buy tax.
     expect(screen.getByText(/You get about 4850 TKN/)).toBeInTheDocument()
     expect(screen.getByText(/3% buy tax/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove liquidity' })).toBeEnabled()
 
-    await user.clear(screen.getByLabelText(/Share of your position/))
-    await user.type(screen.getByLabelText(/Share of your position/), '30')
+    await user.clear(screen.getByLabelText('Share of your position (%)'))
+    await user.type(screen.getByLabelText('Share of your position (%)'), '30')
     expect(screen.getByText(/more TKN than this token lets move in one transfer \(10000\)/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove liquidity' })).toBeDisabled()
   })
@@ -247,5 +255,48 @@ describe('LiquidityPanel', () => {
     render(<LiquidityPanel deployment={basic} />)
     expect(await screen.findByText('Pool live')).toBeInTheDocument()
     expect(screen.queryByTestId('liquidity-remove')).not.toBeInTheDocument()
+  })
+
+  it('creates a time-lock for the pool’s LP from the owner’s wallet, then moves a share of the LP into it', async () => {
+    mockChain({ pair: PAIR, reserves: [parseEther('50000'), parseEther('2')], lpMine: parseEther('50') })
+    vi.mocked(contractsApi.compile).mockResolvedValue({ abi: [], bytecode: '0x00', contract_name: 'TokenTimeLock' })
+    deployContractAsync.mockResolvedValue('0xdeploy')
+    const user = userEvent.setup()
+    const { unmount } = render(<LiquidityPanel deployment={basic} />)
+    await user.type(await screen.findByLabelText('Locked until'), '2099-12-31T12:00')
+    await user.click(screen.getByRole('button', { name: 'Create a lock until this date' }))
+    await waitFor(() =>
+      expect(contractsApi.compile).toHaveBeenCalledWith('token_timelock', {
+        TOKEN: PAIR,
+        BENEFICIARY: OWNER,
+        RELEASE_TIME: String(Math.floor(new Date('2099-12-31T12:00').getTime() / 1000)),
+      }),
+    )
+    expect(deployContractAsync).toHaveBeenCalled()
+    unmount()
+
+    // Once the lock is recorded it's listed with what it holds; move 50% of
+    // the wallet's LP into it.
+    vi.mocked(contractsApi.listDeployments).mockResolvedValue({
+      deployments: [
+        { id: 'lock-1', template_id: 'token_timelock', network: 'sepolia', contract_address: LOCK, parameters: { TOKEN: PAIR.toUpperCase().replace('0X', '0x') } },
+      ] as never,
+    })
+    render(<LiquidityPanel deployment={basic} />)
+    expect(await screen.findByText('25.00% time-locked')).toBeInTheDocument()
+    expect(screen.getByTestId('liquidity-locks')).toHaveTextContent('25.00% of the pool · locked until')
+    await user.type(screen.getByLabelText('Share of your position to lock (%)'), '50')
+    await user.click(screen.getByRole('button', { name: 'Move 50% of your LP here' }))
+    expect(writeContractAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ address: PAIR, functionName: 'transfer', args: [LOCK, parseEther('25')] }),
+    )
+  })
+
+  it('refuses a release date in the past', async () => {
+    mockChain({ pair: PAIR, reserves: [parseEther('50000'), parseEther('2')], lpMine: parseEther('50') })
+    const user = userEvent.setup()
+    render(<LiquidityPanel deployment={basic} />)
+    await user.type(await screen.findByLabelText('Locked until'), '2020-01-01T00:00')
+    expect(screen.getByRole('button', { name: 'Create a lock until this date' })).toBeDisabled()
   })
 })

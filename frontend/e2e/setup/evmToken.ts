@@ -20,7 +20,7 @@ export const anvil = defineChain({
 })
 
 export const publicClient = createPublicClient({ chain: anvil, transport: http(ANVIL_RPC_URL) })
-const testClient = createTestClient({ chain: anvil, mode: 'anvil', transport: http(ANVIL_RPC_URL) })
+export const testClient = createTestClient({ chain: anvil, mode: 'anvil', transport: http(ANVIL_RPC_URL) })
 
 // anvil's default account #0 — the injected wallet the UI signs with.
 export const ownerWallet = createWalletClient({

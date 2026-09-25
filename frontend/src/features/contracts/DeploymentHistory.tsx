@@ -5,6 +5,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import type { ContractDeployment } from '../../lib/contractsApi'
 import { Erc20ManagePanel } from './Erc20ManagePanel'
 import { LiquidityPanel } from './LiquidityPanel'
+import { TokenLockPanel } from './TokenLockPanel'
 import { VerifySource } from './VerifySource'
 
 export function DeploymentHistory({ deployments }: { deployments: ContractDeployment[] }) {
@@ -64,7 +65,7 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                 <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
-                    {deployment.template_id === 'erc20_advanced' && (
+                    {(deployment.template_id === 'erc20_advanced' || deployment.template_id === 'token_timelock') && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -92,7 +93,13 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
               {open?.id === deployment.id && (
                 <tr>
                   <td colSpan={6} className="px-4 pb-4">
-                    {open.panel === 'manage' ? <Erc20ManagePanel deployment={deployment} /> : <LiquidityPanel deployment={deployment} />}
+                    {open.panel === 'liquidity' ? (
+                      <LiquidityPanel deployment={deployment} />
+                    ) : deployment.template_id === 'token_timelock' ? (
+                      <TokenLockPanel deployment={deployment} />
+                    ) : (
+                      <Erc20ManagePanel deployment={deployment} />
+                    )}
                   </td>
                 </tr>
               )}

@@ -11,7 +11,7 @@ export interface DeploymentParam {
 export interface ContractTemplateSummary {
   id: string
   name: string
-  type: 'erc20' | 'erc721'
+  type: 'erc20' | 'erc721' | 'lock'
   description: string
   deployment_params: DeploymentParam[]
   features: string[]
@@ -92,7 +92,7 @@ export interface LiquidityProvision {
 }
 
 export const contractsApi = {
-  listTemplates: (type?: 'erc20' | 'erc721') =>
+  listTemplates: (type?: 'erc20' | 'erc721' | 'lock') =>
     request<{ templates: ContractTemplateSummary[] }>(`/contracts/templates${type ? `?type=${type}` : ''}`),
 
   getTemplate: (templateId: string) =>
