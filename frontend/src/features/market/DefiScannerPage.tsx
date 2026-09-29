@@ -6,13 +6,9 @@ import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { SkeletonTableRow } from '../../components/ui/Skeleton'
 import { marketApi } from '../../lib/marketApi'
+import { formatLarge } from '../../lib/marketFormat'
 
-function formatTvl(value: number | null): string {
-  if (value === null) return '—'
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`
-  return `$${value.toLocaleString()}`
-}
+const formatTvl = formatLarge
 
 function formatChange(value: number | null): string {
   if (value === null) return '—'

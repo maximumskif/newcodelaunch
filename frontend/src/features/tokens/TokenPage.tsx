@@ -15,8 +15,11 @@ const percentOf = (part: bigint, whole: bigint) => (whole > 0n ? `${((Number(par
 
 function Check({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
-    <li className="flex items-start gap-2">
-      <span aria-hidden="true" className={ok ? 'text-success' : 'text-warning'}>
+    <li className="flex items-center gap-3 rounded-lg bg-surface-raised/60 px-3 py-2.5">
+      <span
+        aria-hidden="true"
+        className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${ok ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}`}
+      >
         {ok ? '✓' : '!'}
       </span>
       <span className="text-ink">
@@ -80,36 +83,66 @@ export function TokenPage() {
     }
   }
 
+  const lockedLp =
+    page.chain === 'solana'
+      ? BigInt(page.pool?.permanently_locked_lp ?? '0')
+      : (page.pool?.locks ?? []).reduce((sum, lock) => sum + BigInt(lock.amount), 0n) + BigInt(page.pool?.burned_lp ?? '0')
+  const stats: [string, string][] = [
+    ['Total supply', `${fmt(page.total_supply)}`],
+    ['Price', price !== null ? `${new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4 }).format(price)} ${native}` : '—'],
+    ['Pool', live ? `${formatTokenAmount(pool!.native_reserve!, page.chain === 'solana' ? 9 : 18)} ${native}` : 'No pool'],
+    ['Liquidity locked', live ? percentOf(lockedLp, lpSupply) : '—'],
+  ]
+
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-8" data-testid="token-page">
-      <PageHero
-        eyebrow={`Token · ${networkLabel}`}
-        title={`${page.name} (${page.symbol})`}
-        description="Everything below is read from the chain just now — not what the creator says."
-      />
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="break-all font-mono text-ink-faint">{page.address}</span>
-        {page.explorer_url && (
-          <a href={page.explorer_url} target="_blank" rel="noreferrer" className="text-accent-400 hover:underline">
-            Explorer
-          </a>
-        )}
-        <Button variant="ghost" size="sm" onClick={() => void copyLink()}>
-          {copied ? 'Link copied' : 'Copy link'}
-        </Button>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-8" data-testid="token-page">
+      <header className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 sm:p-8">
+        <div aria-hidden className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[image:var(--gradient-accent)] opacity-15 blur-3xl" />
+        <div className="relative flex flex-wrap items-center gap-4">
+          <span aria-hidden className="grid h-14 w-14 place-items-center rounded-full bg-[image:var(--gradient-accent)] font-display text-2xl font-semibold text-white">
+            {page.symbol.slice(0, 1).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-accent-400">Token · {networkLabel}</p>
+            <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-ink">
+              {page.name} ({page.symbol})
+            </h1>
+          </div>
+        </div>
+        <div className="relative mt-5 flex flex-wrap items-center gap-2 text-sm">
+          <span className="max-w-full truncate rounded-md border border-border bg-canvas px-2.5 py-1 font-mono text-xs text-ink-muted">{page.address}</span>
+          {page.explorer_url && (
+            <a href={page.explorer_url} target="_blank" rel="noreferrer" className="rounded-md border border-border px-2.5 py-1 text-xs text-accent-300 hover:bg-surface-hover">
+              Explorer
+            </a>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => void copyLink()}>
+            {copied ? 'Link copied' : 'Copy link'}
+          </Button>
+        </div>
+        <p className="relative mt-4 text-sm text-ink-muted">Everything below is read from the chain just now — not what the creator says.</p>
+      </header>
+
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {stats.map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-border bg-surface p-4">
+            <dt className="text-xs text-ink-faint">{label}</dt>
+            <dd className={`mt-1 truncate text-lg text-ink ${/^\d/.test(value) ? 'font-mono' : ''}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
 
       {page.chain === 'evm' && page.code_matches_template === false && (
-        <div role="alert" className="max-w-4xl rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm text-ink">
+        <div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm text-ink">
           This contract's code doesn't match the {page.template} template it was recorded as. What it reports about itself below
           can't be trusted.
         </div>
       )}
 
-      <div className="grid max-w-4xl gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card padding="lg" rounded="xl">
-          <h2 className="mb-3 text-sm font-semibold text-ink">Supply and control</h2>
-          <p className="mb-3 text-ink">
+          <h2 className="mb-1 font-display text-lg font-semibold text-ink">Supply and control</h2>
+          <p className="mb-4 text-sm text-ink-muted">
             {fmt(page.total_supply)} {page.symbol}
           </p>
           <ul className="space-y-2 text-sm">
@@ -145,7 +178,7 @@ export function TokenPage() {
         </Card>
 
         <Card padding="lg" rounded="xl" data-testid="token-page-pool">
-          <h2 className="mb-3 text-sm font-semibold text-ink">Liquidity</h2>
+          <h2 className="mb-4 font-display text-lg font-semibold text-ink">Liquidity</h2>
           {!pool ? (
             <p className="text-sm text-ink-muted">Couldn't read the pool right now.</p>
           ) : !live ? (
@@ -189,7 +222,7 @@ export function TokenPage() {
           )}
         </Card>
       </div>
-      <p className="max-w-4xl text-xs text-ink-faint">
+      <p className="text-xs text-ink-faint">
         This page reports on-chain facts, not advice. A fixed supply and locked liquidity remove some risks, not all of them.
       </p>
     </div>

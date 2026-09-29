@@ -6,22 +6,8 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { SkeletonTableRow } from '../../components/ui/Skeleton'
+import { formatLarge, formatPrice } from '../../lib/marketFormat'
 import { marketApi, type DexPair } from '../../lib/marketApi'
-
-function formatPrice(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—'
-  return value >= 1
-    ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-    : `$${value.toPrecision(4)}`
-}
-
-function formatLarge(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—'
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`
-  if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}K`
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-}
 
 function Change({ value }: { value: number | null | undefined }) {
   if (value === null || value === undefined) return <span className="text-ink-faint">—</span>

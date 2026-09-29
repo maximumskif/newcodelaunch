@@ -19,7 +19,7 @@ import { ProjectsDashboard } from './features/projects/ProjectsDashboard'
 import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 
 // react-router's BrowserRouter doesn't scroll to `#hash` targets on its own —
-// this is what makes the nav's "How It Works" / "Start Building" links land
+// this is what makes the nav's "How It Works" link land
 // on the right homepage section instead of just changing the URL.
 function ScrollToHash() {
   const { hash } = useLocation()
