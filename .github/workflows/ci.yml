@@ -208,14 +208,14 @@ jobs:
         run: |
           set -x
           # Readiness: database migrated and reachable, sidecar reachable.
-          curl -kfsS https://localhost/api/health/ready | grep '"status":"ok"'
+          curl -kfsS https://localhost/api/health/ready | grep -E '"status": ?"ok"'
           # The frontend bundle, and a client-side route falling back to it.
           curl -kfsS https://localhost/ | grep '<div id="root">'
           curl -kfsS https://localhost/tokens | grep '<div id="root">'
           # A real compile with the solc baked into the image.
           curl -kfsS https://localhost/api/contracts/compile -H 'Content-Type: application/json' \
             -d '{"template_id":"erc20_basic","parameters":{"TOKEN_NAME":"CI","TOKEN_SYMBOL":"CI","TOKEN_DECIMALS":18,"TOKEN_SUPPLY":1000}}' \
-            | grep '"bytecode":"0x'
+            | grep -E '"bytecode": ?"0x'
           # Nothing but Caddy is reachable from outside.
           for port in 5000 5432 6379 4000 8080; do
             ! curl -s -m 2 "http://localhost:$port" >/dev/null
