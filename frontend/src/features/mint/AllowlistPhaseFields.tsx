@@ -4,9 +4,9 @@ import type { AllowlistPhaseState } from './useAllowlistPhase'
 // fields and checks whether launching a drop or editing a live one.
 export function AllowlistPhaseFields({ phase, disabled }: { phase: AllowlistPhaseState; disabled: boolean }) {
   return (
-    <fieldset className="space-y-3 rounded-md border border-border p-3">
-      <legend className="px-1 text-sm text-ink-muted">Allowlist phase (optional)</legend>
-      <label className="flex items-start gap-2 text-sm text-ink">
+    <fieldset className="space-y-3">
+      <legend className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-faint">Allowlist phase (optional)</legend>
+      <label className="flex items-start gap-3 rounded-lg border border-border bg-canvas p-3 text-sm text-ink">
         <input
           type="checkbox"
           className="mt-0.5"

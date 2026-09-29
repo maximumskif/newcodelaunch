@@ -3,7 +3,7 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { IconSpinner } from './icons'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
-export type ButtonSize = 'sm' | 'md'
+export type ButtonSize = 'sm' | 'md' | 'lg'
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
@@ -28,6 +28,8 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 const SIZE_CLASSES: Record<ButtonSize, string> = {
   sm: 'px-2.5 py-1 text-xs gap-1',
   md: 'px-4 py-1.5 text-sm gap-1.5',
+  // Primary calls to action (a storefront's mint button, hero CTAs).
+  lg: 'px-6 py-3 text-base gap-2',
 }
 
 // For non-<button> elements that need to look like one — e.g. a react-router

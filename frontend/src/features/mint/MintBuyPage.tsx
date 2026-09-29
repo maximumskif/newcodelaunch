@@ -5,11 +5,9 @@ import { Connection, VersionedTransaction } from '@solana/web3.js'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
-import { PageHero } from '../../components/ui/PageHero'
 import { ApiError } from '../../lib/http'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type PublicCandyMachineStatus } from '../../lib/candyMachineApi'
 import { base64ToBytes } from '../../lib/solana'
@@ -101,76 +99,83 @@ export function MintBuyPage() {
 
   if (loadError) {
     return (
-      <div className="space-y-5 p-4 sm:p-8">
-        <PageHero eyebrow="Mint" title="Drop not found" description="" />
-        <EmptyState title="This link doesn't match a launched drop" description={loadError} />
+      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Drop not found</h1>
+        <div className="mt-6">
+          <EmptyState title="This link doesn't match a launched drop" description={loadError} />
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="space-y-5 p-4 sm:p-8">
-      <PageHero
-        eyebrow="Mint"
-        title={status?.collection_name ?? 'Loading…'}
-        description="Your connected Solana wallet pays and signs directly — this app never holds the funds or the NFT."
-      />
+  const minted = status ? status.items_available - status.items_remaining : 0
+  const mintedPct = status && status.items_available > 0 ? (minted / status.items_available) * 100 : 0
+  const networkLabel = status ? (SOLANA_NETWORKS.find((item) => item.id === status.network)?.label ?? status.network) : ''
 
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
       {isLoading && !status && <p className="text-ink-muted">Loading drop…</p>}
 
       {status && (
-        <Card padding="lg" rounded="xl" className="max-w-3xl">
-          <div className="grid gap-6 sm:grid-cols-[minmax(0,280px)_1fr]">
-            {status.preview_image ? (
-              <img
-                src={status.preview_image}
-                alt={status.collection_name ?? 'Collection preview'}
-                className="aspect-square w-full rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-surface-raised text-ink-faint">
-                No preview
+        <div className="grid items-start gap-10 lg:grid-cols-2 lg:gap-14">
+          <DropArtwork src={status.preview_image} name={status.collection_name ?? 'Collection'} />
+
+          <div className="flex flex-col gap-6">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={status.phase === 'upcoming' ? 'warning' : 'success'}>
+                  {status.phase === 'public' ? 'Live now' : status.phase === 'allowlist' ? 'Allowlist phase' : 'Not live yet'}
+                </Badge>
+                <Badge tone={isMainnet ? 'warning' : 'neutral'}>{networkLabel}</Badge>
+                {status.mint_limit && <Badge tone="neutral">Limit {status.mint_limit} per wallet</Badge>}
               </div>
+              <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+                {status.collection_name ?? 'Untitled collection'}
+              </h1>
+              {status.collection_description && <p className="mt-3 text-ink-muted">{status.collection_description}</p>}
+            </div>
+
+            <div>
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-ink">
+                  <span className="font-mono">{minted.toLocaleString()}</span> minted
+                </span>
+                <span className="text-ink-faint">
+                  {status.items_remaining} of {status.items_available} remaining
+                </span>
+              </div>
+              <div
+                className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-raised"
+                role="progressbar"
+                aria-label="Minted so far"
+                aria-valuemin={0}
+                aria-valuemax={status.items_available}
+                aria-valuenow={minted}
+              >
+                <div className="h-full rounded-full bg-[image:var(--gradient-accent)] transition-[width] duration-500" style={{ width: `${mintedPct}%` }} />
+              </div>
+            </div>
+
+            {status.allowlist ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <PhaseCard
+                  active={status.phase === 'allowlist'}
+                  label={`Allowlist · ${status.allowlist.size} wallets`}
+                  price={status.allowlist.price_sol}
+                  when={`${new Date(status.allowlist.start_date).toLocaleString()} – ${new Date(status.go_live_date).toLocaleString()}`}
+                />
+                <PhaseCard
+                  active={status.phase === 'public'}
+                  label="Public"
+                  price={status.price_sol}
+                  when={`Opens ${new Date(status.go_live_date).toLocaleString()}`}
+                />
+              </div>
+            ) : (
+              <PhaseCard active label="Price" price={status.price_sol} when={`Opens ${new Date(status.go_live_date).toLocaleString()}`} large />
             )}
 
-            <div className="flex flex-col gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={status.phase === 'upcoming' ? 'warning' : 'success'}>
-                    {status.phase === 'public' ? 'Live now' : status.phase === 'allowlist' ? 'Allowlist phase' : 'Not live yet'}
-                  </Badge>
-                  <Badge tone="neutral">{status.items_remaining} of {status.items_available} remaining</Badge>
-                  {status.mint_limit && <Badge tone="neutral">Limit {status.mint_limit} per wallet</Badge>}
-                  {isMainnet && <Badge tone="warning">Solana Mainnet</Badge>}
-                </div>
-                {status.collection_description && (
-                  <p className="mt-3 text-sm text-ink-muted">{status.collection_description}</p>
-                )}
-              </div>
-
-              {status.allowlist ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className={`rounded-lg border p-4 ${status.phase === 'allowlist' ? 'border-accent-500 bg-accent-500/5' : 'border-border bg-surface-raised'}`}>
-                    <p className="text-xs text-ink-faint">Allowlist · {status.allowlist.size} wallets</p>
-                    <p className="font-display text-2xl font-semibold text-ink">{status.allowlist.price_sol} SOL</p>
-                    <p className="mt-1 text-xs text-ink-faint">
-                      {new Date(status.allowlist.start_date).toLocaleString()} – {new Date(status.go_live_date).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className={`rounded-lg border p-4 ${status.phase === 'public' ? 'border-accent-500 bg-accent-500/5' : 'border-border bg-surface-raised'}`}>
-                    <p className="text-xs text-ink-faint">Public</p>
-                    <p className="font-display text-2xl font-semibold text-ink">{status.price_sol} SOL</p>
-                    <p className="mt-1 text-xs text-ink-faint">Opens {new Date(status.go_live_date).toLocaleString()}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-border bg-surface-raised p-4">
-                  <p className="text-xs text-ink-faint">Price</p>
-                  <p className="font-display text-3xl font-semibold text-ink">{status.price_sol} SOL</p>
-                  <p className="mt-1 text-xs text-ink-faint">Opens {new Date(status.go_live_date).toLocaleString()}</p>
-                </div>
-              )}
-
+            <div className="space-y-4 rounded-2xl border border-border bg-surface p-5">
               {mintedNft ? (
                 // Checked before sold-out/not-live below on purpose: loadStatus() re-fetches
                 // items_remaining right after a successful mint, so minting the last item
@@ -201,7 +206,7 @@ export function MintBuyPage() {
                 />
               ) : (
                 <>
-                  {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to mint.</p>}
+                  {!publicKey && <p className="text-sm text-ink-muted">Connect a Solana wallet above to mint.</p>}
 
                   {isMainnet && (
                     <MainnetConfirmCheckbox
@@ -223,6 +228,7 @@ export function MintBuyPage() {
 
                   <Button
                     variant="primary"
+                    size="lg"
                     className="w-full"
                     disabled={!publicKey || isBusy || (isMainnet && !mainnetConfirmed)}
                     isLoading={isBusy}
@@ -233,9 +239,52 @@ export function MintBuyPage() {
                 </>
               )}
             </div>
+
+            <p className="text-xs text-ink-faint">
+              Your wallet pays and signs directly — this site never holds the funds or the NFT.
+              {status.explorer_url && (
+                <>
+                  {' '}
+                  <a href={status.explorer_url} target="_blank" rel="noreferrer" className="text-accent-300 underline underline-offset-2">
+                    View the drop on the explorer
+                  </a>
+                </>
+              )}
+            </p>
           </div>
-        </Card>
+        </div>
       )}
+    </div>
+  )
+}
+
+function PhaseCard({ active, label, price, when, large = false }: { active: boolean; label: string; price: number; when: string; large?: boolean }) {
+  return (
+    <div className={`rounded-xl border p-4 ${active ? 'border-accent-500/60 bg-accent-500/10' : 'border-border bg-surface'}`}>
+      <p className="text-xs text-ink-faint">{label}</p>
+      <p className={`font-display font-semibold text-ink ${large ? 'text-4xl' : 'text-2xl'}`}>{price} SOL</p>
+      <p className="mt-1 text-xs text-ink-faint">{when}</p>
+    </div>
+  )
+}
+
+// The collection's image, or — when there's none or it fails to load (an
+// IPFS gateway can be slow or down) — a gradient panel with its initial,
+// never a broken-image icon.
+function DropArtwork({ src, name }: { src: string | null; name: string }) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <div className="relative lg:sticky lg:top-8">
+      <div aria-hidden className="absolute -inset-4 rounded-[2rem] bg-[image:var(--gradient-accent)] opacity-20 blur-3xl" />
+      <div className="relative aspect-square overflow-hidden rounded-3xl border border-border-strong bg-surface">
+        {src && !failed ? (
+          <img src={src} alt={name} className="h-full w-full object-cover" onError={() => setFailed(true)} />
+        ) : (
+          <div role="img" aria-label={name} className="grid h-full w-full place-items-center bg-[image:var(--gradient-accent-soft)]">
+            <span className="font-display text-8xl font-semibold text-ink/80">{name.slice(0, 1).toUpperCase()}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

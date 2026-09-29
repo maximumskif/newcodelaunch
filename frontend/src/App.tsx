@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 
 import { AppShell } from './components/layout/AppShell'
+import { PublicLayout } from './components/layout/PublicLayout'
 import { MarketingLayout } from './components/layout/MarketingLayout'
 import { ContractsPage } from './features/contracts/ContractsPage'
 import { HomePage } from './features/marketing/HomePage'
@@ -49,6 +50,8 @@ export default function App() {
           <Route path="/marketplace" element={<TemplateMarketplacePage />} />
           <Route path="/nft/deploy-evm" element={<NftEvmDeployPage />} />
           <Route path="/mint" element={<MintLaunchPage />} />
+        </Route>
+        <Route element={<PublicLayout />}>
           <Route path="/mint/buy/:candyMachineId" element={<MintBuyPage />} />
           <Route path="/token/:network/:address" element={<TokenPage />} />
         </Route>

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Connection } from '@solana/web3.js'
 
 import { Button } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
+import { Badge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
@@ -17,7 +17,7 @@ import {
   type CandyMachineDeployment,
   type SolanaNetworkId,
 } from '../../lib/candyMachineApi'
-import { nftApi, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
+import { nftApi, uploadUrl, type NFTCollection, type NFTGeneratedItem } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { parseMintLimit } from '../../lib/mintLimit'
 import { signSendAndConfirm, signSendAndConfirmAll } from '../../lib/solana'
@@ -326,179 +326,187 @@ export function MintLaunchPage() {
 
       {isLoading && <p className="text-ink-muted">Loading collection…</p>}
 
-      {!isLoading && collection && (
-        <Card padding="lg" rounded="xl" className="max-w-xl space-y-4">
-          <div>
-            <h2 className="text-lg font-medium text-ink">{collection.name}</h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              {publishedItems.length} of {items.length} generated item{items.length === 1 ? '' : 's'} published to IPFS.
-            </p>
-          </div>
+      {!isLoading && collection && publishedItems.length === 0 && (
+        <EmptyState
+          title="No published items yet"
+          description="Publish at least one generated item to IPFS from the NFT Generator before launching."
+        />
+      )}
 
-          {publishedItems.length === 0 ? (
-            <EmptyState
-              title="No published items yet"
-              description="Publish at least one generated item to IPFS from the NFT Generator before launching."
-            />
-          ) : (
-            <>
-              {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to launch.</p>}
+      {!isLoading && collection && publishedItems.length > 0 && (
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-5 rounded-xl border border-border bg-surface p-6">
+            <div className="border-b border-border pb-5">
+              <h2 className="font-display text-xl font-semibold text-ink">Launch {collection.name}</h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                {publishedItems.length} of {items.length} generated item{items.length === 1 ? '' : 's'} published to IPFS.
+              </p>
+            </div>
 
+            <FormSection title="Network">
               {/* A group, not a label element: a label wrapping buttons names the
                   first button with the whole label text for screen readers. */}
-              <div className="block text-sm text-ink-muted">
-                <span id="candy-network-label">Network</span>
-                <div className="mt-1 flex gap-1.5" role="group" aria-labelledby="candy-network-label">
-                  {SOLANA_NETWORKS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={isBusy}
-                      aria-pressed={network === item.id}
-                      onClick={() => setNetwork(item.id)}
-                      className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors duration-150 ${
-                        network === item.id ? 'border-accent-500 bg-accent-500/10 text-ink' : 'border-border text-ink-muted hover:bg-surface-hover'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="block text-sm text-ink-muted">
-                Price per mint (SOL)
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={priceSol}
-                  disabled={isBusy}
-                  onChange={(e) => setPriceSol(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
-                />
-              </label>
-
-              <label className="block text-sm text-ink-muted">
-                Go-live date
-                <input
-                  type="datetime-local"
-                  value={goLiveDate}
-                  disabled={isBusy}
-                  onChange={(e) => setGoLiveDate(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
-                />
-              </label>
-
-              <AllowlistPhaseFields phase={allowlistPhase} disabled={isBusy} />
-
-              <label className="block text-sm text-ink-muted">
-                Max mints per wallet <span className="text-ink-faint">(optional — across every phase, enforced on-chain)</span>
-                <input
-                  inputMode="numeric"
-                  value={mintLimitText}
-                  disabled={isBusy}
-                  onChange={(e) => setMintLimitText(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
-                />
-              </label>
-              {mintLimit.problem && <p className="text-xs text-warning">{mintLimit.problem}</p>}
-
-              <label className="block text-sm text-ink-muted">
-                Royalty (basis points, 500 = 5%)
-                <input
-                  type="number"
-                  min={0}
-                  max={10000}
-                  value={sellerFeeBps}
-                  disabled={isBusy}
-                  onChange={(e) => setSellerFeeBps(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink"
-                />
-              </label>
-
-              {isMainnet && (
-                <MainnetConfirmCheckbox
-                  checked={mainnetConfirmed}
-                  onChange={setMainnetConfirmed}
-                  disabled={isBusy}
-                  verb="launches on"
-                  networkLabel="Solana Mainnet"
-                />
-              )}
-
-              {!result && (
-                <p className="text-xs text-ink-faint">
-                  You'll be prompted to approve a couple of transactions in your wallet, one step at a time — each
-                  one is only built right before it's shown to you, so you don't need to rush between prompts.
-                  Within a single prompt, though, approve promptly (within about a minute); waiting too long on any
-                  one transaction can still expire it and mean starting that step over.
-                </p>
-              )}
-
-              {error && <InlineError>{error}</InlineError>}
-              {/* aria-live="polite" — this label is the only real-time
-                  indication of which step a multi-transaction, real-money
-                  launch flow is on ("Sign the collection transaction in
-                  your wallet…", "Confirming…"); without it a screen reader
-                  user gets no feedback at all while a sighted user watches
-                  it update. */}
-              {isBusy && (
-                <p aria-live="polite" className="text-sm text-ink-muted">
-                  {progressLabel}
-                </p>
-              )}
-
-              {pendingDrop && !isBusy && !result && (
-                <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-sm">
-                  <p className="text-ink">
-                    Your Candy Machine exists on-chain, but launching it didn't finish. Resume to load its remaining items and
-                    record it — it picks up exactly where it stopped, without creating (or paying for) anything twice.
-                  </p>
-                  <Button variant="primary" size="sm" onClick={() => void handleResume()}>
-                    Resume launch
-                  </Button>
-                </div>
-              )}
-
-              {result ? (
-                <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
-                  <p className="text-success">Candy Machine created.</p>
-                  <p className="mt-1 font-mono text-xs text-ink-muted">{result.candy_machine}</p>
-                  {result.explorer_url && (
-                    <a href={result.explorer_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-accent-400 underline">
-                      View on explorer
-                    </a>
-                  )}
-                  <p className="mt-3 text-ink-muted">
-                    Share this link so anyone can mint from the drop — no account needed, just a Solana wallet:
-                  </p>
-                  <Link
-                    to={`/mint/buy/${result.candy_machine}`}
-                    className="mt-1 block break-all font-mono text-xs text-accent-400 underline"
+              <span id="candy-network-label" className="sr-only">Network</span>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="candy-network-label">
+                {SOLANA_NETWORKS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={isBusy}
+                    aria-pressed={network === item.id}
+                    onClick={() => setNetwork(item.id)}
+                    className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors duration-150 ${
+                      network === item.id ? 'border-accent-500 bg-accent-500/10 text-ink' : 'border-border text-ink-muted hover:bg-surface-hover'
+                    }`}
                   >
-                    {`${window.location.origin}/mint/buy/${result.candy_machine}`}
-                  </Link>
-                </div>
-              ) : pendingDrop ? null : (
-                // Not offered while a created drop is unfinished: a second
-                // launch would create (and charge for) a second Candy Machine.
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  disabled={
-                    !publicKey || !goLiveDate || !priceSol || Boolean(allowlistPhase.problem) || Boolean(mintLimit.problem) || isBusy || (isMainnet && !mainnetConfirmed)
-                  }
-                  isLoading={isBusy}
-                  onClick={() => void handleLaunch()}
-                >
-                  {isBusy ? progressLabel || 'Launching…' : 'Launch Candy Machine'}
+                    {item.label}
+                    <span className="block text-xs text-ink-faint">{isSolanaMainnet(item.id) ? 'Real SOL' : 'Free test SOL'}</span>
+                  </button>
+                ))}
+              </div>
+            </FormSection>
+
+            <FormSection title="Price & opening">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>
+                  Price per mint (SOL)
+                  <input type="number" min={0} step="0.01" value={priceSol} disabled={isBusy} onChange={(e) => setPriceSol(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Go-live date
+                  <input type="datetime-local" value={goLiveDate} disabled={isBusy} onChange={(e) => setGoLiveDate(e.target.value)} className={inputClass} />
+                </label>
+              </div>
+            </FormSection>
+
+            <AllowlistPhaseFields phase={allowlistPhase} disabled={isBusy} />
+
+            <FormSection title="Limits & royalties">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>
+                  Max mints per wallet
+                  <input inputMode="numeric" placeholder="No limit" value={mintLimitText} disabled={isBusy} onChange={(e) => setMintLimitText(e.target.value)} className={inputClass} />
+                  <span className="text-xs font-normal text-ink-faint">Optional. Counts across every phase; enforced on-chain.</span>
+                  {mintLimit.problem && <span className="text-xs font-normal text-warning">{mintLimit.problem}</span>}
+                </label>
+                <label className={labelClass}>
+                  Royalty (basis points, 500 = 5%)
+                  <input type="number" min={0} max={10000} value={sellerFeeBps} disabled={isBusy} onChange={(e) => setSellerFeeBps(e.target.value)} className={inputClass} />
+                  <span className="text-xs font-normal text-ink-faint">Paid to you on secondary sales, where marketplaces honour it.</span>
+                </label>
+              </div>
+            </FormSection>
+          </div>
+
+          <aside aria-label="Launch summary" className="space-y-4 rounded-xl border border-border bg-surface p-5 lg:sticky lg:top-6">
+            <div className="flex items-center gap-3">
+              <img src={uploadUrl(publishedItems[0].image_path)} alt="" className="h-16 w-16 rounded-lg border border-border object-cover" />
+              <div className="min-w-0">
+                <p className="truncate font-medium text-ink">{collection.name}</p>
+                <p className="text-sm text-ink-faint">{publishedItems.length} items</p>
+              </div>
+            </div>
+            <dl className="space-y-2.5 border-t border-border pt-4 text-sm">
+              <SummaryRow label="Network">
+                {SOLANA_NETWORKS.find((item) => item.id === network)?.label}
+                {isMainnet && <Badge tone="warning" className="ml-2">Mainnet</Badge>}
+              </SummaryRow>
+              <SummaryRow label="Public price">{priceSol ? `${priceSol} SOL` : '—'}</SummaryRow>
+              <SummaryRow label="Opens">{goLiveDate ? new Date(goLiveDate).toLocaleString() : 'Not set'}</SummaryRow>
+              <SummaryRow label="Per-wallet limit">{mintLimitText.trim() ? mintLimitText.trim() : 'None'}</SummaryRow>
+              <SummaryRow label="Royalty">{sellerFeeBps ? `${Number(sellerFeeBps) / 100}%` : '—'}</SummaryRow>
+            </dl>
+
+            {!publicKey && <p className="text-sm text-warning">Connect a Solana wallet above to launch.</p>}
+
+            {isMainnet && (
+              <MainnetConfirmCheckbox checked={mainnetConfirmed} onChange={setMainnetConfirmed} disabled={isBusy} verb="launches on" networkLabel="Solana Mainnet" />
+            )}
+
+            {error && <InlineError>{error}</InlineError>}
+            {/* aria-live="polite" — the only real-time indication of which step
+                a multi-transaction, real-money launch is on; without it a
+                screen reader user gets no feedback while it runs. */}
+            {isBusy && (
+              <p aria-live="polite" className="text-sm text-ink-muted">
+                {progressLabel}
+              </p>
+            )}
+
+            {pendingDrop && !isBusy && !result && (
+              <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-sm">
+                <p className="text-ink">
+                  Your Candy Machine exists on-chain, but launching it didn't finish. Resume to load its remaining items and
+                  record it — it picks up exactly where it stopped, without creating (or paying for) anything twice.
+                </p>
+                <Button variant="primary" size="sm" onClick={() => void handleResume()}>
+                  Resume launch
                 </Button>
-              )}
-            </>
-          )}
-        </Card>
+              </div>
+            )}
+
+            {result ? (
+              <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
+                <p className="text-success">Candy Machine created.</p>
+                <p className="mt-1 break-all font-mono text-xs text-ink-muted">{result.candy_machine}</p>
+                {result.explorer_url && (
+                  <a href={result.explorer_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-accent-400 underline">
+                    View on explorer
+                  </a>
+                )}
+                <p className="mt-3 text-ink-muted">Share this link so anyone can mint from the drop — no account needed, just a Solana wallet:</p>
+                <Link to={`/mint/buy/${result.candy_machine}`} className="mt-1 block break-all font-mono text-xs text-accent-400 underline">
+                  {`${window.location.origin}/mint/buy/${result.candy_machine}`}
+                </Link>
+              </div>
+            ) : pendingDrop ? null : (
+              // Not offered while a created drop is unfinished: a second
+              // launch would create (and charge for) a second Candy Machine.
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full"
+                disabled={
+                  !publicKey || !goLiveDate || !priceSol || Boolean(allowlistPhase.problem) || Boolean(mintLimit.problem) || isBusy || (isMainnet && !mainnetConfirmed)
+                }
+                isLoading={isBusy}
+                onClick={() => void handleLaunch()}
+              >
+                {isBusy ? progressLabel || 'Launching…' : 'Launch Candy Machine'}
+              </Button>
+            )}
+
+            {!result && (
+              <p className="text-xs text-ink-faint">
+                Your wallet will ask you to approve a few transactions, one at a time. Approve each within about a minute — a
+                prompt left waiting too long expires and that step starts over.
+              </p>
+            )}
+          </aside>
+        </div>
       )}
+    </div>
+  )
+}
+
+const labelClass = 'flex flex-col gap-1.5 text-sm font-medium text-ink'
+const inputClass =
+  'h-10 w-full rounded-md border border-border bg-canvas px-3 text-sm font-normal text-ink focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25 disabled:opacity-50'
+
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-faint">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function SummaryRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-ink-faint">{label}</dt>
+      <dd className="flex items-center text-right text-ink">{children}</dd>
     </div>
   )
 }
