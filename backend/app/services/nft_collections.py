@@ -16,7 +16,7 @@ import uuid
 from typing import Any, Optional
 
 import requests
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
@@ -77,6 +77,24 @@ def create_collection(
 
 def get_user_collections(user_id: str) -> list[NFTCollection]:
     return NFTCollection.query.filter_by(user_id=user_id).order_by(NFTCollection.created_at.desc()).all()
+
+
+def item_counts(collection_ids: list[str]) -> dict[str, tuple[int, int]]:
+    """(generated, published) item counts per collection, in one grouped
+    query — the collection list shows them without loading every item."""
+    if not collection_ids:
+        return {}
+    rows = (
+        db.session.query(
+            NFTGeneratedItem.collection_id,
+            func.count(NFTGeneratedItem.id),
+            func.count(NFTGeneratedItem.ipfs_metadata_hash),
+        )
+        .filter(NFTGeneratedItem.collection_id.in_(collection_ids))
+        .group_by(NFTGeneratedItem.collection_id)
+        .all()
+    )
+    return {collection_id: (total, published) for collection_id, total, published in rows}
 
 
 def get_owned_collection(collection_id: str, user_id: str) -> NFTCollection:

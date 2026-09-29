@@ -74,8 +74,10 @@ test('a real NFT collection build: create, upload a trait, generate, and publish
   await page.getByLabel('Number of items to generate').fill('1')
   await page.getByRole('button', { name: 'Generate' }).click()
 
-  const publishButton = page.getByRole('button', { name: 'Publish' })
+  // Per-item Publish, plus the bulk "Publish all (1)" beside it.
+  const publishButton = page.getByRole('button', { name: 'Publish', exact: true })
   await expect(publishButton).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Publish all (1)' })).toBeVisible()
   await publishButton.click()
 
   // Real HTTP round trip through the real ipfs.py code path to the local
@@ -248,7 +250,7 @@ test('trait rules: a rule added in the editor is honored by generation, and the 
 
   await page.getByLabel('Number of items to generate').fill('8')
   await page.getByRole('button', { name: 'Generate' }).click()
-  await expect(page.getByRole('button', { name: 'Publish' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Publish', exact: true }).first()).toBeVisible({ timeout: 20_000 })
 
   const { items } = await (await request.get(`${api}/nft/collections/${collection.id}/items`, { headers })).json()
   const combos = items.map((item: { attributes: { value: string }[] }) => item.attributes.map((a) => a.value).join('+'))

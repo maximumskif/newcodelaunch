@@ -1,14 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { candyMachineApi, type CreatorDrop } from '../../lib/candyMachineApi'
+import { nftApi } from '../../lib/nftApi'
 import { DropsDashboard } from './DropsDashboard'
 
 vi.mock('../../lib/candyMachineApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/candyMachineApi')>()
   return { ...actual, candyMachineApi: { ...actual.candyMachineApi, dashboard: vi.fn() } }
+})
+
+vi.mock('../../lib/nftApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/nftApi')>()
+  return { ...actual, nftApi: { ...actual.nftApi, listCollections: vi.fn() } }
 })
 
 vi.mock('../auth/AuthContext', () => ({
@@ -42,14 +49,19 @@ const drop: CreatorDrop = {
 
 function renderDashboard() {
   return render(
-    <MemoryRouter>
-      <DropsDashboard />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter>
+        <DropsDashboard />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
 describe('DropsDashboard', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(nftApi.listCollections).mockResolvedValue({ collections: [] })
+  })
 
   it('shows each drop with live sales, and totals per network', async () => {
     vi.mocked(candyMachineApi.dashboard).mockResolvedValue({
@@ -113,11 +125,23 @@ describe('DropsDashboard', () => {
     expect(within(row).getByText('0.1 SOL allowlist · 50 wallets')).toBeInTheDocument()
   })
 
-  it('points a creator with no drops at the NFT Generator', async () => {
+  it('launches a drop from a published collection, and says what the others still need', async () => {
     vi.mocked(candyMachineApi.dashboard).mockResolvedValue({ drops: [], totals_by_network: {} })
+    const base = { description: '', collection_size: 10, image_size: 512, status: 'generated' as const, created_at: '2026-01-01T00:00:00Z' }
+    vi.mocked(nftApi.listCollections).mockResolvedValue({
+      collections: [
+        { ...base, id: 'ready', name: 'Ready Apes', item_count: 10, published_count: 8 },
+        { ...base, id: 'unpublished', name: 'Draft Apes', item_count: 4, published_count: 0 },
+        { ...base, id: 'empty', name: 'Empty Apes', item_count: 0, published_count: 0 },
+      ],
+    })
     renderDashboard()
+
     expect(await screen.findByText('No drops yet')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Go to NFT Generator' })).toHaveAttribute('href', '/nft')
+    expect(await screen.findByRole('link', { name: 'Launch 8 items' })).toHaveAttribute('href', '/mint?collection=ready')
+    expect(screen.getByText('0 of 4 items published to IPFS')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Publish items in the generator' })).toHaveAttribute('href', '/nft')
+    expect(screen.getByRole('link', { name: 'Generate items in the generator' })).toHaveAttribute('href', '/nft')
   })
 
   it('reports a load failure and can refresh', async () => {

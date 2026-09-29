@@ -28,6 +28,9 @@ export interface NFTCollection {
   rules?: NFTTraitRule[]
   // Distinct items possible given the trait rules (from the server).
   max_combinations?: number
+  // Only on the collection list: generated items, and how many are on IPFS.
+  item_count?: number
+  published_count?: number
 }
 
 // exclude: the two traits never appear together. require: whenever

@@ -56,7 +56,12 @@ export function GenerateStep({ token, collection, projectId }: Props) {
 
   const [items, setItems] = useState<NFTGeneratedItem[]>([])
   const [isLoadingItems, setIsLoadingItems] = useState(false)
-  const [count, setCount] = useState('10')
+  const [typedCount, setTypedCount] = useState<string | null>(null)
+  // 10 by default, but never more than the traits can make — asking for 10
+  // from 4 possible combinations was a guaranteed error. Once the user types
+  // a number, theirs stands.
+  const count = typedCount ?? String(maxCombinations > 0 ? Math.min(10, maxCombinations) : 10)
+  const setCount = (value: string) => setTypedCount(value)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationJob, setGenerationJob] = useState<NFTGenerationJob | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -186,6 +191,29 @@ export function GenerateStep({ token, collection, projectId }: Props) {
     }
   }
 
+  // Publishes every unpublished item, one at a time (each is two Pinata
+  // uploads), stopping at the first failure so one error isn't repeated N
+  // times. Already-published items are skipped by the backend anyway.
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const handlePublishAll = async () => {
+    const pending = items.filter((item) => !item.ipfs_image_hash)
+    setError(null)
+    setBulkProgress({ done: 0, total: pending.length })
+    try {
+      for (const [index, pendingItem] of pending.entries()) {
+        const { item } = await nftApi.publishItem(token, pendingItem.id)
+        setItems((prev) => prev.map((existing) => (existing.id === item.id ? item : existing)))
+        setBulkProgress({ done: index + 1, total: pending.length })
+      }
+      setPreviews({})
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Publish failed')
+    } finally {
+      setBulkProgress(null)
+    }
+  }
+  const unpublishedCount = items.filter((item) => !item.ipfs_image_hash).length
+
   const handleTogglePreview = async (itemId: string) => {
     if (expandedId === itemId) {
       setExpandedId(null)
@@ -262,6 +290,18 @@ export function GenerateStep({ token, collection, projectId }: Props) {
         {isLoadingItems && <p className="text-sm text-ink-faint">Loading items…</p>}
         {!isLoadingItems && items.length === 0 && <EmptyState title="Nothing generated yet." />}
         {items.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-ink-muted">
+              {items.length - unpublishedCount} of {items.length} published to IPFS
+            </p>
+            {unpublishedCount > 0 && (
+              <Button size="sm" onClick={() => void handlePublishAll()} isLoading={bulkProgress !== null} disabled={publishingId !== null}>
+                {bulkProgress ? `Publishing ${bulkProgress.done} / ${bulkProgress.total}…` : `Publish all (${unpublishedCount})`}
+              </Button>
+            )}
+          </div>
+        )}
+        {items.length > 0 && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {items.map((item) => {
               const isPublished = Boolean(item.ipfs_image_hash)
@@ -286,7 +326,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
                       ) : (
                         <button
                           onClick={() => handlePublish(item.id)}
-                          disabled={publishingId === item.id}
+                          disabled={publishingId === item.id || bulkProgress !== null}
                           className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-hover disabled:opacity-40"
                         >
                           {publishingId === item.id ? <IconSpinner className="h-3 w-3" /> : <IconLink className="h-3 w-3" />}

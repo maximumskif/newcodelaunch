@@ -36,7 +36,13 @@ def create_collection():
 @jwt_required()
 def list_collections():
     collections = nft_collections.get_user_collections(get_jwt_identity())
-    return jsonify(collections=[c.to_dict() for c in collections])
+    counts = nft_collections.item_counts([c.id for c in collections])
+    return jsonify(
+        collections=[
+            {**c.to_dict(), "item_count": counts.get(c.id, (0, 0))[0], "published_count": counts.get(c.id, (0, 0))[1]}
+            for c in collections
+        ]
+    )
 
 
 @nft_bp.get("/collections/<collection_id>")

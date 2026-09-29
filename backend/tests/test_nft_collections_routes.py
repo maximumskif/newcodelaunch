@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token
 
 from app.extensions import db as _db
 from app.models.candy_machine import CandyMachineDeployment
-from app.models.nft import NFTCollection, NFTGenerationJob, NFTGenerationJobStatus, NFTLayer, NFTTrait
+from app.models.nft import NFTCollection, NFTGeneratedItem, NFTGenerationJob, NFTGenerationJobStatus, NFTLayer, NFTTrait
 from app.models.project import Project, ProjectType
 from app.models.user import Chain, User
 
@@ -401,3 +401,23 @@ def test_cannot_delete_another_users_trait(app, client, tmp_path):
 
         assert response.status_code == 404
         assert _db.session.get(NFTTrait, trait.id) is not None
+
+
+def test_collection_list_counts_generated_and_published_items(app, client):
+    with app.app_context():
+        user = _make_user()
+        full = NFTCollection(user_id=user.id, name="Half published", description="", collection_size=3, image_size=64)
+        empty = NFTCollection(user_id=user.id, name="Nothing yet", description="", collection_size=3, image_size=64)
+        _db.session.add_all([full, empty])
+        _db.session.flush()
+        for index, published in enumerate([True, True, False]):
+            _db.session.add(NFTGeneratedItem(
+                collection_id=full.id, token_index=index, attributes=[], image_path=f"x{index}.png",
+                ipfs_image_hash="QmI" if published else None, ipfs_metadata_hash="QmM" if published else None,
+            ))
+        _db.session.commit()
+
+        body = client.get("/api/nft/collections", headers=_auth_header(user)).get_json()
+
+    counts = {c["name"]: (c["item_count"], c["published_count"]) for c in body["collections"]}
+    assert counts == {"Half published": (3, 2), "Nothing yet": (0, 0)}

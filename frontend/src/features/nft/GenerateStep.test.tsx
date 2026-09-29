@@ -279,3 +279,56 @@ describe('GenerateStep "Launch Mint Site" link', () => {
     expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}`)
   })
 })
+
+describe('GenerateStep publish all', () => {
+  const items = [1, 2, 3].map((n) => ({ ...draftItem, id: `item-${n}`, token_index: n }))
+  const published = (item: NFTGeneratedItem) => ({ ...item, ipfs_image_hash: `QmImg${item.id}`, ipfs_metadata_hash: `QmMeta${item.id}` })
+
+  beforeEach(() => {
+    vi.mocked(nftApi.publishItem).mockReset()
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items })
+  })
+
+  it('publishes every unpublished item in one click', async () => {
+    const user = userEvent.setup()
+    vi.mocked(nftApi.publishItem).mockImplementation(async (_token, id) => ({ item: published(items.find((i) => i.id === id)!) }))
+    render(<MemoryRouter><GenerateStep token="tok" collection={collection} /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: 'Publish all (3)' }))
+
+    expect(await screen.findByText('3 of 3 published to IPFS')).toBeInTheDocument()
+    expect(vi.mocked(nftApi.publishItem).mock.calls.map((call) => call[1])).toEqual(['item-1', 'item-2', 'item-3'])
+    expect(screen.queryByRole('button', { name: /Publish all/ })).not.toBeInTheDocument()
+  })
+
+  it('stops at the first failure and shows why', async () => {
+    const user = userEvent.setup()
+    vi.mocked(nftApi.publishItem)
+      .mockResolvedValueOnce({ item: published(items[0]) })
+      .mockRejectedValueOnce(new Error("Publishing to IPFS isn't set up on this server yet"))
+    render(<MemoryRouter><GenerateStep token="tok" collection={collection} /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: 'Publish all (3)' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("isn't set up")
+    expect(nftApi.publishItem).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('1 of 3 published to IPFS')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Publish all (2)' })).toBeInTheDocument()
+  })
+})
+
+describe('GenerateStep item count', () => {
+  it('defaults to what the traits can make when that is under 10', async () => {
+    vi.mocked(nftApi.listItems).mockResolvedValue({ items: [] })
+    const fourCombinations: NFTCollection = {
+      ...collection,
+      layers: ['Background', 'Body'].map((name, index) => ({
+        id: `layer-${index}`, name, order_index: index,
+        traits: [0, 1].map((t) => ({ id: `${name}-${t}`, name: `${name}${t}`, rarity_weight: 50, image_path: 'x.png' })),
+      })),
+    }
+    render(<MemoryRouter><GenerateStep token="tok" collection={fourCombinations} /></MemoryRouter>)
+
+    expect(await screen.findByLabelText('Number of items to generate')).toHaveValue(4)
+  })
+})

@@ -70,7 +70,8 @@ def _auth_headers() -> dict[str, str]:
         return {"pinata_api_key": api_key, "pinata_secret_api_key": secret_key}
 
     raise IPFSNotConfiguredError(
-        "Pinata is not configured — set PINATA_JWT or PINATA_API_KEY + PINATA_SECRET_KEY"
+        "Publishing to IPFS isn't set up on this server yet: it needs a Pinata API key "
+        "(PINATA_JWT, or PINATA_API_KEY + PINATA_SECRET_KEY, in backend/.env)"
     )
 
 
