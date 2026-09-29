@@ -58,4 +58,6 @@ def test_every_supported_network_has_a_configured_rpc_url():
 
     assert set(_RPC_CONFIG_KEYS) == set(EVM_NETWORKS) | set(SOLANA_NETWORKS)
     for config_key in _RPC_CONFIG_KEYS.values():
-        assert getattr(TestConfig, config_key).startswith("http")
+        value = getattr(TestConfig, config_key)
+        urls = [value] if isinstance(value, str) else value  # EVM: a fallback list
+        assert urls and all(url.startswith("http") for url in urls)

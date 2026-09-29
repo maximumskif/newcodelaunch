@@ -27,8 +27,11 @@ changes:
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+import logging
+import threading
+from typing import Any, Optional
 
+import requests
 from flask import current_app
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
@@ -125,16 +128,67 @@ class UnknownNetworkError(ValueError):
     pass
 
 
-def _rpc_url(network: str) -> str:
+def _rpc_urls(network: str) -> list[str]:
+    """The network's RPC endpoints in preference order: a configured
+    override first, then the public fallbacks (see config._rpc_urls_env)."""
     try:
         config_key = _RPC_CONFIG_KEYS[network]
     except KeyError as exc:
         raise UnknownNetworkError(f"Unknown network: {network}") from exc
-    return current_app.config[config_key]
+    value = current_app.config[config_key]
+    return [value] if isinstance(value, str) else list(value)
+
+
+def _rpc_url(network: str) -> str:
+    return _rpc_urls(network)[0]
+
+
+_log = logging.getLogger(__name__)
+# Index of the endpoint that last answered, per endpoint list — so a
+# request starts where the previous one succeeded instead of re-timing-out
+# on a dead first choice every time.
+_preferred: dict[tuple[str, ...], int] = {}
+_preferred_lock = threading.Lock()
+
+
+class FallbackHTTPProvider(HTTPProvider):
+    """An HTTPProvider over several endpoints for the same chain. A request
+    that can't get an HTTP answer from one — unreachable, TLS failure (what a
+    network filter intercepting the connection looks like), timeout, or an
+    HTTP error status such as 429/5xx — is sent to the next. JSON-RPC errors
+    (a revert, a bad parameter) are real answers and are not retried.
+
+    Public endpoints disappear, rate-limit, or get blocked by ISP "security"
+    filters; with a single URL any of that took the whole network down."""
+
+    def __init__(self, endpoint_uris: list[str], **kwargs: Any) -> None:
+        self._endpoints = tuple(endpoint_uris)
+        with _preferred_lock:
+            start = _preferred.get(self._endpoints, 0)
+        super().__init__(self._endpoints[start], exception_retry_configuration=None, **kwargs)
+
+    def _make_request(self, method: Any, request_data: bytes) -> bytes:
+        with _preferred_lock:
+            start = _preferred.get(self._endpoints, 0)
+        order = self._endpoints[start:] + self._endpoints[:start]
+        last_error: Optional[Exception] = None
+        for uri in order:
+            try:
+                response = self._request_session_manager.make_post_request(uri, request_data, **self.get_request_kwargs())
+            except requests.RequestException as exc:
+                _log.warning("RPC endpoint failed, trying the next one: %s (%s)", uri, type(exc).__name__)
+                last_error = exc
+                continue
+            with _preferred_lock:
+                _preferred[self._endpoints] = self._endpoints.index(uri)
+            self.endpoint_uri = uri
+            return response
+        assert last_error is not None
+        raise last_error
 
 
 def _get_web3(network: str) -> Web3:
-    w3 = Web3(HTTPProvider(_rpc_url(network), request_kwargs={"timeout": 10}))
+    w3 = Web3(FallbackHTTPProvider(_rpc_urls(network), request_kwargs={"timeout": 8}))
     if EVM_NETWORKS[network]["poa"]:
         w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     return w3

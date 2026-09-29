@@ -32,6 +32,22 @@ def _rpc_url_env(name: str, default: str) -> str:
     return os.environ.get(name, "").strip() or default
 
 
+def _rpc_urls_env(name: str, fallbacks: list[str]) -> list[str]:
+    """An EVM network's RPC endpoints, in the order they're tried: the env
+    var's URL(s) first (comma-separated for several), then the public
+    fallbacks. The backend moves to the next endpoint when one doesn't
+    answer (services/blockchain.FallbackHTTPProvider), so a private RPC
+    that's down, or a public one that's gone or blocked, costs a retry
+    instead of the network. Blank means "the public ones", like
+    _rpc_url_env."""
+    configured = [u.strip() for u in os.environ.get(name, "").split(",") if u.strip()]
+    # A local node (anvil in the e2e suite) is a different chain from the
+    # public network it stands in for, so public endpoints are no fallback.
+    if any(host in url for url in configured for host in ("localhost", "127.0.0.1")):
+        return configured
+    return list(dict.fromkeys(configured + fallbacks))
+
+
 class Config:
     ENV = os.environ.get("FLASK_ENV", "development")
     DEBUG = ENV == "development"
@@ -110,12 +126,30 @@ class Config:
     # Testnets are listed first and are what the frontend network picker
     # defaults to (see NetworkContext.tsx) — mainnet requires the user to
     # deliberately switch networks and confirm before a deploy goes through.
-    SEPOLIA_RPC_URL = _rpc_url_env("SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com")
-    ETHEREUM_RPC_URL = _rpc_url_env("ETHEREUM_RPC_URL", "https://eth.llamarpc.com")
-    POLYGON_AMOY_RPC_URL = _rpc_url_env("POLYGON_AMOY_RPC_URL", "https://rpc-amoy.polygon.technology")
-    POLYGON_RPC_URL = _rpc_url_env("POLYGON_RPC_URL", "https://polygon-rpc.com")
-    BSC_TESTNET_RPC_URL = _rpc_url_env("BSC_TESTNET_RPC_URL", "https://bsc-testnet-rpc.publicnode.com")
-    BSC_RPC_URL = _rpc_url_env("BSC_RPC_URL", "https://bsc-dataseed.binance.org")
+    # Public fallbacks, each checked with eth_chainId on 2026-09-29. Several
+    # per network from different operators: public endpoints come and go,
+    # rate-limit, and some are blocked by ISP filters (a Spectrum "Security
+    # Shield" blocked eth.llamarpc.com, polygon-rpc.com and
+    # bsc-dataseed.binance.org — the previous single defaults).
+    SEPOLIA_RPC_URL = _rpc_urls_env(
+        "SEPOLIA_RPC_URL", ["https://ethereum-sepolia-rpc.publicnode.com", "https://1rpc.io/sepolia", "https://sepolia.drpc.org"]
+    )
+    ETHEREUM_RPC_URL = _rpc_urls_env(
+        "ETHEREUM_RPC_URL", ["https://ethereum.publicnode.com", "https://eth.drpc.org", "https://1rpc.io/eth", "https://cloudflare-eth.com"]
+    )
+    POLYGON_AMOY_RPC_URL = _rpc_urls_env(
+        "POLYGON_AMOY_RPC_URL", ["https://polygon-amoy-bor-rpc.publicnode.com", "https://polygon-amoy.drpc.org", "https://rpc-amoy.polygon.technology"]
+    )
+    POLYGON_RPC_URL = _rpc_urls_env(
+        "POLYGON_RPC_URL", ["https://1rpc.io/matic", "https://polygon-bor-rpc.publicnode.com", "https://polygon.drpc.org", "https://polygon-rpc.com"]
+    )
+    BSC_TESTNET_RPC_URL = _rpc_urls_env(
+        "BSC_TESTNET_RPC_URL",
+        ["https://bsc-testnet.bnbchain.org", "https://data-seed-prebsc-1-s1.bnbchain.org:8545", "https://bsc-testnet.drpc.org", "https://bsc-testnet-rpc.publicnode.com"],
+    )
+    BSC_RPC_URL = _rpc_urls_env(
+        "BSC_RPC_URL", ["https://bsc-dataseed1.defibit.io", "https://1rpc.io/bnb", "https://bsc-rpc.publicnode.com", "https://bsc-dataseed.binance.org"]
+    )
     SOLANA_DEVNET_RPC_URL = _rpc_url_env("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com")
     SOLANA_RPC_URL = _rpc_url_env("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 

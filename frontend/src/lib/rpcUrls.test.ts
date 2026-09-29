@@ -31,11 +31,14 @@ describe('resolved RPC URLs', () => {
     return { rpcUrls, SOLANA_NETWORKS, wagmiConfig }
   }
 
-  function transportUrl(config: Awaited<ReturnType<typeof load>>['wagmiConfig'], chainId: number): string {
+  // The endpoints a chain's fallback transport tries, in order.
+  function transportUrls(config: Awaited<ReturnType<typeof load>>['wagmiConfig'], chainId: number): string[] {
     const chain = config.chains.find((item) => item.id === chainId)!
     const transport = config._internal.transports[chainId as keyof typeof config._internal.transports]
-    return (transport({ chain }).value as { url: string }).url
+    const { transports } = transport({ chain }).value as unknown as { transports: { value: { url: string } }[] }
+    return transports.map((item) => item.value.url)
   }
+  const transportUrl = (config: Awaited<ReturnType<typeof load>>['wagmiConfig'], chainId: number) => transportUrls(config, chainId)[0]
 
   it('falls back to public defaults when every override is empty', async () => {
     for (const name of [
@@ -50,16 +53,24 @@ describe('resolved RPC URLs', () => {
     ]) {
       vi.stubEnv(name, '')
     }
-    const { SOLANA_NETWORKS, wagmiConfig } = await load()
+    const { rpcUrls, SOLANA_NETWORKS, wagmiConfig } = await load()
 
     expect(SOLANA_NETWORKS.map((network) => network.rpcUrl)).toEqual([
       'https://api.devnet.solana.com',
       'https://api.mainnet-beta.solana.com',
     ])
-    // viem's own per-chain default, not an empty URL.
-    for (const chain of wagmiConfig.chains) {
-      expect(transportUrl(wagmiConfig, chain.id)).toBe(chain.rpcUrls.default.http[0])
-    }
+    // Every public endpoint, in order — never an empty URL.
+    expect(transportUrls(wagmiConfig, 1)).toEqual(rpcUrls.EVM_PUBLIC_RPC_URLS.ethereum)
+    expect(transportUrls(wagmiConfig, 56)).toEqual(rpcUrls.EVM_PUBLIC_RPC_URLS.bsc)
+  })
+
+  it('tries an override first, then the public endpoints; a local node alone', async () => {
+    vi.stubEnv('VITE_POLYGON_RPC_URL', 'https://polygon.example')
+    vi.stubEnv('VITE_SEPOLIA_RPC_URL', 'http://127.0.0.1:8545')
+    const { rpcUrls, wagmiConfig } = await load()
+
+    expect(transportUrls(wagmiConfig, 137)).toEqual(['https://polygon.example', ...rpcUrls.EVM_PUBLIC_RPC_URLS.polygon])
+    expect(transportUrls(wagmiConfig, 11155111)).toEqual(['http://127.0.0.1:8545'])
   })
 
   it('wires each override to its own network', async () => {

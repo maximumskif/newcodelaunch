@@ -19,9 +19,8 @@ export function rpcOverride(value: string | undefined): string | undefined {
 
 const env = import.meta.env as Record<string, string | undefined>
 
-// EVM: `undefined` means "no override" — wagmiConfig.ts hands these to
-// viem's http(), which then uses its own public default for that chain.
-// Keyed by the same network ids the backend and NetworkContext.tsx use.
+// EVM: `undefined` means "no override". Keyed by the same network ids the
+// backend and NetworkContext.tsx use.
 export const EVM_RPC_URL_OVERRIDES = {
   sepolia: rpcOverride(env.VITE_SEPOLIA_RPC_URL),
   ethereum: rpcOverride(env.VITE_ETHEREUM_RPC_URL),
@@ -29,6 +28,35 @@ export const EVM_RPC_URL_OVERRIDES = {
   polygon: rpcOverride(env.VITE_POLYGON_RPC_URL),
   bsc_testnet: rpcOverride(env.VITE_BSC_TESTNET_RPC_URL),
   bsc: rpcOverride(env.VITE_BSC_RPC_URL),
+}
+
+// Public endpoints tried after the override, in order — the same list as the
+// backend's (backend/app/config.py), each checked with eth_chainId on
+// 2026-09-29. Several per network because public RPCs disappear,
+// rate-limit, or are blocked by ISP filters (a Spectrum "Security Shield"
+// blocked viem's own defaults for Ethereum, Polygon and BSC); wagmi falls
+// through to the next one when a request fails.
+export const EVM_PUBLIC_RPC_URLS: Record<keyof typeof EVM_RPC_URL_OVERRIDES, string[]> = {
+  sepolia: ['https://ethereum-sepolia-rpc.publicnode.com', 'https://1rpc.io/sepolia', 'https://sepolia.drpc.org'],
+  ethereum: ['https://ethereum.publicnode.com', 'https://eth.drpc.org', 'https://1rpc.io/eth', 'https://cloudflare-eth.com'],
+  polygon_amoy: ['https://polygon-amoy-bor-rpc.publicnode.com', 'https://polygon-amoy.drpc.org', 'https://rpc-amoy.polygon.technology'],
+  polygon: ['https://1rpc.io/matic', 'https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org', 'https://polygon-rpc.com'],
+  bsc_testnet: [
+    'https://bsc-testnet.bnbchain.org',
+    'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
+    'https://bsc-testnet.drpc.org',
+    'https://bsc-testnet-rpc.publicnode.com',
+  ],
+  bsc: ['https://bsc-dataseed1.defibit.io', 'https://1rpc.io/bnb', 'https://bsc-rpc.publicnode.com', 'https://bsc-dataseed.binance.org'],
+}
+
+// The endpoints wagmi tries for a network, in order. A local node (anvil in
+// the e2e suite) is a different chain from the public network it stands in
+// for, so it gets no public fallbacks.
+export function evmRpcUrls(network: keyof typeof EVM_RPC_URL_OVERRIDES): string[] {
+  const override = EVM_RPC_URL_OVERRIDES[network]
+  if (override && /localhost|127\.0\.0\.1/.test(override)) return [override]
+  return [...new Set([...(override ? [override] : []), ...EVM_PUBLIC_RPC_URLS[network]])]
 }
 
 // Solana has no library-side default to fall through to (unlike viem), so
