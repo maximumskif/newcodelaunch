@@ -261,7 +261,7 @@ function TopTokens() {
 
 export function MarketIntelligencePage() {
   return (
-    <div className="space-y-8 p-8">
+    <div className="space-y-8 p-4 sm:p-8">
       <PageHero
         eyebrow="Live Data"
         title="Market Intelligence"

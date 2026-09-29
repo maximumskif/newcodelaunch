@@ -101,7 +101,7 @@ export function MintBuyPage() {
 
   if (loadError) {
     return (
-      <div className="space-y-5 p-8">
+      <div className="space-y-5 p-4 sm:p-8">
         <PageHero eyebrow="Mint" title="Drop not found" description="" />
         <EmptyState title="This link doesn't match a launched drop" description={loadError} />
       </div>
@@ -109,7 +109,7 @@ export function MintBuyPage() {
   }
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Mint"
         title={status?.collection_name ?? 'Loading…'}

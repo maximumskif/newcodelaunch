@@ -49,7 +49,7 @@ export function TokenPage() {
 
   if (error) {
     return (
-      <div className="space-y-5 p-8">
+      <div className="space-y-5 p-4 sm:p-8">
         <PageHero eyebrow="Token" title="Token not found" description="" />
         <EmptyState title="This link doesn't match a token launched here" description={error} />
       </div>
@@ -81,7 +81,7 @@ export function TokenPage() {
   }
 
   return (
-    <div className="space-y-5 p-8" data-testid="token-page">
+    <div className="space-y-5 p-4 sm:p-8" data-testid="token-page">
       <PageHero
         eyebrow={`Token · ${networkLabel}`}
         title={`${page.name} (${page.symbol})`}

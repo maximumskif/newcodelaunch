@@ -28,7 +28,7 @@ export function TokenLaunchpadPage() {
   }
 
   return (
-    <div className="space-y-6 p-8">
+    <div className="space-y-6 p-4 sm:p-8">
       <PageHero
         eyebrow="Token Launchpad"
         title="Launch a token"

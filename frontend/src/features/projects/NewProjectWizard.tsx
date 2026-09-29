@@ -58,14 +58,14 @@ export function NewProjectWizard() {
 
   if (!accessToken) {
     return (
-      <div className="space-y-5 p-8">
+      <div className="space-y-5 p-4 sm:p-8">
         <PageHero eyebrow="Projects" title="New Project" description="Connect and sign in with a wallet first." />
       </div>
     )
   }
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Projects"
         title="New Project"

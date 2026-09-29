@@ -21,6 +21,9 @@ interface Props {
   token: string
   collection: NFTCollection
   projectId?: string | null
+  // Called after items are generated or published (the page refreshes the
+  // collection list's counts).
+  onItemsChanged?: () => void
 }
 
 // Mirrors nft_generation.py's MAX_ITEMS_PER_GENERATE_CALL — generation now
@@ -47,7 +50,7 @@ function downloadJson(filename: string, data: unknown) {
   URL.revokeObjectURL(url)
 }
 
-export function GenerateStep({ token, collection, projectId }: Props) {
+export function GenerateStep({ token, collection, projectId, onItemsChanged }: Props) {
   const layers = collection.layers ?? []
   const ready = layers.length > 0 && layers.every((layer) => layer.traits.length > 0)
   // The server's count honors trait rules; the local product is only the
@@ -138,6 +141,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
         setError(job.error ?? 'Generation failed')
       } else {
         await refreshItems()
+        onItemsChanged?.()
       }
       return
     }
@@ -174,6 +178,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
     try {
       const { item } = await nftApi.publishItem(token, itemId)
       setItems((prev) => prev.map((existing) => (existing.id === item.id ? item : existing)))
+      onItemsChanged?.()
       // The cached preview (if any) showed the unpublished placeholder —
       // drop it so a later "Preview metadata" click refetches the real,
       // now-published content instead of the stale image:null version.
@@ -209,6 +214,7 @@ export function GenerateStep({ token, collection, projectId }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed')
     } finally {
+      if (pending.length > 0) onItemsChanged?.()
       setBulkProgress(null)
     }
   }
@@ -384,11 +390,14 @@ export function GenerateStep({ token, collection, projectId }: Props) {
         )}
 
         {items.some((item) => item.ipfs_image_hash) && (
-          <div className="mt-5 flex items-center justify-between rounded-md border border-border bg-canvas p-3">
-            <p className="text-sm text-ink-muted">Ready to sell this collection?</p>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-500/40 bg-accent-500/10 p-4">
+            <div>
+              <p className="font-medium text-ink">Ready to sell this collection?</p>
+              <p className="text-sm text-ink-muted">Launch a Solana mint site with Candy Machine, or deploy it as an ERC-721 on EVM.</p>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Link to={`/mint?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
-                <Button variant="secondary" size="sm">
+                <Button variant="primary" size="sm">
                   Launch Mint Site (Solana)
                 </Button>
               </Link>

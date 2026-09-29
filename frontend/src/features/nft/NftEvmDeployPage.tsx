@@ -157,7 +157,7 @@ export function NftEvmDeployPage() {
 
   if (!collectionId) {
     return (
-      <div className="space-y-5 p-8">
+      <div className="space-y-5 p-4 sm:p-8">
         <PageHero
           eyebrow="NFT Generator"
           title="Deploy on Ethereum, Polygon or BSC"
@@ -181,7 +181,7 @@ export function NftEvmDeployPage() {
   const progressLabel = isPinning ? 'Pinning the metadata folder to IPFS…' : isBusy ? `${step[0].toUpperCase()}${step.slice(1)}…` : ''
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="NFT Generator"
         title="Deploy on Ethereum, Polygon or BSC"

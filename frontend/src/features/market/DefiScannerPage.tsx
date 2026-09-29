@@ -31,7 +31,7 @@ export function DefiScannerPage() {
   })
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Live Data"
         title="DeFi Protocol Scanner"

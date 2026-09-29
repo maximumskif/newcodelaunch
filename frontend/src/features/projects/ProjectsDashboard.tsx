@@ -96,7 +96,7 @@ export function ProjectsDashboard() {
   }
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Overview"
         title="Dashboard"

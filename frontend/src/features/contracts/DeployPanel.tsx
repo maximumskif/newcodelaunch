@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAccount } from 'wagmi'
 
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { IconCheck, IconSpinner } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
@@ -10,9 +12,10 @@ import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { DeploymentHistory } from './DeploymentHistory'
+import { templateMeta } from './templateMeta'
 import { TemplateForm } from './TemplateForm'
 import { VerifySource } from './VerifySource'
-import { useDeployTemplate } from './useDeployTemplate'
+import { useDeployTemplate, type DeployStep } from './useDeployTemplate'
 
 const BUSY_STEPS = new Set(['compiling', 'deploying', 'confirming', 'recording'])
 const DRAFT_SAVE_DEBOUNCE_MS = 800
@@ -154,9 +157,12 @@ export function DeployPanel({ title, description, templateType, projectId, prese
   }
 
   const isBusy = BUSY_STEPS.has(step)
+  const networkLabel = EVM_NETWORKS.find((item) => item.id === network)?.label ?? network
+  const meta = selectedTemplate ? templateMeta(selectedTemplate.id) : null
+  const identity = meta?.identityParams.map((name) => collectParameters()[name]).find(Boolean)
 
   return (
-    <div>
+    <div className="space-y-8">
       {project && (
         <ProjectContextBar
           project={project}
@@ -165,40 +171,59 @@ export function DeployPanel({ title, description, templateType, projectId, prese
         />
       )}
 
-      <div className={`flex flex-wrap items-start justify-between gap-3 ${project ? 'mt-4' : ''}`}>
+      <section aria-labelledby="deploy-heading" className="space-y-4">
         <div>
-          <h2 className="text-lg font-medium text-ink">{title}</h2>
-          <p className="mt-1 text-ink-muted">{description}</p>
+          <h2 id="deploy-heading" className="font-display text-2xl font-semibold tracking-tight text-ink">{title}</h2>
+          <p className="mt-1 max-w-2xl text-ink-muted">{description}</p>
         </div>
-        <p className="text-sm text-ink-faint">
-          Network:{' '}
-          <span className={isMainnet ? 'font-medium text-warning' : 'text-ink-muted'}>
-            {EVM_NETWORKS.find((item) => item.id === network)?.label ?? network}
-            {isMainnet ? ' (mainnet)' : ''}
-          </span>{' '}
-          — change it in the top bar
-        </p>
-      </div>
-
-      <div className="mt-4 grid gap-6 lg:grid-cols-[280px_1fr]">
-        <div className="space-y-2">
+        <div className={`grid gap-3 sm:grid-cols-2 ${templates.length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
           {templates.map((template) => (
-            <button
-              key={template.id}
-              onClick={() => setSelectedId(template.id)}
-              className={`w-full rounded-lg border px-3.5 py-2.5 text-left text-sm transition-colors duration-150 ${
-                template.id === selectedId ? 'border-accent-500 bg-accent-500/10' : 'border-border hover:bg-surface-hover'
-              }`}
-            >
-              <p className="font-medium text-ink">{template.name}</p>
-              <p className="text-ink-faint">{template.description}</p>
-            </button>
+            <TemplateCard key={template.id} template={template} selected={template.id === selectedId} onSelect={() => setSelectedId(template.id)} />
           ))}
         </div>
+      </section>
 
-        {selectedTemplate && (
-          <div className="space-y-4">
+      {selectedTemplate && meta && (
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section aria-labelledby="configure-heading" className="rounded-xl border border-border bg-surface p-6">
+            <div className="mb-6 flex items-center gap-3 border-b border-border pb-5">
+              <span className="grid h-10 w-10 place-items-center rounded-lg bg-[image:var(--gradient-accent)] text-white">
+                <meta.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 id="configure-heading" className="font-display text-lg font-semibold text-ink">Configure {selectedTemplate.name}</h3>
+                <p className="text-sm text-ink-faint">Fields marked * are required. Values are compiled into the contract.</p>
+              </div>
+            </div>
             <TemplateForm params={selectedTemplate.deployment_params} values={values} onChange={handleChange} />
+          </section>
+
+          <aside aria-label="Deployment summary" className="space-y-4 rounded-xl border border-border bg-surface p-5 lg:sticky lg:top-6">
+            <h3 className="font-display text-base font-semibold text-ink">Summary</h3>
+            <dl className="space-y-2.5 text-sm">
+              <SummaryRow label="Network">
+                <span className={isMainnet ? 'font-medium text-warning' : 'text-ink'}>{networkLabel}</span>
+                {isMainnet ? <Badge tone="warning" className="ml-2">Mainnet</Badge> : <Badge className="ml-2">Testnet</Badge>}
+              </SummaryRow>
+              <SummaryRow label="Template">{selectedTemplate.name}</SummaryRow>
+              {identity && <SummaryRow label="Name">{identity}</SummaryRow>}
+              <SummaryRow label="Estimated cost">
+                {estimate ? (
+                  <span className="font-mono">
+                    {estimate.deployment_cost_native.toFixed(6)} {estimate.native_token}
+                  </span>
+                ) : (
+                  <span className="text-ink-faint">Not estimated</span>
+                )}
+              </SummaryRow>
+            </dl>
+            {estimate && (
+              <p className="text-xs text-ink-faint">
+                ~{estimate.gas_estimate.toLocaleString()} gas at {estimate.gas_price_gwei.toFixed(2)} gwei ≈{' '}
+                {estimate.deployment_cost_native.toFixed(6)} {estimate.native_token}
+              </p>
+            )}
+            <p className="text-xs text-ink-faint">Change the network in the top bar.</p>
 
             {isMainnet && (
               <MainnetConfirmCheckbox
@@ -210,61 +235,142 @@ export function DeployPanel({ title, description, templateType, projectId, prese
               />
             )}
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="secondary" onClick={handleEstimate} disabled={!address} isLoading={isEstimating}>
-                Estimate cost
-              </Button>
+            <div className="grid gap-2">
               <Button
                 variant="primary"
                 onClick={handleDeploy}
                 disabled={!address || isBusy || (isMainnet && !mainnetConfirmed)}
+                className="w-full justify-center"
               >
                 {isBusy ? `${step}…` : 'Deploy'}
               </Button>
-              {!address && <span className="text-sm text-ink-faint">Connect an EVM wallet to estimate or deploy</span>}
+              <Button variant="secondary" onClick={handleEstimate} disabled={!address} isLoading={isEstimating} className="w-full justify-center">
+                Estimate cost
+              </Button>
+              {!address && <p className="text-center text-xs text-ink-faint">Connect an EVM wallet to estimate or deploy</p>}
             </div>
 
+            {step !== 'idle' && <DeployProgress step={step} />}
             {estimateError && <InlineError>{estimateError}</InlineError>}
-            {estimate && (
-              <p className="text-sm text-ink-muted">
-                ~{estimate.gas_estimate.toLocaleString()} gas at {estimate.gas_price_gwei.toFixed(2)} gwei ≈{' '}
-                {estimate.deployment_cost_native.toFixed(6)} {estimate.native_token}
-              </p>
-            )}
-
             {error && <InlineError>{error}</InlineError>}
             {txHash && step !== 'error' && (
-              <p className="text-sm text-ink-muted">
-                tx: <span className="font-mono">{txHash}</span> — {step}
+              <p className="break-all text-xs text-ink-faint">
+                tx <span className="font-mono">{txHash}</span>
               </p>
             )}
             {deployment && (
-              <div className="space-y-1 text-sm" data-testid="deploy-result">
+              <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-3 text-sm" data-testid="deploy-result">
                 <p className="text-success">
-                  Deployed at <span className="font-mono">{deployment.contract_address}</span>.{' '}
+                  Deployed at <span className="break-all font-mono">{deployment.contract_address}</span>.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
                   {deployment.explorer_url && (
-                    <a href={deployment.explorer_url} target="_blank" rel="noreferrer" className="underline">
+                    <a href={deployment.explorer_url} target="_blank" rel="noreferrer" className="text-accent-300 hover:underline">
                       View on explorer
                     </a>
                   )}
-                </p>
-                <VerifySource key={deployment.id} deployment={deployment} />
+                  <VerifySource key={deployment.id} deployment={deployment} compact />
+                </div>
               </div>
             )}
-          </div>
+          </aside>
+        </div>
+      )}
+
+      <section aria-labelledby="history-heading" className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h3 id="history-heading" className="font-display text-lg font-semibold text-ink">Deployment history</h3>
+          {accessToken && history.length > 0 && <span className="text-xs text-ink-faint">{history.length} deployed</span>}
+        </div>
+        {accessToken ? (
+          <DeploymentHistory deployments={history} />
+        ) : (
+          <p className="rounded-xl border border-dashed border-border p-6 text-center text-ink-faint">Sign in with your wallet to see your deployment history.</p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function TemplateCard({ template, selected, onSelect }: { template: ContractTemplateSummary; selected: boolean; onSelect: () => void }) {
+  const { icon: Icon, tags } = templateMeta(template.id)
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`group relative flex h-full flex-col gap-3 rounded-xl border p-4 text-left transition-all duration-150 ${
+        selected
+          ? 'border-accent-500 bg-accent-500/10 shadow-[var(--shadow-glow-accent)]'
+          : 'border-border bg-surface hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-hover'
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <span
+          className={`grid h-9 w-9 place-items-center rounded-lg ${selected ? 'bg-[image:var(--gradient-accent)] text-white' : 'bg-surface-raised text-accent-300'}`}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        {selected && (
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-accent-500 text-white">
+            <IconCheck className="h-3 w-3" />
+          </span>
         )}
       </div>
-
-      <div className="mt-10">
-        <h3 className="text-base font-medium text-ink">Deployment History</h3>
-        <div className="mt-3">
-          {accessToken ? (
-            <DeploymentHistory deployments={history} />
-          ) : (
-            <p className="text-ink-faint">Sign in with your wallet to see your deployment history.</p>
-          )}
-        </div>
+      <div>
+        <p className="font-medium text-ink">{template.name}</p>
+        <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{template.description}</p>
       </div>
+      {tags.length > 0 && (
+        <div className="mt-auto flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <span key={tag} className="rounded-md bg-surface-raised px-2 py-0.5 text-[11px] text-ink-muted">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </button>
+  )
+}
+
+function SummaryRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-ink-faint">{label}</dt>
+      <dd className="flex items-center text-right text-ink">{children}</dd>
     </div>
+  )
+}
+
+const PROGRESS: { step: DeployStep; label: string }[] = [
+  { step: 'compiling', label: 'Compile' },
+  { step: 'deploying', label: 'Sign & broadcast' },
+  { step: 'confirming', label: 'Confirm on-chain' },
+  { step: 'recording', label: 'Verify & record' },
+]
+
+// Where a deploy is: done steps checked, the current one spinning. On an
+// error it stops where it failed (the error message says why).
+function DeployProgress({ step }: { step: DeployStep }) {
+  const current = step === 'done' ? PROGRESS.length : PROGRESS.findIndex((item) => item.step === step)
+  return (
+    <ol className="space-y-2 rounded-lg border border-border bg-canvas p-3 text-sm" aria-label="Deployment progress">
+      {PROGRESS.map((item, index) => {
+        const state = step === 'error' ? 'idle' : index < current ? 'done' : index === current ? 'active' : 'idle'
+        return (
+          <li key={item.step} className="flex items-center gap-2.5">
+            <span
+              className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] ${
+                state === 'done' ? 'bg-success/15 text-success' : state === 'active' ? 'bg-accent-500/20 text-accent-300' : 'bg-surface-raised text-ink-faint'
+              }`}
+            >
+              {state === 'done' ? <IconCheck className="h-3 w-3" /> : state === 'active' ? <IconSpinner className="h-3 w-3" /> : index + 1}
+            </span>
+            <span className={state === 'idle' ? 'text-ink-faint' : 'text-ink'}>{item.label}</span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }

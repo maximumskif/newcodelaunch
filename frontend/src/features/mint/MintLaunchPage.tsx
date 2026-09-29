@@ -297,7 +297,7 @@ export function MintLaunchPage() {
 
   if (!collectionId) {
     return (
-      <div className="space-y-5 p-8">
+      <div className="space-y-5 p-4 sm:p-8">
         <PageHero
           eyebrow="Mint"
           title="Candy Machine"
@@ -309,7 +309,7 @@ export function MintLaunchPage() {
   }
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Mint"
         title="Candy Machine"

@@ -186,3 +186,20 @@ export function IconChevronDown({ className = base }: IconProps) {
     </svg>
   )
 }
+
+export function IconLock({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IconBolt({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" strokeLinejoin="round" />
+    </svg>
+  )
+}

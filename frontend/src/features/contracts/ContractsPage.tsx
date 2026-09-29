@@ -10,18 +10,18 @@ export function ContractsPage() {
   const templateId = searchParams.get('template')
 
   return (
-    <div className="space-y-8 p-8">
+    <div className="space-y-8 p-4 sm:p-8">
       <PageHero
         eyebrow="Smart Contracts Hub"
-        title="Compile, estimate, deploy"
-        description="Live chain status, plus compile, estimate, and deploy from real Solidity templates."
-      />
-
-      <NetworkStatusGrid />
+        title="Deploy a smart contract in minutes"
+        description="Pick a template, fill in a few fields, and deploy from your own wallet. We compile the contract; you sign it — nothing is ever signed on our servers."
+      >
+        <NetworkStatusGrid />
+      </PageHero>
 
       <DeployPanel
-        title="Deploy a Contract"
-        description="Your connected wallet signs the deployment transaction — the backend only compiles the contract and records the result afterward."
+        title="Choose a template"
+        description="Every template is real, readable Solidity — source-verifiable on the explorer after deploy."
         projectId={projectId}
         preselectedTemplateId={templateId}
       />

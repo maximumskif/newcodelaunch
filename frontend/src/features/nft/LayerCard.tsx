@@ -16,6 +16,8 @@ interface Props {
   onRename: (name: string) => void
   onDelete: () => void
   onMoveUp?: () => void
+  // 1-based stacking position (1 = bottom layer), shown as a badge.
+  position?: number
   onMoveDown?: () => void
 }
 
@@ -34,7 +36,8 @@ function nameFromFilename(filename: string): string {
   return spaced || 'Untitled'
 }
 
-export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMoveUp, onMoveDown }: Props) {
+export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMoveUp, onMoveDown, position }: Props) {
+  const totalWeight = layer.traits.reduce((sum, trait) => sum + trait.rarity_weight, 0) || 1
   const [isFormOpen, setIsFormOpen] = useState(layer.traits.length === 0)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [name, setName] = useState('')
@@ -197,8 +200,8 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className="rounded-xl border border-border bg-surface-raised/40 p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
         {isEditingName ? (
           <input
             autoFocus
@@ -216,13 +219,16 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
             className="min-w-0 flex-1 rounded-md border border-border bg-surface px-1.5 py-0.5 text-sm font-medium text-ink"
           />
         ) : (
-          <button
-            onClick={() => setIsEditingName(true)}
-            title="Click to rename"
-            className="truncate text-sm font-medium text-ink hover:underline"
-          >
-            {layer.name}
-          </button>
+          <div className="flex min-w-0 items-center gap-2">
+            {position !== undefined && (
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-accent-500/15 font-mono text-xs text-accent-300" aria-hidden>
+                {position}
+              </span>
+            )}
+            <button onClick={() => setIsEditingName(true)} title="Click to rename" className="truncate text-left font-medium text-ink hover:underline">
+              {layer.name}
+            </button>
+          </div>
         )}
         <div className="flex shrink-0 items-center gap-1">
           {(onMoveUp || onMoveDown) && (
@@ -259,7 +265,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
                 setIsFormOpen(true)
               }}
             >
-              <IconPlus className="h-3 w-3" /> Add
+              <IconPlus className="h-3 w-3" /> Add trait
             </Button>
           )}
           <button
@@ -274,16 +280,24 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       </div>
 
       {layer.traits.length > 0 && (
-        <div className="mb-2 grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5">
+        <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2.5">
           {layer.traits.map((trait) => (
             <button
               key={trait.id}
               onClick={() => startEditTrait(trait)}
               title={`${trait.name} · weight ${trait.rarity_weight} · click to edit`}
-              className="overflow-hidden rounded-lg border border-border bg-canvas text-left transition-all duration-150 hover:-translate-y-0.5 hover:ring-1 hover:ring-accent-400/40"
+              className={`overflow-hidden rounded-lg border bg-canvas text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-400/50 ${
+                editingTrait?.id === trait.id ? 'border-accent-500 ring-2 ring-accent-500/30' : 'border-border'
+              }`}
             >
-              <img src={uploadUrl(trait.image_path)} alt={trait.name} className="aspect-square w-full object-contain" />
-              <p className="truncate px-1 py-0.5 text-[9px] text-ink-faint">{trait.name}</p>
+              {/* Checkerboard behind the art, so transparent layer images read as transparent. */}
+              <div className="bg-[conic-gradient(#ffffff0d_25%,transparent_0_50%,#ffffff0d_0_75%,transparent_0)] bg-[length:12px_12px]">
+                <img src={uploadUrl(trait.image_path)} alt={trait.name} className="aspect-square w-full object-contain" />
+              </div>
+              <div className="flex items-baseline justify-between gap-1 px-2 py-1.5">
+                <p className="truncate text-xs text-ink">{trait.name}</p>
+                <p className="shrink-0 font-mono text-[10px] text-ink-faint">{Math.round((trait.rarity_weight / totalWeight) * 100)}%</p>
+              </div>
             </button>
           ))}
         </div>
@@ -355,7 +369,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       />
 
       {isFormOpen && (
-        <div className="rounded-md border border-border bg-canvas p-2">
+        <div className="rounded-lg border border-dashed border-border-strong bg-canvas p-3">
           <div className="flex flex-wrap items-center gap-2">
             {previewUrl ? (
               <div
@@ -369,13 +383,13 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
                 role="button"
                 tabIndex={0}
                 aria-label="Remove selected image"
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-canvas"
+                className="flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-canvas"
                 title="Click to remove"
               >
                 <img src={previewUrl} alt="" className="h-full w-full object-contain" />
               </div>
             ) : (
-              <div className="h-9 w-9 shrink-0">
+              <div className="h-14 w-14 shrink-0">
                 <Dropzone iconOnly multiple onFiles={handleFiles} />
               </div>
             )}
@@ -385,7 +399,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
               onChange={(e) => setName(e.target.value)}
               placeholder="Trait name"
               aria-label="Trait name"
-              className="min-w-[7rem] flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm placeholder:text-ink-faint"
+              className="h-9 min-w-[7rem] flex-1 rounded-md border border-border bg-surface px-3 text-sm placeholder:text-ink-faint focus:border-accent-500 focus:outline-none"
             />
 
             <div className="flex items-center gap-1.5" title="Rarity weight">

@@ -152,10 +152,20 @@ export function CollectionSidebar({
           >
             <button
               onClick={() => onSelect(collection.id)}
-              className="flex flex-1 items-center gap-2 px-2.5 py-2 text-left"
+              aria-label={collection.name}
+              className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
             >
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[collection.status] ?? STATUS_DOT.draft}`} />
-              <span className="flex-1 truncate">{collection.name}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{collection.name}</span>
+                {collection.item_count !== undefined && (
+                  <span className="block text-[11px] text-ink-faint">
+                    {collection.item_count === 0
+                      ? 'No items yet'
+                      : `${collection.item_count} items · ${collection.published_count ?? 0} published`}
+                  </span>
+                )}
+              </span>
             </button>
             <button
               onClick={() => onDeleteRequest(collection)}

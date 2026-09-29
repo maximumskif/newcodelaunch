@@ -32,6 +32,7 @@ export interface NetworkSummary {
   chain_id?: number
   native_token: string
   explorer_url: string
+  is_testnet?: boolean
 }
 
 export interface NetworkStatus {

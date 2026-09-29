@@ -125,11 +125,11 @@ export function NFTGeneratorPage() {
   }
 
   return (
-    <div className="space-y-5 p-8">
+    <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="NFT Generator"
         title="NFT Collection Generator"
-        description="Build a layered trait system with AI-assisted rarity suggestions, composite real artwork with rarity-weighted generation, and publish straight to IPFS — no fake URLs, no round-robin trait picking."
+        description="Stack trait layers, set how rare each trait is, and generate a unique collection — then publish it to IPFS and sell it on Solana or EVM."
       />
 
       {project && (
@@ -155,7 +155,7 @@ export function NFTGeneratorPage() {
           </button>
           {showBatchAnalyzer && <BatchTraitAnalyzer token={accessToken} />}
 
-          <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+          <div className="grid items-start gap-5 lg:grid-cols-[260px_1fr]">
             <CollectionSidebar
               token={accessToken}
               collections={collections}
@@ -190,7 +190,7 @@ export function NFTGeneratorPage() {
                   <Card>
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
-                        <h2 className="text-xl font-semibold text-ink">{collection.name}</h2>
+                        <h2 className="font-display text-2xl font-semibold tracking-tight text-ink">{collection.name}</h2>
                         {collection.description && <p className="mt-1 text-sm text-ink-muted">{collection.description}</p>}
                       </div>
                       <Stepper
@@ -201,6 +201,7 @@ export function NFTGeneratorPage() {
                         ]}
                       />
                     </div>
+                    <CollectionStats collection={collection} listed={collections.find((c) => c.id === collection.id)} />
                   </Card>
 
                   <LayerEditor
@@ -215,7 +216,12 @@ export function NFTGeneratorPage() {
                     onChange={() => void refreshCollection(accessToken, collection.id)}
                   />
 
-                  <GenerateStep token={accessToken} collection={collection} projectId={projectId} />
+                  <GenerateStep
+                    token={accessToken}
+                    collection={collection}
+                    projectId={projectId}
+                    onItemsChanged={() => void refreshCollections(accessToken)}
+                  />
                 </>
               )}
             </div>
@@ -236,5 +242,29 @@ export function NFTGeneratorPage() {
         onCancel={() => setPendingDeleteCollection(null)}
       />
     </div>
+  )
+}
+
+// Where the collection stands, at a glance. Generated/published come from
+// the collection list (its grouped counts), so they refresh with it.
+function CollectionStats({ collection, listed }: { collection: NFTCollection; listed?: NFTCollection }) {
+  const layers = collection.layers ?? []
+  const traits = layers.reduce((sum, layer) => sum + layer.traits.length, 0)
+  const stats: [string, string][] = [
+    ['Layers', String(layers.length)],
+    ['Traits', String(traits)],
+    ['Possible combinations', (collection.max_combinations ?? 0).toLocaleString()],
+    ['Generated', (listed?.item_count ?? 0).toLocaleString()],
+    ['Published', (listed?.published_count ?? 0).toLocaleString()],
+  ]
+  return (
+    <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border pt-5 sm:grid-cols-5">
+      {stats.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-xs text-ink-faint">{label}</dt>
+          <dd className="mt-0.5 font-mono text-lg text-ink">{value}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }

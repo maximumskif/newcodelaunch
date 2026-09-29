@@ -121,6 +121,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
             onDelete={() => setPendingDeleteLayer(layer)}
             onMoveUp={index > 0 ? () => handleMoveLayer(index, -1) : undefined}
             onMoveDown={index < layers.length - 1 ? () => handleMoveLayer(index, 1) : undefined}
+            position={index + 1}
           />
         ))}
       </div>
