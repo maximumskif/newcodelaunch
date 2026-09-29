@@ -10,7 +10,6 @@ as a general-purpose RPC proxy.
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any, Optional
 
 from sqlalchemy import func
@@ -18,7 +17,7 @@ from web3 import Web3
 
 from ..models.deployment import ContractDeployment
 from ..models.solana_token import SolanaTokenLaunch
-from . import blockchain, contract_templates, liquidity, solidity
+from . import blockchain, contracts, liquidity
 from .candy_machine import CandyMachineServiceError, _sidecar_network, _sidecar_request
 
 ZERO = "0x0000000000000000000000000000000000000000"
@@ -70,32 +69,12 @@ _PAIR_ABI = [
 ]
 
 
-@lru_cache(maxsize=256)
-def _runtime_code(contract_code: str, contract_name: str) -> Optional[str]:
-    compiled = solidity.compile_contract(contract_code, contract_name)
-    return compiled.deployed_bytecode.lower() if compiled.success and compiled.deployed_bytecode else None
-
-
 def code_matches_template(w3: Web3, deployment: ContractDeployment) -> Optional[bool]:
-    """Whether the contract at a recorded deployment's address runs exactly
-    the code its template compiles to with its recorded parameters.
-    Recording a deployment proves the transaction created that address, not
-    what code it deployed — so a public page can't take a recorded contract's
-    own answers (lockedAmount(), owner(), ...) on trust without this. Exact
-    comparison works because the templates declare no immutables (a test
-    keeps it that way) and compilation is deterministic (what explorer
-    verification relies on too). None: the recorded parameters no longer
-    render, so it can't be checked."""
-    try:
-        rendered = contract_templates.render_contract(deployment.template_id, deployment.parameters or {})
-    except (contract_templates.UnknownTemplateError, contract_templates.TemplateParameterError):
-        return None
-    expected = _runtime_code(rendered["contract_code"], rendered["contract_name"])
-    if expected is None:
-        return None
-    actual = w3.eth.get_code(Web3.to_checksum_address(deployment.contract_address)).hex()
-    actual = actual if actual.startswith("0x") else "0x" + actual
-    return actual.lower() == expected
+    """Checked again here, not only when the deployment was recorded: rows
+    recorded before that check existed were never verified."""
+    return contracts.code_matches_template(
+        w3, deployment.template_id, deployment.parameters or {}, deployment.contract_address
+    )
 
 
 def _optional(call) -> Any:

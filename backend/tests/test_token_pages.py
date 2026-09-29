@@ -112,3 +112,54 @@ def test_chain_failures_dont_leak_details(client, records, monkeypatch):
 )
 def test_only_tokens_launched_here_have_pages(client, records, path):
     assert client.get(path).status_code == 404
+
+
+PAIR = "0x3333333333333333333333333333333333333333"
+REAL_LOCK = "0x4444444444444444444444444444444444444444"
+LEGACY_FAKE = "0x5555555555555555555555555555555555555555"
+
+
+class _Contract:
+    """eth.contract(...) stand-in: functions.name(*args).call() answers from a dict."""
+
+    def __init__(self, answers):
+        self.functions = self
+        self._answers = answers
+
+    def __getattr__(self, name):
+        answer = self._answers[name]
+        return lambda *args: type("Call", (), {"call": staticmethod(lambda: answer(*args) if callable(answer) else answer)})
+
+
+def test_pool_counts_only_locks_whose_code_is_the_template(app, monkeypatch):
+    # Record-time checks keep a fake lock out now, but rows recorded before
+    # them never went through that — the page must still ignore one whose
+    # code isn't the template's, even while it holds real LP.
+    with app.app_context():
+        for address, tx in ((REAL_LOCK, "0xreal"), (LEGACY_FAKE, "0xfake")):
+            _db.session.add(
+                ContractDeployment(
+                    user_id="u", template_id="token_timelock", template_name="Token Time-Lock", contract_type="lock",
+                    network="sepolia", contract_address=address, transaction_hash=tx, deployer_address="0x1",
+                    parameters={"TOKEN": PAIR, "BENEFICIARY": "0x1", "RELEASE_TIME": "4102444800"},
+                )
+            )
+        _db.session.commit()
+        dex = {"name": "Uniswap V2", "factory": "0xF", "wrapped_native": "0xW"}
+        monkeypatch.setattr(token_pages.liquidity, "dexes", lambda: {"sepolia": dex})
+        monkeypatch.setattr(token_pages, "code_matches_template", lambda w3, row: row.contract_address == REAL_LOCK)
+        balances = {REAL_LOCK: 300, LEGACY_FAKE: 500, token_pages.DEAD: 0, token_pages.ZERO: token_pages.MINIMUM_LIQUIDITY}
+        contracts_by_address = {
+            "0xF": _Contract({"getPair": PAIR}),
+            PAIR: _Contract(
+                {"getReserves": (10, 20, 0), "token0": TOKEN, "totalSupply": 1000,
+                 "balanceOf": lambda who: balances[who]}
+            ),
+        }
+        w3 = type("W3", (), {})()
+        w3.eth = type("Eth", (), {"contract": staticmethod(lambda address, abi: contracts_by_address[address])})()
+
+        pool = token_pages._evm_pool(w3, "sepolia", TOKEN, chain_time=1_800_000_000)
+
+        assert pool["locks"] == [{"address": REAL_LOCK, "amount": "300", "release_time": 4102444800}]
+        assert pool["burned_lp"] == "0"

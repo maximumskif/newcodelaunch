@@ -988,3 +988,11 @@ A deliberate second look at everything added for liquidity, locks and public pag
 2. **Uniswap's minimum liquidity was reported as "burned".** Every V2 pool mints 1,000 LP units to address 0 at creation; the page counted them, showing a green ✓ "0.00% burned" on every pool. They're now excluded.
 
 **Verified**: pytest 2 new (no immutables in any template; compile returns runtime code contained in the creation code); Vitest 1 new (the mismatch warning); `dex-liquidity.spec.ts` with the fake-lock attack.
+
+## Contract code verified when a deployment is recorded, 2026-09-29
+
+The 2026-09-25 review made the public token page compare a recorded contract's runtime code with its template. Recording itself still accepted anything a receipt vouched for, and plenty else reads recorded rows back on trust — owner tools, the Liquidity panel's lock list, explorer verification (which submits the recorded parameters). `record_deployment` now also requires the contract's runtime code to equal the template compiled with the recorded parameters, and refuses the deployment otherwise (422, nothing stored). The check moved from `token_pages` to `contracts.code_matches_template` and is shared. The page still runs it too, because rows recorded before today were never checked.
+
+**Verified**: pytest 360 passed / 2 skipped. New tests: exact comparison with a real compile (match, different parameters, empty code, parameters that don't render), record refusing wrong code, right code recorded with wrong parameters, and unrenderable parameters. Also a page-level test where a legacy fake-lock row holding real LP is ignored. `dex-liquidity.spec.ts`'s fake-lock attack now gets a 422 from the real API. Full Playwright suite: 26 passed, plus that spec re-run on its own after its expectation was updated (the full run had started before the edit).
+
+Real-devnet smoke: the faucet answered once this session and then rate-limited again. A throwaway devnet keypair is ready at `~/devnet-smoke.json` for manual funding.

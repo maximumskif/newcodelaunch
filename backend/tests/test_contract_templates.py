@@ -189,7 +189,7 @@ def test_token_timelock_parameters_are_checked(overrides, message):
 
 
 def test_templates_declare_no_immutables():
-    # token_pages.code_matches_template compares a live contract's runtime
+    # contracts.code_matches_template compares a live contract's runtime
     # code with the compiled template byte for byte — immutables are filled
     # in at deploy time and would make every comparison fail.
     for template in contract_templates.get_all_templates():

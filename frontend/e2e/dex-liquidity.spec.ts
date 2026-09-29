@@ -192,10 +192,10 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock - locked)
 
   // An attempt to fake a lock: the owner deploys a contract that answers 42
-  // to every call (so lockedAmount() would look like a lock), records it
-  // through the real API as a Token Time-Lock on this pool's LP, and even
-  // sends it real LP. Recording only proves the transaction created that
-  // address — the public page must check the code and ignore it.
+  // to every call (so lockedAmount() would look like a lock) and tries to
+  // record it through the real API as a Token Time-Lock on this pool's LP.
+  // The receipt alone would pass — it did create that address — so the
+  // backend compares the contract's code with the template and refuses it.
   const fakeHash = await ownerWallet.sendTransaction({ data: '0x600a600c600039600a6000f3602a60005260206000f3' })
   const fakeReceipt = await publicClient.waitForTransactionReceipt({ hash: fakeHash })
   const fake = fakeReceipt.contractAddress!
@@ -211,9 +211,8 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
       parameters: { TOKEN: pair, BENEFICIARY: OWNER, RELEASE_TIME: '4102444800' },
     },
   })
-  expect(recorded.status()).toBe(201)
-  const fakeLp = await ownerWallet.writeContract({ address: pair, abi: PAIR_ABI, functionName: 'transfer', args: [fake, 1_000_000n] })
-  await publicClient.waitForTransactionReceipt({ hash: fakeLp })
+  expect(recorded.status()).toBe(422)
+  expect((await recorded.json()).error).toMatch(/code doesn't match the Token Time-Lock template/)
 
   // A buyer — a fresh browser, no wallet, not signed in — sees the real lock
   // (and only it) on the token's public page, read from the chain.
@@ -236,7 +235,6 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
 
   // A buyer can check what it is: its source verifies on the explorer
   // (the local verifying Etherscan stub recompiles and compares bytecode).
-  // (Pinned to the real lock's row: the fake above is a Token Time-Lock row too.)
   const realLockRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: `Manage ${lock}` }) })
   await realLockRow.getByRole('button', { name: 'Verify source' }).click()
   await expect(realLockRow.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
@@ -250,7 +248,7 @@ test('liquidity for an advanced ERC-20 on a real Uniswap V2: pool created from t
   const lockPanel = page.getByTestId('token-lock')
   await lockPanel.getByRole('button', { name: 'Release to beneficiary' }).click()
   await expect(lockPanel.getByText('Released to the beneficiary.')).toBeVisible({ timeout: 20_000 })
-  // Everything back with the owner, less the LP it sent to the fake lock.
-  await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock - 1_000_000n)
+  // Everything back with the owner.
+  await expect.poll(() => publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [OWNER] })).toBe(lpBeforeLock)
   await expect.poll(() => publicClient.readContract({ address: lock, abi: LOCK_ABI, functionName: 'lockedAmount' })).toBe(0n)
 })

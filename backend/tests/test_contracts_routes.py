@@ -71,7 +71,7 @@ def test_list_deployments_requires_authentication(client):
     assert response.status_code == 401
 
 
-def test_create_deployment_with_a_foreign_project_id_does_not_hijack_it(app, client, monkeypatch):
+def test_create_deployment_with_a_foreign_project_id_does_not_hijack_it(app, client, monkeypatch, code_matches):
     # Regression coverage for projects.link_if_owned: a caller supplying
     # someone else's project_id must not attach their deployment to it —
     # the on-chain deployment already happened by the time this endpoint is

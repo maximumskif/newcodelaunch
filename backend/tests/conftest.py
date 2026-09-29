@@ -26,3 +26,13 @@ def app():
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def code_matches(monkeypatch):
+    """For tests of record_deployment that aren't about its code check: the
+    deployed contract's code matches its template (test_contracts_service
+    covers the check itself)."""
+    from app.services import contracts
+
+    monkeypatch.setattr(contracts, "code_matches_template", lambda *args: True)

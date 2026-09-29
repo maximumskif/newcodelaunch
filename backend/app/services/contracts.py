@@ -10,7 +10,10 @@ transaction from the browser.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Optional
+
+from web3 import Web3
 
 from ..extensions import db
 from ..models.deployment import ContractDeployment
@@ -42,6 +45,33 @@ def compile_template(template_id: str, parameters: dict[str, Any]) -> dict[str, 
         "contract_name": rendered["contract_name"],
         "template": rendered["template"],
     }
+
+
+@lru_cache(maxsize=256)
+def _runtime_code(contract_code: str, contract_name: str) -> Optional[str]:
+    compiled = solidity.compile_contract(contract_code, contract_name)
+    return compiled.deployed_bytecode.lower() if compiled.success and compiled.deployed_bytecode else None
+
+
+def code_matches_template(w3: Web3, template_id: str, parameters: dict[str, Any], address: str) -> Optional[bool]:
+    """Whether the contract at `address` runs exactly the code the template
+    compiles to with these parameters. A receipt proves a transaction created
+    that address, not what code it deployed — anything that later takes a
+    recorded contract's own answers (lockedAmount(), owner(), ...) on trust
+    depends on this. Exact comparison works because the templates declare no
+    immutables (a test keeps it that way) and compilation is deterministic
+    (what explorer verification relies on too). None: the parameters don't
+    render, so there's nothing to compare against."""
+    try:
+        rendered = contract_templates.render_contract(template_id, parameters)
+    except (contract_templates.UnknownTemplateError, contract_templates.TemplateParameterError):
+        return None
+    expected = _runtime_code(rendered["contract_code"], rendered["contract_name"])
+    if expected is None:
+        return None
+    actual = w3.eth.get_code(Web3.to_checksum_address(address)).hex()
+    actual = actual if actual.startswith("0x") else "0x" + actual
+    return actual.lower() == expected
 
 
 def estimate_deployment(
@@ -124,6 +154,12 @@ def record_deployment(
     sender = tx_status.get("from")
     if not sender or sender.lower() != deployer_address.lower():
         raise ValueError("The confirmed transaction was not sent by the given deployer_address")
+    # The parameters are what explorer verification, owner tools and public
+    # pages all read back later, so they must be the ones actually deployed.
+    if not code_matches_template(blockchain.get_web3(network), template_id, parameters, contract_address):
+        raise ValueError(
+            f"The deployed contract's code doesn't match the {template.name} template with the given parameters"
+        )
 
     deployment = ContractDeployment(
         user_id=user_id,
