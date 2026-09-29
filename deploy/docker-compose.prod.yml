@@ -1,0 +1,80 @@
+# Production overrides for ../docker-compose.yml, for one server behind
+# Caddy (automatic HTTPS). Run from the repo root:
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml \
+#     --env-file deploy/.env up -d --build
+#
+# What changes from the dev compose file:
+# - Only Caddy is reachable from outside (80/443). Postgres, Redis, the
+#   sidecar, the backend and the frontend lose their host ports (`!reset`
+#   needs Docker Compose 2.24+).
+# - One origin: Caddy sends /api/* to the backend and everything else to the
+#   frontend, so the bundle calls a relative /api and CORS is just the domain.
+# - The Postgres password comes from deploy/.env instead of the dev default.
+# - Uploaded trait images and generated NFTs live on a volume, so a rebuild
+#   doesn't wipe them.
+# - gunicorn gets threads and a longer timeout: compiles, RPC reads and
+#   uploads can outlast the 30s default.
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: launchpad-caddy
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+
+  redis:
+    ports: !reset []
+
+  candy-machine:
+    ports: !reset []
+    environment:
+      # Only the backend calls the sidecar (server to server), never a browser.
+      CORS_ORIGINS: https://${DOMAIN}
+
+  backend:
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql://launchpad:${POSTGRES_PASSWORD}@postgres:5432/launchpad
+      CORS_ORIGINS: https://${DOMAIN}
+      UPLOAD_FOLDER: /data/uploads
+      # Exactly one proxy (Caddy) in front: take the client IP from its
+      # X-Forwarded-For, so rate limits are per visitor, not one shared bucket.
+      TRUSTED_PROXY_COUNT: '1'
+    volumes:
+      - uploads:/data/uploads
+    command: sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 --timeout 120 --access-logfile - wsgi:app"
+
+  scheduler:
+    environment:
+      DATABASE_URL: postgresql://launchpad:${POSTGRES_PASSWORD}@postgres:5432/launchpad
+      UPLOAD_FOLDER: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+
+  frontend:
+    ports: !reset []
+    build:
+      args:
+        VITE_API_BASE_URL: /api
+
+volumes:
+  uploads:
+  caddy_data:
+  caddy_config:

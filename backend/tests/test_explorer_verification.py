@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from flask_jwt_extended import create_access_token
@@ -120,7 +121,7 @@ def test_a_failed_verification_records_why_and_can_be_retried(app, configured, e
     _, answers = explorer
     answers.extend(
         [
-            {"status": "0", "message": "NOTOK", "result": "Unable to locate ContractCode at 0x5FbD..."},
+            {"status": "0", "message": "NOTOK", "result": "Fail - Unable to verify. Compiled contract deployment bytecode does NOT match"},
             {"status": "1", "message": "OK", "result": "guid-2"},
         ]
     )
@@ -128,7 +129,7 @@ def test_a_failed_verification_records_why_and_can_be_retried(app, configured, e
 
     explorer_verification.submit_verification(deployment)
     assert deployment.verification_status == "failed"
-    assert "Unable to locate ContractCode" in deployment.verification_message
+    assert "does NOT match" in deployment.verification_message
 
     explorer_verification.submit_verification(deployment)
     assert deployment.verification_status == "pending"
@@ -195,3 +196,51 @@ def test_routes_are_owner_only_and_map_errors(app, client, configured, explorer)
     _, other = _deployment(network="bsc")
     response = client.post(f"/api/contracts/deployments/{other.id}/verify", headers=owner_headers)
     assert response.status_code == 503
+
+
+NOT_INDEXED = {"status": "0", "message": "NOTOK", "result": "Unable to locate ContractCode at 0x5FbD..."}
+
+
+def test_a_contract_the_explorer_has_not_indexed_yet_stays_pending_and_is_resubmitted(app, configured, explorer):
+    # Seen on real Sepolia: for a minute or two after a deploy, Etherscan's
+    # verifier can't find the contract its own index already shows. That used
+    # to fail the verification outright, right after a successful deploy.
+    calls, answers = explorer
+    answers.extend([NOT_INDEXED, NOT_INDEXED, {"status": "1", "message": "OK", "result": "guid-9"}, {"status": "1", "message": "OK", "result": "Pass - Verified"}])
+    _, deployment = _deployment()
+
+    explorer_verification.submit_verification(deployment)
+    assert (deployment.verification_status, deployment.verification_message) == ("pending", explorer_verification.WAITING_FOR_INDEX)
+    explorer_verification.refresh_verification(deployment)  # resubmits: still not indexed
+    assert deployment.verification_status == "pending" and deployment.verification_guid is None
+    explorer_verification.refresh_verification(deployment)  # resubmits: accepted
+    assert deployment.verification_guid == "guid-9"
+    explorer_verification.refresh_verification(deployment)  # polls the guid
+    assert deployment.verification_status == "verified"
+    assert [c["data"]["action"] if c["method"] == "POST" else c["params"]["action"] for c in calls] == [
+        "verifysourcecode", "verifysourcecode", "verifysourcecode", "checkverifystatus",
+    ]
+
+
+def test_not_indexed_long_after_the_deploy_is_a_failure(app, configured, explorer):
+    _, answers = explorer
+    answers.append(NOT_INDEXED)
+    _, deployment = _deployment()
+    deployment.created_at = datetime.now(timezone.utc) - timedelta(minutes=11)
+    _db.session.commit()
+
+    explorer_verification.submit_verification(deployment)
+    assert deployment.verification_status == "failed"
+
+
+def test_a_retry_that_is_not_indexed_forgets_the_old_guid(app, configured, explorer):
+    _, answers = explorer
+    answers.extend([NOT_INDEXED, {"status": "1", "message": "OK", "result": "guid-new"}])
+    _, deployment = _deployment()
+    deployment.verification_status, deployment.verification_guid = "failed", "guid-old"
+    _db.session.commit()
+
+    explorer_verification.submit_verification(deployment)
+    assert deployment.verification_guid is None
+    explorer_verification.refresh_verification(deployment)
+    assert deployment.verification_guid == "guid-new"

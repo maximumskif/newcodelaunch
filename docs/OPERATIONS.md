@@ -15,6 +15,20 @@ How to run NewCodeLaunch in production, independent of which host it ends up on.
 
 The sidecar should only be reachable from the backend. Its `/internal` routes require the shared secret, but nothing else needs to reach it — don't publish its port publicly (`docker-compose.yml` maps `4000:4000` for local convenience only).
 
+## Hosting (recommended setup)
+
+One small Linux server running the Compose stack, with Caddy in front for HTTPS: `deploy/docker-compose.prod.yml` on top of `docker-compose.yml`. Why a single server rather than a platform per service:
+
+- Six long-running services, several needing each other on a private network. The sidecar must not be public, and the scheduler must run continuously. On a per-service platform (Render, Railway, Fly) that's five or six billed services plus a managed database.
+- The backend keeps state on disk (uploaded trait images, generated NFTs in `UPLOAD_FOLDER`), and NFT generation runs in background threads inside the backend. Both want a normal persistent disk and a process that isn't scaled to zero.
+- The load is modest: a 2 vCPU / 4 GB machine (Hetzner CX22 at about €4/month, or a DigitalOcean/Vultr 4 GB droplet at about $24/month) has plenty of headroom.
+
+**Setup:** on a fresh Ubuntu 24.04 server, as root, run `deploy/bootstrap.sh` (usage is in its header). It installs Docker and a firewall that allows only SSH, HTTP and HTTPS, clones the repo to `/opt/newcodelaunch`, generates every secret into `deploy/.env`, `backend/.env` and `services/candy-machine/.env`, and starts the stack. Without a domain it uses `<ip>.sslip.io`, which gets a real certificate. To use your own domain later, point its DNS at the server, change `DOMAIN` in `deploy/.env`, and rerun `deploy/update.sh`. **To redeploy after a push:** `bash /opt/newcodelaunch/deploy/update.sh` pulls, rebuilds, and waits for `/api/health/ready` over HTTPS.
+
+**What the production override changes:** only Caddy publishes ports. `/api/*` and the frontend share one origin. The Postgres password comes from `deploy/.env`. Uploads live on a named volume. gunicorn runs 2 workers × 4 threads with a 120 s timeout. `TRUSTED_PROXY_COUNT=1`, so rate limits apply per visitor instead of to Caddy's address. CI's `docker` job builds every image and boots this exact configuration on each push, then checks readiness, the frontend, a real compile, closed ports and a scheduler round through Caddy.
+
+**Backups:** `docker compose ... exec postgres pg_dump -U launchpad launchpad > backup.sql`, plus the `uploads` volume. Automate both before real users arrive (see [Caveats](#operational-caveats)).
+
 ## Environment variables
 
 "Required" means the service misbehaves in production without it, not only that it refuses to start — the ones that stop startup are marked. A **blank value is treated as unset** for every URL-type variable (RPCs, Pinata URLs, frontend overrides), so a blank line copied from an `.env.example` means "use the default".

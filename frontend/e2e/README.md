@@ -354,3 +354,25 @@ it at https://faucet.solana.com. Each check prints PASS/FAIL, every
 transaction prints an explorer link, and the run stops at the first failure.
 Against a local validator instead: `SOLANA_RPC_URL=http://127.0.0.1:8899
 bash e2e/devnet/run-stack.sh` and `--rpc http://127.0.0.1:8899 --airdrop`.
+
+## Real-network smoke test (Sepolia)
+
+`e2e/sepolia/smoke.mjs` does the same for the EVM side against real
+Sepolia, the real Uniswap V2 deployment there, and the real Etherscan API:
+advanced ERC-20 deploy and record (the backend's receipt and code checks),
+a non-template contract refused at record time, source verification, a
+pool created with `addLiquidityETH` and recorded from its Mint event,
+registering the pair and enabling trading, a buy from a fresh second wallet
+that must pay exactly the buy tax, an LP time-lock (deployed, funded,
+verified, refused before its time, released after), the public token page
+read with no account, and an ERC-721 deploy, mint and verification.
+
+```bash
+cd frontend
+ETHERSCAN_API_KEY=... bash e2e/devnet/run-stack.sh &   # same stack; the key enables real verification
+node e2e/sepolia/smoke.mjs --key-file ~/sepolia-wallet.json   # `cast wallet new --json` output
+```
+
+A run spends about 0.02 Sepolia ETH at ~1 gwei (0.01 of it into the pool)
+and takes about 10 minutes, most of it the lock's 4-minute release time
+(`--lock-seconds`) and Etherscan indexing new contracts.

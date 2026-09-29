@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Starts the real backend, Candy Machine sidecar, and local Pinata stub
-# pointed at a real Solana cluster (devnet by default), for smoke.mjs.
+# pointed at a real Solana cluster (devnet by default) and Sepolia, for
+# smoke.mjs and ../sepolia/smoke.mjs. ETHERSCAN_API_KEY, if set, is passed
+# through so the Sepolia run verifies source on the real Etherscan.
 # Separate ports from the Playwright suite (backend :5100, sidecar :4100)
 # so both can exist on one machine. Ctrl-C stops everything.
 #
@@ -33,7 +35,8 @@ bash "$SCRIPT_DIR/../setup/run-pinata-stub.sh" > "$WORK/pinata.log" 2>&1 &
   export CANDY_MACHINE_SHARED_SECRET="$SECRET" CANDY_MACHINE_SERVICE_URL="http://localhost:4100"
   export PINATA_JWT="devnet-smoke-fake-jwt" PINATA_BASE_URL="http://127.0.0.1:5555"
   export PINATA_GATEWAY_URL="http://127.0.0.1:5555/ipfs/"
-  export OPENAI_API_KEY="" ETHERSCAN_API_KEY=""
+  export SEPOLIA_RPC_URL="${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
+  export OPENAI_API_KEY="" ETHERSCAN_API_KEY="${ETHERSCAN_API_KEY:-}"
   .venv/bin/flask db upgrade
   exec .venv/bin/flask run --port 5100
 ) > "$WORK/backend.log" 2>&1 &

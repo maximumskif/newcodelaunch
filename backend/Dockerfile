@@ -27,6 +27,12 @@ COPY wsgi.py ./
 # from this same image.
 COPY scripts ./scripts
 
+# The Solidity compiler, downloaded now rather than by the first compile
+# request (solcx installs lazily into ~/.solcx, which a fresh container
+# doesn't have — so every new container's first deploy would wait on, and
+# depend on, a GitHub download). Version read from the one place it's set.
+RUN python -c "import re, solcx; v = re.search(r'SOLC_VERSION = \"(.+?)\"', open('app/services/solidity.py').read()).group(1); solcx.install_solc(v); print('solc', v)"
+
 EXPOSE 5000
 
 # Matches the one prod entry point this app has always had (see wsgi.py,

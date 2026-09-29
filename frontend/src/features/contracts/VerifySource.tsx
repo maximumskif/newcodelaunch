@@ -65,7 +65,7 @@ export function VerifySource({ deployment, compact = false }: { deployment: Cont
   if (status === 'pending') {
     return (
       <span aria-live="polite" className="text-ink-muted">
-        Verifying source…
+        {message?.startsWith('Waiting for the explorer') ? `${message}…` : 'Verifying source…'}
       </span>
     )
   }

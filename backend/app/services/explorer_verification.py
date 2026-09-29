@@ -16,6 +16,7 @@ returns a guid, which is polled until it settles.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -41,6 +42,12 @@ class VerificationNotPossibleError(ValueError):
 PENDING = "pending"
 VERIFIED = "verified"
 FAILED = "failed"
+# Etherscan's verifier lags its own index: for a minute or two after a
+# deploy, submitting answers "Unable to locate ContractCode" (seen on real
+# Sepolia). That's "not yet", not a failure — the submission stays pending
+# (with no guid) and is resent on each poll, until the contract is this old.
+NOT_INDEXED_GRACE = timedelta(minutes=10)
+WAITING_FOR_INDEX = "Waiting for the explorer to index the contract"
 
 
 def _api_key() -> str:
@@ -88,7 +95,10 @@ def submit_verification(deployment: ContractDeployment) -> ContractDeployment:
     rather than resubmitted."""
     if deployment.verification_status in (VERIFIED, PENDING):
         return deployment
+    return _submit(deployment)
 
+
+def _submit(deployment: ContractDeployment) -> ContractDeployment:
     network = blockchain.EVM_NETWORKS.get(deployment.network)
     if network is None:
         raise VerificationNotPossibleError(f"Source verification isn't available for network: {deployment.network}")
@@ -125,13 +135,26 @@ def submit_verification(deployment: ContractDeployment) -> ContractDeployment:
         return _save(deployment, PENDING, "Submitted — waiting for the explorer to verify", guid=result)
     if "already verified" in result.lower():
         return _save(deployment, VERIFIED, result)
+    if "unable to locate contractcode" in result.lower() and _recently_deployed(deployment):
+        deployment.verification_guid = None
+        return _save(deployment, PENDING, WAITING_FOR_INDEX)
     return _save(deployment, FAILED, result)
 
 
+def _recently_deployed(deployment: ContractDeployment) -> bool:
+    created = deployment.created_at
+    if created.tzinfo is None:  # SQLite hands back naive datetimes
+        created = created.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - created < NOT_INDEXED_GRACE
+
+
 def refresh_verification(deployment: ContractDeployment) -> ContractDeployment:
-    """Polls a pending verification once and records where it landed."""
-    if deployment.verification_status != PENDING or not deployment.verification_guid:
+    """Polls a pending verification once and records where it landed —
+    or, while the explorer hasn't indexed the contract yet, submits again."""
+    if deployment.verification_status != PENDING:
         return deployment
+    if not deployment.verification_guid:
+        return _submit(deployment)
 
     network = blockchain.EVM_NETWORKS[deployment.network]
     body = _call(

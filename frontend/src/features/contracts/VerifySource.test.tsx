@@ -61,6 +61,12 @@ describe('VerifySource', () => {
     expect(contractsApi.refreshVerification).toHaveBeenCalledTimes(2)
   })
 
+  it('says when it is waiting for the explorer to index the contract', () => {
+    render(<VerifySource deployment={{ ...base, verification_status: 'pending', verification_message: 'Waiting for the explorer to index the contract' }} />)
+    expect(screen.getByText('Waiting for the explorer to index the contract…')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
   it("shows the explorer's reason on failure and offers a retry", async () => {
     render(<VerifySource deployment={{ ...base, verification_status: 'failed', verification_message: 'Unable to locate ContractCode' }} />)
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to locate ContractCode')
