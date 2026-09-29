@@ -8,6 +8,8 @@ interface DialogProps {
   title: string
   description?: string
   children?: ReactNode
+  // 'lg' for content that needs room (e.g. contract source).
+  size?: 'sm' | 'lg'
   // False while a confirmed action is in flight — Escape/backdrop-click
   // used to close the dialog unconditionally even then, which looked like
   // it cancelled the action (the confirm button's own `disabled`/isLoading
@@ -23,7 +25,7 @@ interface DialogProps {
 // still leave the dialog) — fine for the one use case this exists for today
 // (a confirm dialog with two buttons); revisit if a future dialog has more
 // content worth trapping focus inside.
-export function Dialog({ open, onClose, title, description, children, dismissible = true }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, dismissible = true, size = 'sm' }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
@@ -77,7 +79,7 @@ export function Dialog({ open, onClose, title, description, children, dismissibl
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative w-full max-w-sm rounded-lg border border-border bg-surface p-5 shadow-lg outline-none"
+        className={`relative w-full rounded-lg border border-border bg-surface p-5 shadow-lg outline-none ${size === 'lg' ? 'max-w-4xl' : 'max-w-sm'}`}
       >
         <h2 id={titleId} className="text-sm font-medium text-ink">
           {title}

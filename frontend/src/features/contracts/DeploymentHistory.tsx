@@ -5,6 +5,8 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import type { ContractDeployment } from '../../lib/contractsApi'
 import { tokenPagePath } from '../../lib/tokenPagesApi'
+import { EVM_NETWORKS, isMainnetNetwork } from '../network/NetworkContext'
+import { templateMeta } from './templateMeta'
 import { Erc20ManagePanel } from './Erc20ManagePanel'
 import { LiquidityPanel } from './LiquidityPanel'
 import { TokenLockPanel } from './TokenLockPanel'
@@ -45,8 +47,16 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
           {deployments.map((deployment) => (
             <Fragment key={deployment.id}>
               <tr className="border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-hover">
-                <td className="px-4 py-3 text-ink">{deployment.template_name}</td>
-                <td className="px-4 py-3 text-ink">{deployment.network}</td>
+                <td className="px-4 py-3 text-ink">
+                  <span className="flex items-center gap-2.5">
+                    <TemplateIcon id={deployment.template_id} />
+                    {deployment.template_name}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-ink">
+                  {EVM_NETWORKS.find((item) => item.id === deployment.network)?.label ?? deployment.network}
+                  {!isMainnetNetwork(deployment.network) && <span className="ml-1.5 text-xs text-ink-faint">testnet</span>}
+                </td>
                 <td className="px-4 py-3 font-mono text-ink">
                   {deployment.explorer_url ? (
                     <a
@@ -64,7 +74,9 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                 <td className="px-4 py-3 text-sm">
                   <VerifySource deployment={deployment} compact />
                 </td>
-                <td className="px-4 py-3 text-ink-faint">{new Date(deployment.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-ink-faint" title={new Date(deployment.created_at).toLocaleString()}>
+                  {new Date(deployment.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
                     {(deployment.template_id === 'erc20_advanced' || deployment.template_id === 'token_timelock') && (
@@ -119,5 +131,14 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
         </tbody>
       </table>
     </div>
+  )
+}
+
+function TemplateIcon({ id }: { id: string }) {
+  const { icon: Icon } = templateMeta(id)
+  return (
+    <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-raised text-accent-300">
+      <Icon className="h-3.5 w-3.5" />
+    </span>
   )
 }

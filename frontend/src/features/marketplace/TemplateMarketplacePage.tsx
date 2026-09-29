@@ -1,13 +1,16 @@
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { Dialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
-import { IconCoin, IconLayers, IconShield } from '../../components/ui/icons'
+import { InlineError } from '../../components/ui/InlineError'
 import { contractsApi, type ContractTemplateSummary } from '../../lib/contractsApi'
+import { templateMeta } from '../contracts/templateMeta'
 
 // Browse-only gallery over the templates that actually exist — no fake
 // authors, ratings, or download counts like the legacy Template Marketplace.
@@ -19,6 +22,7 @@ export function TemplateMarketplacePage() {
   const [templates, setTemplates] = useState<ContractTemplateSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<ContractTemplateSummary | null>(null)
 
   useEffect(() => {
     // Regression: this had no .catch() — a failed request left `templates`
@@ -56,9 +60,7 @@ export function TemplateMarketplacePage() {
           {templates.map((template) => (
             <Card key={template.id} padding="lg" rounded="xl" interactive className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-500/10 text-accent-400">
-                  {template.type === 'erc20' ? <IconCoin /> : template.type === 'lock' ? <IconShield /> : <IconLayers />}
-                </span>
+                <TemplateIcon id={template.id} />
                 <Badge tone="accent">{template.type === 'erc20' ? 'ERC-20' : template.type === 'lock' ? 'Time-lock' : 'ERC-721'}</Badge>
               </div>
 
@@ -75,13 +77,54 @@ export function TemplateMarketplacePage() {
 
               <p className="text-xs text-ink-faint">~{template.gas_estimate.toLocaleString()} gas to deploy</p>
 
-              <Button variant="secondary" size="sm" className="mt-auto" onClick={() => selectTemplate(template)}>
-                Use this template
-              </Button>
+              <div className="mt-auto grid grid-cols-2 gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setViewing(template)}>
+                  View source
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => selectTemplate(template)}>
+                  Use this template
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
       )}
+
+      {viewing && <SourceDialog template={viewing} onClose={() => setViewing(null)} />}
     </div>
+  )
+}
+
+function TemplateIcon({ id }: { id: string }) {
+  const { icon: Icon } = templateMeta(id)
+  return (
+    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
+      <Icon className="h-5 w-5" />
+    </span>
+  )
+}
+
+// The template's Solidity, exactly as it's compiled (parameters appear as
+// {{PLACEHOLDERS}} until you fill them in on the deploy page).
+function SourceDialog({ template, onClose }: { template: ContractTemplateSummary; onClose: () => void }) {
+  const { data, error, isLoading } = useQuery({
+    queryKey: ['template-source', template.id],
+    queryFn: () => contractsApi.getTemplate(template.id),
+  })
+  return (
+    <Dialog open onClose={onClose} title={`${template.name} — source`} description="The Solidity this template compiles. Values in {{BRACES}} are filled in from the deploy form." size="lg">
+      {isLoading && <p className="text-sm text-ink-muted">Loading source…</p>}
+      {error && <InlineError>{(error as Error).message}</InlineError>}
+      {data && (
+        <pre className="mt-3 max-h-[60vh] overflow-auto rounded-lg border border-border bg-canvas p-4 font-mono text-xs leading-relaxed text-ink-muted">
+          <code>{data.template.solidity_code}</code>
+        </pre>
+      )}
+      <div className="mt-4 flex justify-end">
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </Dialog>
   )
 }
