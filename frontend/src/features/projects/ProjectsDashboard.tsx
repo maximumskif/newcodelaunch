@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { IconPlus, IconTrash } from '../../components/ui/icons'
+import { IconArrowRight, IconCandy, IconCode, IconCoin, IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
 import { PROJECT_TYPES, projectHref } from '../../lib/projectTypes'
@@ -103,6 +103,8 @@ export function ProjectsDashboard() {
         description="Every project you've started — resume a draft where you left off, or jump back into something already deployed."
       />
 
+      <QuickStart />
+
       {!accessToken ? (
         <Card padding="lg" className="text-center">
           <p className="text-ink-muted">Connect and sign in with a wallet above to see your projects.</p>
@@ -110,9 +112,12 @@ export function ProjectsDashboard() {
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-ink-faint">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Your projects{' '}
+              <span className="text-sm font-normal text-ink-faint">
               {isLoading ? 'Loading…' : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
-            </p>
+              </span>
+            </h2>
             <Link to="/projects/new" className="inline-flex">
               <Button variant="primary" size="sm">
                 <IconPlus className="h-3.5 w-3.5" />
@@ -198,5 +203,39 @@ export function ProjectsDashboard() {
         onCancel={() => setPendingDelete(null)}
       />
     </div>
+  )
+}
+
+const QUICK_START = [
+  { icon: IconCoin, title: 'Launch a token', description: 'ERC-20 or SPL, with taxes, limits and verified source.', href: '/tokens' },
+  { icon: IconLayers, title: 'Build an NFT collection', description: 'Layers, rarity and rules — generated and published to IPFS.', href: '/nft' },
+  { icon: IconCandy, title: 'Launch a drop', description: 'Sell a collection on Solana with phases and mint limits.', href: '/mint' },
+  { icon: IconCode, title: 'Deploy a contract', description: 'Any template, including LP time-locks and NFT contracts.', href: '/contracts' },
+]
+
+// Straight into a product — the dashboard's job isn't only listing projects.
+function QuickStart() {
+  return (
+    <section aria-labelledby="quick-start-heading">
+      <h2 id="quick-start-heading" className="sr-only">Quick start</h2>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {QUICK_START.map(({ icon: Icon, title, description, href }) => (
+          <Link
+            key={title}
+            to={href}
+            className="group flex flex-col rounded-xl border border-border bg-surface p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-500/40 hover:bg-surface-hover"
+          >
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
+              <Icon className="h-[18px] w-[18px]" />
+            </span>
+            <span className="mt-3 flex items-center gap-1.5 font-medium text-ink">
+              {title}
+              <IconArrowRight className="h-3.5 w-3.5 text-ink-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-accent-300" />
+            </span>
+            <span className="mt-1 text-sm text-ink-muted">{description}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
   )
 }

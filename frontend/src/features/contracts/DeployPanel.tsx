@@ -176,7 +176,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
           <h2 id="deploy-heading" className="font-display text-2xl font-semibold tracking-tight text-ink">{title}</h2>
           <p className="mt-1 max-w-2xl text-ink-muted">{description}</p>
         </div>
-        <div className={`grid gap-3 sm:grid-cols-2 ${templates.length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
+        <div className={`grid gap-3 sm:grid-cols-2 ${templates.length > 3 ? 'xl:grid-cols-4' : templates.length === 3 ? 'xl:grid-cols-3' : ''}`}>
           {templates.map((template) => (
             <TemplateCard key={template.id} template={template} selected={template.id === selectedId} onSelect={() => setSelectedId(template.id)} />
           ))}

@@ -1,106 +1,166 @@
-import type { ReactNode } from 'react'
+import type { ComponentType } from 'react'
 import { Link } from 'react-router-dom'
 
-import { Badge } from '../../components/ui/Badge'
 import { buttonClassName } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
-import { IconArrowRight, IconCheck, IconCode, IconCoin, IconLayers, IconShield, IconWallet } from '../../components/ui/icons'
+import {
+  IconArrowRight,
+  IconCandy,
+  IconChart,
+  IconCheck,
+  IconCode,
+  IconCoin,
+  IconLayers,
+  IconLock,
+  IconShield,
+  IconWallet,
+} from '../../components/ui/icons'
 
-// Every claim on this page maps to something that actually works today
-// (see docs/REBUILD_PROGRESS.md). Nothing here is aspirational copy — the
-// old app's homepage claimed "world's most advanced platform" for features
-// that were partly `random.randint()`; this one only says what's true.
-//
-// 2026-09 design refresh: visual presentation only — every heading,
-// description, badge state, and link target below is byte-for-byte the same
-// claim this page already made; nothing here is new or exaggerated copy.
+// Every claim on this page maps to something that works today (see
+// docs/REBUILD_PROGRESS.md) — the old app's homepage claimed "world's most
+// advanced platform" for features that were partly `random.randint()`;
+// this one only says what's true. The hero's preview card is labelled as an
+// example: it shows what a real public token page reports, not a real token.
 
-interface CreationPath {
-  icon: ReactNode
+type Icon = ComponentType<{ className?: string }>
+
+interface Product {
+  icon: Icon
   title: string
   description: string
-  href?: string
-  badge: 'live' | 'soon'
+  points: string[]
+  href: string
 }
 
-const CREATION_PATHS: CreationPath[] = [
+const PRODUCTS: Product[] = [
   {
-    icon: <IconCoin />,
-    title: 'Launch a Token',
-    description: 'Compile a real ERC-20 template, estimate gas, and deploy with your own connected wallet.',
+    icon: IconCoin,
+    title: 'Token Launchpad',
+    description: 'ERC-20s on Ethereum, Polygon and BSC, or SPL tokens on Solana.',
+    points: ['Taxes, limits and a trading switch', 'Revoke mint & freeze authority', 'Source verified on the explorer'],
     href: '/tokens',
-    badge: 'live',
   },
   {
-    icon: <IconLayers />,
-    title: 'Build an NFT Collection',
-    description: 'Upload trait layers, set rarity weights, composite a real collection, and publish to IPFS.',
+    icon: IconLayers,
+    title: 'NFT Generator',
+    description: 'Stack trait layers and generate a unique collection from your art.',
+    points: ['Rarity weights and trait rules', 'Up to 10,000 items', 'Publish to IPFS in one click'],
     href: '/nft',
-    badge: 'live',
   },
   {
-    icon: <IconCode />,
-    title: 'Smart Contracts Hub',
-    description: 'Live network status plus compile/estimate/deploy across every supported template.',
-    href: '/contracts',
-    badge: 'live',
-  },
-  {
-    icon: <IconLayers />,
-    title: 'Mint Site',
-    description: 'Launch a real Solana Candy Machine from a published collection, with a shareable public mint page.',
+    icon: IconCandy,
+    title: 'Candy Machine drops',
+    description: 'Sell a collection on Solana with a shareable mint page.',
+    points: ['Allowlist and public phases', 'Per-wallet mint limits', 'Live sales dashboard'],
     href: '/mint',
-    badge: 'live',
+  },
+  {
+    icon: IconLock,
+    title: 'Liquidity & locks',
+    description: 'Open a pool for your token and lock the LP to earn trust.',
+    points: ['Uniswap, PancakeSwap and Raydium', 'Time-locks with no admin key', 'Permanent Raydium locks'],
+    href: '/tokens',
+  },
+  {
+    icon: IconShield,
+    title: 'Public token pages',
+    description: 'A page buyers can check, read straight from the chain.',
+    points: ['Supply, authorities and taxes', 'How much liquidity is locked', 'Code matched against the template'],
+    href: '/tokens',
+  },
+  {
+    icon: IconChart,
+    title: 'Market Intelligence',
+    description: 'Look up any token and see what is moving across DEXes.',
+    points: ['Any address, any chain', 'Trending DEX tokens', 'Top tokens by market cap'],
+    href: '/market',
   },
 ]
 
-const HOW_IT_WORKS = [
-  { title: 'Pick what to build', description: 'A token or an NFT collection — each has its own guided form.' },
-  { title: 'Configure it', description: 'Name, supply, layers, rarity — whatever the project type needs.' },
-  { title: 'Review the real cost', description: 'A live gas estimate from the network, before you commit to anything.' },
-  { title: 'Deploy with your wallet', description: 'Your wallet signs and broadcasts. Nothing is ever signed on our servers.' },
-  { title: 'Track it', description: 'Deployments and generated collections persist so you can find them again.' },
+const FACTS: [string, string][] = [
+  ['8', 'networks, mainnet and testnet'],
+  ['4', 'contract templates, plus SPL tokens'],
+  ['0', 'private keys ever sent to us'],
+  ['100%', 'of transactions signed in your wallet'],
 ]
 
-const SECURITY_POINTS = [
-  {
-    icon: <IconWallet />,
-    title: 'Your wallet, your keys',
-    description: 'We never receive, log, or store a private key or seed phrase — not once, not ever.',
-  },
-  {
-    icon: <IconShield />,
-    title: 'Client-side signing only',
-    description: 'The backend compiles and estimates. Your connected wallet is what actually signs and broadcasts.',
-  },
-  {
-    icon: <IconCode />,
-    title: 'Contract source is visible',
-    description: "Every deployment template's Solidity source is real and inspectable before you deploy it.",
-  },
-  {
-    icon: <IconCheck />,
-    title: 'Live network status',
-    description: 'See whether a network is actually reachable before you commit to deploying on it.',
-  },
+const STEPS = [
+  { title: 'Configure', description: 'Pick a token, collection or contract and fill in a guided form — no Solidity required.' },
+  { title: 'Check the cost', description: 'See a live estimate from the network and exactly what will be deployed before you commit.' },
+  { title: 'Sign & launch', description: 'Your own wallet signs and broadcasts. We compile and verify; we never hold keys.' },
 ]
 
-const SUPPORTED_NETWORKS = ['Ethereum', 'Polygon', 'BSC', 'Solana']
+const SECURITY_POINTS: { icon: Icon; title: string; description: string }[] = [
+  { icon: IconWallet, title: 'Your wallet, your keys', description: 'We never receive, log, or store a private key or seed phrase.' },
+  { icon: IconShield, title: 'Client-side signing only', description: 'The backend compiles and estimates; your wallet signs and broadcasts.' },
+  { icon: IconCode, title: 'Readable contract source', description: 'Every template is real Solidity you can inspect, and verify on the explorer.' },
+  { icon: IconCheck, title: 'Checked on-chain', description: 'Deployments are only recorded after the backend reads them back from the chain.' },
+]
+
+const EXAMPLE_CHECKS: [string, string][] = [
+  ['Supply is fixed', 'Mint authority revoked'],
+  ['Can’t freeze wallets', 'Freeze authority revoked'],
+  ['62% of liquidity locked', 'Permanently, via Raydium'],
+  ['Pool on Raydium', 'Price read from the pool'],
+]
+
+// What a public token page reports — an illustrative example, labelled so.
+function HeroPreview() {
+  return (
+    <figure className="relative mx-auto w-full max-w-md">
+      <div aria-hidden className="absolute -inset-6 rounded-[2rem] bg-[image:var(--gradient-accent)] opacity-20 blur-3xl" />
+      <div className="relative rounded-2xl border border-border-strong bg-[#101012]/90 p-5 shadow-elevated backdrop-blur">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span aria-hidden className="grid h-10 w-10 place-items-center rounded-full bg-[image:var(--gradient-accent)] font-display font-semibold text-white">
+              N
+            </span>
+            <div>
+              <p className="font-medium text-ink">Nova Token</p>
+              <p className="font-mono text-xs text-ink-faint">NOVA · Solana</p>
+            </div>
+          </div>
+          <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-ink-faint">Example</span>
+        </div>
+        <div className="mt-5 grid grid-cols-3 gap-2 text-center">
+          {[
+            ['Price', '$0.0142'],
+            ['Liquidity', '$48.2K'],
+            ['Supply', '1B'],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-border bg-canvas px-2 py-2.5">
+              <p className="text-[11px] text-ink-faint">{label}</p>
+              <p className="mt-0.5 font-mono text-sm text-ink">{value}</p>
+            </div>
+          ))}
+        </div>
+        <ul className="mt-4 space-y-2">
+          {EXAMPLE_CHECKS.map(([title, detail]) => (
+            <li key={title} className="flex items-center gap-3 rounded-lg bg-surface px-3 py-2.5">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-success/15 text-success">
+                <IconCheck className="h-3.5 w-3.5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm text-ink">{title}</p>
+                <p className="text-xs text-ink-faint">{detail}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <figcaption className="relative mt-4 text-center text-xs text-ink-faint">
+        An example public token page — every token launched here gets one, read from the chain.
+      </figcaption>
+    </figure>
+  )
+}
 
 export function HomePage() {
   return (
     <div>
-      {/* 2026-10 design refresh: an aurora of two large, very-low-opacity
-          radial gradients (violet + cyan, index.css's accent/accent2 hues)
-          slowly drifting behind the hero, plus the existing dot-grid on top
-          for texture — a deliberate reversal of the earlier "no moving/
-          blurred gradient blobs" rule (see index.css's own comment on that
-          reversal), done at low enough opacity and slow enough motion to
-          read as atmosphere, not a background that fights the real content
-          sitting on top of it. Both layers are aria-hidden and motion is
-          disabled at the animation level (index.css's global
-          prefers-reduced-motion query zeroes animation-duration). */}
-      <section className="relative overflow-hidden border-b border-border px-6 py-24 sm:py-32">
+      {/* Atmosphere behind the hero: two slow, low-opacity radial gradients
+          plus a masked dot grid — aria-hidden, and motion is zeroed by
+          index.css's prefers-reduced-motion query. */}
+      <section className="relative overflow-hidden border-b border-border px-6 py-20 sm:py-28">
         <div
           aria-hidden="true"
           className="animate-gradient-pan pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(ellipse_60%_50%_at_20%_20%,color-mix(in_oklab,var(--color-accent-500)_28%,transparent),transparent_60%),radial-gradient(ellipse_50%_50%_at_80%_60%,color-mix(in_oklab,var(--color-accent2-500)_22%,transparent),transparent_60%)] [background-size:180%_180%]"
@@ -109,140 +169,140 @@ export function HomePage() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 [background-image:radial-gradient(color-mix(in_oklab,white_10%,transparent)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,black_40%,transparent_100%)]"
         />
-        <div className="relative mx-auto max-w-3xl text-center">
-          <Badge tone="neutral" className="animate-fade-up">
-            Early build — see what's real below
-          </Badge>
-          <h1 className="animate-fade-up mt-6 text-4xl font-semibold tracking-tight text-ink [animation-delay:80ms] sm:text-5xl lg:text-6xl">
-            Launch Web3 projects{' '}
-            <span className="bg-[image:var(--gradient-accent)] bg-clip-text text-transparent">
-              without writing smart contracts.
+        <div className="relative mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[1.1fr_1fr]">
+          <div className="text-center lg:text-left">
+            <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs text-ink-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" /> Live on Ethereum, Polygon, BSC and Solana
             </span>
-          </h1>
-          <p className="animate-fade-up mx-auto mt-5 max-w-xl text-base text-ink-muted [animation-delay:160ms] sm:text-lg">
-            Configure a token or NFT collection through a guided interface, review a real gas estimate, and deploy
-            with your own connected wallet. Nothing is signed on our servers.
-          </p>
-          <div className="animate-fade-up mt-9 flex flex-wrap items-center justify-center gap-3 [animation-delay:240ms]">
-            <Link to="/tokens" className={buttonClassName('primary', 'md', 'px-6 py-3 text-base')}>
-              Create a Project
-              <IconArrowRight className="h-4 w-4" />
-            </Link>
-            <Link to="/contracts" className={buttonClassName('secondary', 'md', 'px-6 py-3 text-base')}>
-              View Live Chain Status
-            </Link>
-          </div>
-          <div className="animate-fade-up mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-ink-faint [animation-delay:320ms]">
-            <span className="uppercase tracking-widest">Supported networks</span>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {SUPPORTED_NETWORKS.map((network) => (
-                <span
-                  key={network}
-                  className="rounded-full border border-border px-3 py-1 text-ink-muted transition-colors duration-150 hover:border-accent-500/50 hover:text-ink"
-                >
-                  {network}
-                </span>
-              ))}
+            <h1 className="animate-fade-up mt-6 text-4xl font-semibold tracking-tight text-ink [animation-delay:80ms] sm:text-5xl lg:text-6xl">
+              Launch tokens and NFTs{' '}
+              <span className="bg-[image:var(--gradient-accent)] bg-clip-text text-transparent">without writing code.</span>
+            </h1>
+            <p className="animate-fade-up mx-auto mt-5 max-w-xl text-base text-ink-muted [animation-delay:160ms] sm:text-lg lg:mx-0">
+              Create a token, generate an NFT collection, open a liquidity pool and lock it — all from guided forms, signed
+              by your own wallet. Nothing is ever signed on our servers.
+            </p>
+            <div className="animate-fade-up mt-9 flex flex-wrap items-center justify-center gap-3 [animation-delay:240ms] lg:justify-start">
+              <Link to="/tokens" className={buttonClassName('primary', 'md', 'px-6 py-3 text-base')}>
+                Launch a token
+                <IconArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/nft" className={buttonClassName('secondary', 'md', 'px-6 py-3 text-base')}>
+                Build an NFT collection
+              </Link>
             </div>
+          </div>
+          <div className="animate-fade-up [animation-delay:200ms]">
+            <HeroPreview />
           </div>
         </div>
       </section>
 
+      <section aria-label="At a glance" className="border-b border-border px-6 py-10">
+        <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-6 lg:grid-cols-4">
+          {FACTS.map(([value, label]) => (
+            <div key={label} className="flex flex-col-reverse text-center lg:text-left">
+              <dt className="mt-1 text-sm text-ink-muted">{label}</dt>
+              <dd className="font-display text-3xl font-semibold text-ink">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
       <section id="start-here" className="scroll-mt-20 px-6 py-20">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-2xl font-semibold text-ink">Start here</h2>
-          <p className="mt-1 text-sm text-ink-muted">All four of these are real, working flows.</p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {CREATION_PATHS.map((path) => {
-              const content = (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300 transition-transform duration-200 ease-out group-hover:scale-110">
-                      {path.icon}
-                    </span>
-                    <Badge tone={path.badge === 'live' ? 'success' : 'neutral'}>{path.badge === 'live' ? 'Live' : 'Coming soon'}</Badge>
-                  </div>
-                  <h3 className="mt-4 font-display font-medium text-ink">{path.title}</h3>
-                  <p className="mt-1.5 text-sm text-ink-muted">{path.description}</p>
-                </>
-              )
-              return path.href ? (
-                // aria-label keeps the link's announced name to the actual
-                // action ("Launch a Token (Live)") — without it, wrapping
-                // the whole card (badge + title + description) in one <a>
-                // makes every word of the description part of the link's
-                // accessible name, so a screen reader user has to sit
-                // through the full sentence just to identify which link
-                // they're on. Found via a real Chromium accessibility-tree
-                // dump (Accessibility.getFullAXTree), not assumed — axe's
-                // automated WCAG scan has no rule for this since a long
-                // accessible name isn't a spec violation, just bad screen-
-                // reader UX. Visual content is unchanged; sighted users
-                // still see the full card exactly as before.
-                <Link
-                  key={path.title}
-                  to={path.href}
-                  className="group"
-                  aria-label={`${path.title} (${path.badge === 'live' ? 'Live' : 'Coming soon'})`}
-                >
-                  <Card interactive padding="lg" rounded="xl" className="h-full">
-                    {content}
-                  </Card>
-                </Link>
-              ) : (
-                <Card key={path.title} padding="lg" rounded="xl" className="h-full cursor-not-allowed opacity-60">
-                  {content}
-                </Card>
-              )
-            })}
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-widest text-accent-400">Products</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Everything to launch, in one place</h2>
+          <p className="mt-2 max-w-2xl text-ink-muted">Each of these is a working flow on real networks — try any of them on a testnet first.</p>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {PRODUCTS.map(({ icon: ProductIcon, title, description, points, href }) => (
+              <Link
+                key={title}
+                to={href}
+                aria-label={title}
+                className="group flex flex-col rounded-2xl border border-border bg-surface p-6 transition-all duration-200 hover:-translate-y-1 hover:border-accent-500/40 hover:bg-surface-hover"
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-xl bg-[image:var(--gradient-accent-soft)] text-accent-300 transition-transform duration-200 group-hover:scale-110">
+                  <ProductIcon className="h-5 w-5" />
+                </span>
+                <h3 className="mt-5 font-display text-lg font-semibold text-ink">{title}</h3>
+                <p className="mt-1.5 text-sm text-ink-muted">{description}</p>
+                <ul className="mt-4 space-y-1.5">
+                  {points.map((point) => (
+                    <li key={point} className="flex items-center gap-2 text-sm text-ink-muted">
+                      <IconCheck className="h-3.5 w-3.5 shrink-0 text-accent-300" />
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+                <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent-300">
+                  Open <IconArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
       <section id="how-it-works" className="scroll-mt-20 border-t border-border px-6 py-20">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-2xl font-semibold text-ink">How it works today</h2>
-          <div className="relative mt-10 grid gap-8 sm:grid-cols-5">
-            {/* A connecting line behind the numbered steps — desktop only
-                (sm:grid-cols-5 already stacks to one column below that
-                breakpoint, where a horizontal line wouldn't track the steps). */}
-            <div className="absolute top-4 right-0 left-0 hidden h-px bg-[image:var(--gradient-accent-soft)] sm:block" aria-hidden="true" />
-            {HOW_IT_WORKS.map((step, index) => (
-              <div key={step.title} className="animate-fade-up relative" style={{ animationDelay: `${index * 80}ms` }}>
-                <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-accent)] text-xs font-semibold text-white ring-4 ring-canvas">
-                  {index + 1}
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-widest text-accent-400">How it works</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink">From idea to on-chain in three steps</h2>
+          <ol className="mt-10 grid gap-4 md:grid-cols-3">
+            {STEPS.map((step, index) => (
+              <li key={step.title} className="rounded-2xl border border-border bg-surface p-6">
+                <span aria-hidden className="font-display text-5xl font-semibold text-transparent [-webkit-text-stroke:1px_var(--color-border-strong)]">
+                  0{index + 1}
                 </span>
-                <h3 className="mt-3 text-sm font-medium text-ink">{step.title}</h3>
-                <p className="mt-1 text-xs text-ink-muted">{step.description}</p>
+                <h3 className="mt-3 font-display text-lg font-semibold text-ink">{step.title}</h3>
+                <p className="mt-1.5 text-sm text-ink-muted">{step.description}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="border-t border-border px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-widest text-accent-400">Security</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink">You stay in control</h2>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {SECURITY_POINTS.map(({ icon: PointIcon, title, description }) => (
+              <div key={title} className="rounded-2xl border border-border bg-surface p-5">
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
+                  <PointIcon className="h-4 w-4" />
+                </span>
+                <h3 className="mt-4 text-sm font-semibold text-ink">{title}</h3>
+                <p className="mt-1 text-sm text-ink-muted">{description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="border-t border-border px-6 py-20">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-2xl font-semibold text-ink">Security & transparency</h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {SECURITY_POINTS.map((point) => (
-              <Card key={point.title} interactive padding="md" className="flex gap-3.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
-                  {point.icon}
-                </span>
-                <div>
-                  <h3 className="text-sm font-medium text-ink">{point.title}</h3>
-                  <p className="mt-1 text-sm text-ink-muted">{point.description}</p>
-                </div>
-              </Card>
-            ))}
+      <section className="px-6 pb-20">
+        <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl border border-accent-500/30 px-8 py-14 text-center">
+          <div aria-hidden className="absolute inset-0 bg-[image:var(--gradient-accent)] opacity-15" />
+          <div className="relative">
+            <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Ready to launch?</h2>
+            <p className="mx-auto mt-3 max-w-lg text-ink-muted">Connect a wallet and try it on a testnet — it costs nothing but test tokens.</p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link to="/projects/new" className={buttonClassName('primary', 'md', 'px-6 py-3 text-base')}>
+                Start a project
+                <IconArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/contracts" className={buttonClassName('secondary', 'md', 'px-6 py-3 text-base')}>
+                View live network status
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
       <footer className="border-t border-border px-6 py-8">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 text-sm text-ink-faint">
-          <span>NewCodeLaunch — early build, not production software yet.</span>
-          <span>Supported networks: Ethereum, Polygon, BSC, Solana</span>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 text-sm text-ink-faint">
+          <span>NewCodeLaunch — beta. Try things on a testnet first.</span>
+          <span>Ethereum · Polygon · BSC · Solana</span>
         </div>
       </footer>
     </div>

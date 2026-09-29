@@ -124,7 +124,8 @@ export function AppShell() {
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
           {!isCollapsed && (
-            <Link to="/" className="font-display text-sm font-semibold tracking-tight text-ink">
+            <Link to="/" className="flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-ink">
+              <span aria-hidden className="grid h-6 w-6 place-items-center rounded-md bg-[image:var(--gradient-accent)] text-xs text-white">N</span>
               NewCodeLaunch
             </Link>
           )}
@@ -156,22 +157,32 @@ export function AppShell() {
             <IconGrid className="h-4 w-4 shrink-0" />
             {!isCollapsed && <span>Dashboard</span>}
           </NavLink>
-          <div className="my-2 border-t border-border" />
-          {liveProducts.map((item) => {
-            const Icon = item.icon
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path!}
-                title={isCollapsed ? item.label : undefined}
-                className={sidebarLinkClassName}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                {Icon && <Icon className="h-4 w-4 shrink-0" />}
-                {!isCollapsed && <span>{item.label}</span>}
-              </NavLink>
-            )
-          })}
+          {(['Build', 'Launch', 'Research'] as const).map((group) => (
+            <div key={group} className="pt-4">
+              {isCollapsed ? (
+                <div className="mx-2 mb-2 border-t border-border" />
+              ) : (
+                <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">{group}</p>
+              )}
+              {liveProducts
+                .filter((item) => item.group === group)
+                .map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path!}
+                      title={isCollapsed ? item.label : undefined}
+                      className={sidebarLinkClassName}
+                      onClick={() => setIsMobileOpen(false)}
+                    >
+                      {Icon && <Icon className="h-4 w-4 shrink-0" />}
+                      {!isCollapsed && <span>{item.label}</span>}
+                    </NavLink>
+                  )
+                })}
+            </div>
+          ))}
         </nav>
 
         {!isCollapsed && (
