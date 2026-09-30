@@ -183,6 +183,10 @@ class Config:
     PINATA_JWT = os.environ.get("PINATA_JWT", "")
     PINATA_API_KEY = os.environ.get("PINATA_API_KEY", "")
     PINATA_SECRET_KEY = os.environ.get("PINATA_SECRET_KEY", "")
+    # Which Pinata upload API to use: "auto" (default — the v3 Files API with
+    # a JWT, falling back to the classic pinning API for a key without v3
+    # scopes), "v3", or "legacy". See services/ipfs.py.
+    PINATA_API = os.environ.get("PINATA_API", "").strip().lower() or "auto"
 
     # AI Trait Identifier (Phase 3) — optional. Without it, trait analysis still
     # runs (real color/composition/technical CV analysis), just without the

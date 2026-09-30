@@ -35,6 +35,7 @@ bash "$SCRIPT_DIR/../setup/run-pinata-stub.sh" > "$WORK/pinata.log" 2>&1 &
   export CANDY_MACHINE_SHARED_SECRET="$SECRET" CANDY_MACHINE_SERVICE_URL="http://localhost:4100"
   export PINATA_JWT="devnet-smoke-fake-jwt" PINATA_BASE_URL="http://127.0.0.1:5555"
   export PINATA_GATEWAY_URL="http://127.0.0.1:5555/ipfs/"
+  export PINATA_API="legacy" PINATA_UPLOADS_URL="http://127.0.0.1:5555"
   export SEPOLIA_RPC_URL="${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
   export OPENAI_API_KEY="" ETHERSCAN_API_KEY="${ETHERSCAN_API_KEY:-}"
   .venv/bin/flask db upgrade

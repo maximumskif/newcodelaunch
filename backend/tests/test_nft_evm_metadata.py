@@ -112,13 +112,14 @@ def test_upload_directory_sends_every_file_under_one_folder(app, monkeypatch):
         def json():
             return {"IpfsHash": "QmDir"}
 
-    def fake_post(url, files, headers, timeout):
+    def fake_post(url, files, headers, timeout, data=None):
         sent["url"] = url
         sent["files"] = files
         return _Response()
 
     monkeypatch.setattr(ipfs.requests, "post", fake_post)
     app.config["PINATA_JWT"] = "jwt"
+    app.config["PINATA_API"] = "legacy"
 
     result = ipfs.upload_directory({"1.json": b"{}", "2.json": b"{}"}, "apes")
 

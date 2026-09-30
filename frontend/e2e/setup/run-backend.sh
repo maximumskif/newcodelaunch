@@ -35,6 +35,9 @@ export CANDY_MACHINE_SERVICE_URL="http://localhost:4000"
 # before the request ever reaches PINATA_BASE_URL.
 export PINATA_JWT="e2e-fake-jwt-not-for-real-use"
 export PINATA_BASE_URL="http://127.0.0.1:5555"
+# The stub implements Pinata's classic pinning API only; never let "auto"
+# try the real v3 host (see backend/app/services/ipfs.py).
+export PINATA_API="legacy" PINATA_UPLOADS_URL="http://127.0.0.1:5555"
 export PINATA_GATEWAY_URL="http://127.0.0.1:5555/ipfs/"
 export FLASK_APP="wsgi.py"
 # config.py calls load_dotenv() unconditionally, which — given `cd

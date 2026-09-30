@@ -10,6 +10,7 @@ import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { ApiError } from '../../lib/http'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type PublicCandyMachineStatus } from '../../lib/candyMachineApi'
+import { ipfsImageCandidates } from '../../lib/ipfsGateways'
 import { base64ToBytes } from '../../lib/solana'
 
 type MintStep = 'idle' | 'preparing' | 'signing' | 'done' | 'error'
@@ -272,13 +273,16 @@ function PhaseCard({ active, label, price, when, large = false }: { active: bool
 // IPFS gateway can be slow or down) — a gradient panel with its initial,
 // never a broken-image icon.
 function DropArtwork({ src, name }: { src: string | null; name: string }) {
-  const [failed, setFailed] = useState(false)
+  // Each gateway in turn (see lib/ipfsGateways.ts), then the fallback panel.
+  const candidates = src ? ipfsImageCandidates(src) : []
+  const [attempt, setAttempt] = useState(0)
+  const failed = attempt >= candidates.length
   return (
     <div className="relative lg:sticky lg:top-8">
       <div aria-hidden className="absolute -inset-4 rounded-[2rem] bg-[image:var(--gradient-accent)] opacity-20 blur-3xl" />
       <div className="relative aspect-square overflow-hidden rounded-3xl border border-border-strong bg-surface">
-        {src && !failed ? (
-          <img src={src} alt={name} className="h-full w-full object-cover" onError={() => setFailed(true)} />
+        {!failed ? (
+          <img src={candidates[attempt]} alt={name} className="h-full w-full object-cover" onError={() => setAttempt((n) => n + 1)} />
         ) : (
           <div role="img" aria-label={name} className="grid h-full w-full place-items-center bg-[image:var(--gradient-accent-soft)]">
             <span className="font-display text-8xl font-semibold text-ink/80">{name.slice(0, 1).toUpperCase()}</span>

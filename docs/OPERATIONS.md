@@ -44,7 +44,7 @@ Required:
 | `FLASK_ENV=production` | `DEBUG` is `FLASK_ENV == "development"`, and `backend/.env.example` ships `development`. |
 | `CORS_ORIGINS` | Comma-separated list of the frontend's real origin(s). Defaults to `http://localhost:5173`, so a real frontend's browser calls fail CORS without it. |
 | `CANDY_MACHINE_SERVICE_URL`, `CANDY_MACHINE_SHARED_SECRET` | Every Solana feature (Candy Machine drops, SPL token launches) goes through the sidecar. An empty secret fails those calls before they're sent (`candy_machine._sidecar_headers`). Must match the sidecar's own secret. |
-| `PINATA_JWT` (or legacy `PINATA_API_KEY` + `PINATA_SECRET_KEY`) | IPFS publishing (NFT metadata, collection folders, SPL token logos). Without it those actions return a "not configured" error. |
+| `PINATA_JWT` (or legacy `PINATA_API_KEY` + `PINATA_SECRET_KEY`) | IPFS publishing (NFT metadata, collection folders, SPL token logos). Without it those actions return a "not configured" error. Keys created in Pinata's dashboard today only work with the v3 Files API; `PINATA_API` (`auto` by default) uses v3 with a JWT and falls back to the classic pinning API for older keys. |
 | `RATE_LIMIT_STORAGE_URI` | Required as soon as there's more than one gunicorn worker or instance — see [Rate limiting](#rate-limiting-with-more-than-one-worker). |
 | `TRUSTED_PROXY_COUNT` | Required as soon as anything (load balancer, CDN) sits in front — see the same section. |
 
@@ -62,7 +62,7 @@ Optional (default in brackets):
 | `OPENAI_API_KEY` | ["" → trait analysis runs without the AI-vision section] |
 | `UPLOAD_FOLDER` | [`<cwd>/instance/uploads`, i.e. `/app/instance/uploads` in the image] |
 | `MAX_CONTENT_LENGTH` | [16 MiB] Max request body. |
-| `PINATA_BASE_URL`, `PINATA_GATEWAY_URL` (`app/services/ipfs.py`) | [Pinata's API / public gateway] Set the gateway to a dedicated Pinata gateway if you have one. |
+| `PINATA_BASE_URL`, `PINATA_UPLOADS_URL`, `PINATA_GATEWAY_URL` (`app/services/ipfs.py`) | [Pinata's classic API / v3 uploads host / public gateway] **Set the gateway to your dedicated Pinata gateway** (`https://<name>.mypinata.cloud/ipfs/`, included in the free plan) for production: the public gateway rate-limits and sends `Cross-Origin-Resource-Policy: same-origin`, so browsers won't show its images on this site. The storefront falls back to ipfs.io and dweb.link when an image fails to load. |
 | `OPENAI_BASE_URL` (`app/services/ai_traits.py`) | ["" → the SDK's default] Exists for the e2e stub. |
 | `ETHERSCAN_API_URL` | [Etherscan V2] Exists for the e2e stub. |
 | `DEX_OVERRIDES` | [unset — the built-in, verified Uniswap/PancakeSwap V2 addresses] JSON replacing a network's DEX for adding liquidity, e.g. `{"sepolia": {"name": "…", "router": "0x…", "factory": "0x…", "wrapped_native": "0x…"}}`. For local chains (the e2e suite); leave unset in production. |
