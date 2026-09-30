@@ -47,7 +47,7 @@ class InvalidParametersError(TemplateParameterError):
 class ContractTemplate:
     id: str
     name: str
-    type: str  # 'erc20' | 'erc721'
+    type: str  # 'erc20' | 'erc721' | 'lock' | 'utility'
     description: str
     solidity_code: str
     deployment_params: list[dict[str, Any]]
@@ -657,6 +657,28 @@ contract {{CONTRACT_NAME}} {
 }
 '''
 
+# Airdrops on EVM: sends one ERC-20 from the caller to many wallets in one
+# transaction, after the caller approves this contract for the total. No
+# owner, no parameters, holds nothing: it can only move the CALLER's tokens
+# (transferFrom msg.sender), and only up to what they approved — so one
+# deployment per network is shared by everyone. Low-level calls tolerate
+# tokens that return nothing from transferFrom (USDT-style).
+_MULTISEND_SOURCE = '''// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract {{CONTRACT_NAME}} {
+    function send(address token, address[] calldata recipients, uint256[] calldata amounts) external {
+        require(recipients.length == amounts.length, "Recipients and amounts differ in length");
+        for (uint256 i = 0; i < recipients.length; i++) {
+            (bool ok, bytes memory data) = token.call(
+                abi.encodeWithSelector(0x23b872dd, msg.sender, recipients[i], amounts[i])
+            );
+            require(ok && (data.length == 0 || abi.decode(data, (bool))), "Token transfer failed");
+        }
+    }
+}
+'''
+
 _TEMPLATES: dict[str, ContractTemplate] = {
     "erc20_basic": ContractTemplate(
         id="erc20_basic",
@@ -727,6 +749,16 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         features=["Time-Locked", "No Owner", "Anyone Can Trigger Release", "Pays Only the Beneficiary"],
         gas_estimate=400_000,
     ),
+    "multisend": ContractTemplate(
+        id="multisend",
+        name="Multisend",
+        type="utility",
+        description="Sends one token to many wallets in a single transaction — what the Airdrop tool uses; no owner, holds nothing",
+        solidity_code=_MULTISEND_SOURCE,
+        deployment_params=[],
+        features=["No Owner", "Holds No Funds", "Moves Only the Caller's Tokens", "Shared Per Network"],
+        gas_estimate=350_000,
+    ),
 }
 
 
@@ -744,6 +776,9 @@ def get_all_templates(contract_type: Optional[str] = None) -> list[ContractTempl
 # Which display-name parameter each template's {{CONTRACT_NAME}} identifier
 # is derived from.
 _DISPLAY_NAME_PARAM = {"erc20": "TOKEN_NAME", "erc721": "COLLECTION_NAME"}
+
+# Templates without a display name have a fixed contract name.
+_FIXED_CONTRACT_NAMES = {"token_timelock": "TokenTimeLock", "multisend": "MultiSend"}
 
 # Identifiers a derived contract name must not collide with: the interfaces
 # these templates declare themselves, plus Solidity keywords/reserved words
@@ -874,7 +909,7 @@ def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, A
     contract_name = (
         contract_identifier(str(parameters[display_param]), fallback=template.type.upper())
         if display_param
-        else "TokenTimeLock"
+        else _FIXED_CONTRACT_NAMES[template.id]
     )
     contract_code = contract_code.replace("{{CONTRACT_NAME}}", contract_name)
 

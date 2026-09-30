@@ -17,6 +17,8 @@ import { templateMeta } from '../contracts/templateMeta'
 // The 3 templates here are the same real, complete ones the Token Launchpad
 // and Contracts Hub already deploy from (contract_templates.py); this page
 // is a discovery front-end over that same real data, not a new backend model.
+const TYPE_LABELS: Record<string, string> = { erc20: 'ERC-20', erc721: 'ERC-721', lock: 'Time-lock', utility: 'Utility' }
+
 export function TemplateMarketplacePage() {
   const navigate = useNavigate()
   const [templates, setTemplates] = useState<ContractTemplateSummary[]>([])
@@ -61,7 +63,7 @@ export function TemplateMarketplacePage() {
             <Card key={template.id} padding="lg" rounded="xl" interactive className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <TemplateIcon id={template.id} />
-                <Badge tone="accent">{template.type === 'erc20' ? 'ERC-20' : template.type === 'lock' ? 'Time-lock' : 'ERC-721'}</Badge>
+                <Badge tone="accent">{TYPE_LABELS[template.type] ?? template.type}</Badge>
               </div>
 
               <h3 className="font-display font-medium text-ink">{template.name}</h3>

@@ -5,7 +5,7 @@ from app.services import contract_templates, solidity
 
 def test_get_all_templates_returns_the_real_templates():
     templates = contract_templates.get_all_templates()
-    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock"}
+    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock", "multisend"}
 
 
 def test_get_all_templates_filters_by_type():
@@ -202,3 +202,12 @@ def test_compile_returns_the_runtime_code_too():
     assert compiled.deployed_bytecode.startswith("0x") and len(compiled.deployed_bytecode) > 100
     # Runtime code is the creation code minus the constructor.
     assert compiled.deployed_bytecode[2:] in compiled.bytecode
+
+
+def test_multisend_compiles_with_one_function_and_nothing_to_own():
+    rendered = contract_templates.render_contract("multisend", {})
+    assert rendered["contract_name"] == "MultiSend"
+    compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    assert compiled.success, compiled.error_message
+    assert [item["name"] for item in compiled.abi if item.get("type") == "function"] == ["send"]
+    assert not any(item.get("stateMutability") == "payable" for item in compiled.abi)

@@ -29,8 +29,8 @@ describe('AllToolsPage', () => {
 
   it('shows a coming tool without linking it', () => {
     render(<MemoryRouter><AllToolsPage /></MemoryRouter>)
-    expect(screen.getByLabelText('Airdrop — coming soon')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Airdrop/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Vesting — coming soon')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Vesting/ })).not.toBeInTheDocument()
   })
 })
 

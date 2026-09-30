@@ -18,6 +18,7 @@ const META: Record<string, TemplateMeta> = {
   erc20_advanced: { icon: IconBolt, tags: ['Buy/sell tax', 'Anti-whale limits', 'Trading switch'], identityParams: ['TOKEN_NAME'] },
   erc721_basic: { icon: IconImage, tags: ['Public mint', 'Mint price', 'Metadata URI'], identityParams: ['COLLECTION_NAME'] },
   token_timelock: { icon: IconLock, tags: ['No owner', 'Release date', 'LP locks'], identityParams: [] },
+  multisend: { icon: IconBolt, tags: ['No owner', 'Airdrops', 'Shared'], identityParams: [] },
 }
 
 export function templateMeta(id: string): TemplateMeta {

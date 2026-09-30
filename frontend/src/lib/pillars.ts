@@ -153,7 +153,7 @@ export const PILLARS: Pillar[] = [
       { id: 'liq-evm', name: 'Pool on Uniswap / PancakeSwap', description: 'Create a pool, add or remove liquidity (EVM).', glyph: '≈', path: '/tokens/create#history', status: 'live', keywords: ['uniswap', 'pancakeswap', 'dex', 'add liquidity', 'remove'] },
       { id: 'liq-raydium', name: 'Pool on Raydium', description: 'A CPMM pool for your SPL token (Solana).', glyph: '≈', path: '/tokens/create?chain=solana#history', status: 'live', keywords: ['raydium', 'solana', 'dex'] },
       { id: 'liq-lock', name: 'Lock liquidity', description: 'Time-lock LP (EVM) or lock it permanently (Raydium).', glyph: '▢', path: '/tokens/create#history', status: 'live', keywords: ['lp lock', 'burn'] },
-      { id: 'dist-airdrop', name: 'Airdrop', description: 'Send a token to many wallets at once.', glyph: '⇶', status: 'soon', keywords: ['multisend', 'multisender', 'send'] },
+      { id: 'dist-airdrop', name: 'Airdrop', description: 'Send a token to many wallets at once.', glyph: '⇶', path: '/liquidity/airdrop', status: 'new', keywords: ['multisend', 'multisender', 'send'] },
       { id: 'dist-snapshot', name: 'Holder snapshot', description: 'Every holder of a token at a moment.', glyph: '▦', status: 'soon', keywords: ['holders', 'export'] },
       { id: 'dist-vesting', name: 'Vesting', description: 'Release tokens to people over time.', glyph: '⌛', status: 'soon', keywords: ['cliff', 'schedule'] },
     ],

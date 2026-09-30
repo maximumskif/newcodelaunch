@@ -92,7 +92,7 @@ export interface LiquidityProvision {
 }
 
 export const contractsApi = {
-  listTemplates: (type?: 'erc20' | 'erc721' | 'lock') =>
+  listTemplates: (type?: 'erc20' | 'erc721' | 'lock' | 'utility') =>
     request<{ templates: ContractTemplateSummary[] }>(`/contracts/templates${type ? `?type=${type}` : ''}`),
 
   getTemplate: (templateId: string) =>
@@ -139,6 +139,10 @@ export const contractsApi = {
       { method: 'POST', body: JSON.stringify({ transaction_hash: transactionHash }) },
       token,
     ),
+
+  // The shared Multisend the Airdrop tool sends through; null until someone
+  // deploys it on this network.
+  multisend: (network: string) => request<{ address: `0x${string}` | null }>(`/contracts/multisend/${network}`),
 
   getDeployment: (contractAddress: string) =>
     request<{ deployment: ContractDeployment; live_status: Record<string, unknown> | null }>(

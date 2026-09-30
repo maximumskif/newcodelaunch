@@ -201,3 +201,18 @@ def get_user_deployments(user_id: str) -> list[ContractDeployment]:
 
 def get_deployment_by_address(contract_address: str) -> Optional[ContractDeployment]:
     return ContractDeployment.query.filter_by(contract_address=contract_address).first()
+
+
+def shared_multisend(w3: Web3, network: str) -> Optional[str]:
+    """The Multisend deployed here on this network (by anyone — it has no
+    owner and can only move its caller's tokens), whose on-chain code is
+    exactly the template's. Oldest first; None if there isn't one yet."""
+    rows = (
+        ContractDeployment.query.filter_by(template_id="multisend", network=network)
+        .order_by(ContractDeployment.created_at.asc())
+        .all()
+    )
+    for row in rows:
+        if code_matches_template(w3, "multisend", {}, row.contract_address):
+            return row.contract_address
+    return None

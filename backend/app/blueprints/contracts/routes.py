@@ -101,6 +101,19 @@ def create_deployment():
     return jsonify(deployment=deployment.to_dict()), 201
 
 
+@contracts_bp.get("/multisend/<network>")
+def get_multisend(network):
+    """Where the Airdrop tool sends from on this network: null until someone
+    deploys the Multisend there."""
+    if network not in blockchain.EVM_NETWORKS:
+        return jsonify(error=f"Unknown EVM network: {network}"), 400
+    try:
+        address = contracts.shared_multisend(blockchain.get_web3(network), network)
+    except Exception:  # noqa: BLE001 — RPC trouble; details stay server-side
+        return jsonify(error="Couldn't reach the network right now"), 502
+    return jsonify(address=address)
+
+
 @contracts_bp.get("/deployments")
 @jwt_required()
 def list_deployments():

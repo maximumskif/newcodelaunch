@@ -134,3 +134,25 @@ def test_get_deployment_by_address_is_intentionally_public(app, client):
 
     assert response.status_code == 200
     assert response.get_json()["deployment"]["contract_address"] == contract_address
+
+
+def test_multisend_lookup_returns_the_oldest_deployment_whose_code_matches(app, client, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from app.services import contracts
+
+    with app.app_context():
+        user = _make_user("0xMultisendDeployerAAAAAAAAAAAAAAAAAAAAAAAA")
+        for i, address in enumerate(["0xFake", "0xReal", "0xLater"]):
+            row = _make_deployment(user.id, f"0xms{i}")
+            row.template_id, row.contract_type, row.contract_address = "multisend", "utility", address
+            row.created_at = datetime(2026, 1, 1) + timedelta(days=i)
+        _db.session.commit()
+
+    monkeypatch.setattr(blockchain, "get_web3", lambda network: object())
+    # The oldest row's address runs other code: skipped, not trusted.
+    monkeypatch.setattr(contracts, "code_matches_template", lambda w3, template, params, address: address != "0xFake")
+
+    assert client.get("/api/contracts/multisend/sepolia").get_json() == {"address": "0xReal"}
+    assert client.get("/api/contracts/multisend/bsc").get_json() == {"address": None}
+    assert client.get("/api/contracts/multisend/solana").status_code == 400
