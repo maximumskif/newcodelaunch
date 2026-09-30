@@ -18,7 +18,7 @@ export function Stepper({ steps, activeId }: { steps: StepInfo[]; activeId: stri
                 step.done
                   ? 'bg-success/15 text-success ring-success/30'
                   : isActive
-                    ? 'bg-accent-600 text-white ring-transparent'
+                    ? 'bg-accent-600 text-canvas ring-transparent'
                     : 'bg-surface-hover text-ink-faint ring-border'
               }`}
             >

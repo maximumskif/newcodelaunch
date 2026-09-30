@@ -53,7 +53,7 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   await page.getByRole('button', { name: 'Solana', exact: true }).click()
   await page.getByPlaceholder('My token').fill('E2E SPL Project')
   await page.getByRole('button', { name: 'Create draft and continue' }).click()
-  await expect(page).toHaveURL(/\/tokens\?project=[^&]+&chain=solana/)
+  await expect(page).toHaveURL(/\/tokens\/create\?project=[^&]+&chain=solana/)
   await expect(page.getByText('E2E SPL Project')).toBeVisible()
 
   await page.getByLabel('Token name').fill('E2E Test Token')
@@ -125,7 +125,7 @@ test('owner tools on a token that kept its authorities: mint more, revoke freeze
   const readMint = async (mint: PublicKey) =>
     ((await connection.getParsedAccountInfo(mint)).value!.data as { parsed: { info: Record<string, unknown> } }).parsed.info
 
-  await page.goto('/tokens?chain=solana')
+  await page.goto('/tokens/create?chain=solana')
   const connectButton = page.getByRole('button', { name: 'Connect Solana Wallet' })
   if (await connectButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await connectButton.click()

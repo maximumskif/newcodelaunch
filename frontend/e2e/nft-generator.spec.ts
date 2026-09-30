@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
 // Only the wallet-signing step (auth) is faked at the key level, same as
 // token-deploy.spec.ts — everything downstream is the real backend.
 async function signIn(page: Page) {
-  await page.goto('/nft')
+  await page.goto('/nfts/generator')
   await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
   await page.getByRole('button', { name: /^Sign in with/ }).click()
   await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })

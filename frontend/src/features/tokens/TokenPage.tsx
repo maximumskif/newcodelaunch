@@ -99,7 +99,7 @@ export function TokenPage() {
       <header className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 sm:p-8">
         <div aria-hidden className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[image:var(--gradient-accent)] opacity-15 blur-3xl" />
         <div className="relative flex flex-wrap items-center gap-4">
-          <span aria-hidden className="grid h-14 w-14 place-items-center rounded-full bg-[image:var(--gradient-accent)] font-display text-2xl font-semibold text-white">
+          <span aria-hidden className="grid h-14 w-14 place-items-center rounded-full bg-[image:var(--gradient-accent)] font-display text-2xl font-semibold text-canvas">
             {page.symbol.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">

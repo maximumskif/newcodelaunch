@@ -34,7 +34,7 @@ test(`a ${ITEMS}-item Candy Machine drop: items stored compactly and loaded in w
 }) => {
   test.setTimeout(180_000)
 
-  await page.goto('/mint')
+  await page.goto('/drops/launch')
   const connect = page.getByRole('button', { name: 'Connect Solana Wallet' })
   if (await connect.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await connect.click()
@@ -47,7 +47,7 @@ test(`a ${ITEMS}-item Candy Machine drop: items stored compactly and loaded in w
   // Well past the old 20-item cap, and more than one transaction holds.
   const { collection } = await seedLargePublishedCollection(request, { Authorization: `Bearer ${accessToken}` }, 'E2E Big Drop', ITEMS)
 
-  await page.goto(`/mint?collection=${collection.id}`)
+  await page.goto(`/drops/launch?collection=${collection.id}`)
   await expect(page.getByText(`${ITEMS} of ${ITEMS} generated items published to IPFS.`)).toBeVisible()
   await page.getByLabel('Go-live date').fill('2020-01-01T00:00')
   await page.getByRole('button', { name: 'Launch Candy Machine' }).click()
@@ -62,6 +62,6 @@ test(`a ${ITEMS}-item Candy Machine drop: items stored compactly and loaded in w
   await page.getByRole('button', { name: /^Mint for/ }).click()
   await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
 
-  await page.goto('/mint')
+  await page.goto('/drops/launch')
   await expect(page.getByRole('row', { name: /E2E Big Drop/ })).toContainText(`1 / ${ITEMS}`)
 })

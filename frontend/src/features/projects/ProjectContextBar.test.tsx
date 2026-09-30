@@ -103,7 +103,7 @@ describe('ProjectContextBar', () => {
     await user.click(screen.getByText('Switch project'))
     await user.click(await screen.findByText('My Token Launch'))
 
-    expect(navigateMock).toHaveBeenCalledWith('/tokens?project=proj-2')
+    expect(navigateMock).toHaveBeenCalledWith('/tokens/create?project=proj-2')
   })
 
   it('shows "no other projects" instead of an empty or perpetually loading list', async () => {

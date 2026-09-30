@@ -167,7 +167,7 @@ export function NftEvmDeployPage() {
           title="Pick a collection to deploy"
           description={'Publish at least one item to IPFS in the NFT Generator, then use "Deploy on EVM" there.'}
           action={
-            <Link to="/nft" className="mt-2 inline-flex">
+            <Link to="/nfts/generator" className="mt-2 inline-flex">
               <Button variant="secondary" size="sm">
                 Go to NFT Generator
               </Button>

@@ -40,7 +40,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
 }) => {
   test.setTimeout(120_000)
 
-  await page.goto('/mint')
+  await page.goto('/drops/launch')
   const connectButton = page.getByRole('button', { name: 'Connect Solana Wallet' })
   if (await connectButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await connectButton.click()
@@ -56,7 +56,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   // Launch through the actual form: allowlist phase open since yesterday
   // (the fixture wallet + one other), public phase opening tomorrow.
   const otherListed = Keypair.generate().publicKey.toBase58()
-  await page.goto(`/mint?collection=${collection.id}`)
+  await page.goto(`/drops/launch?collection=${collection.id}`)
   await page.getByLabel('Price per mint (SOL)').fill('0.2')
   await page.getByLabel('Go-live date').fill(localInput(new Date(Date.now() + 24 * 3600_000)))
   await page.getByLabel(/Add an allowlist phase/).check()
@@ -107,7 +107,7 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
 
   // The dashboard: allowlist phase, and revenue as a range (1 mint at either
   // 0.05 or 0.2 — the chain doesn't record which phase a mint came through).
-  await page.goto('/mint')
+  await page.goto('/drops/launch')
   const row = page.getByRole('row', { name: /E2E Phased Drop/ })
   await expect(row).toContainText('1 / 2')
   await expect(row).toContainText('Allowlist phase')

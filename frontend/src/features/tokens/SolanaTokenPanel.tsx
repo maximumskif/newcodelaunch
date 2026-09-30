@@ -377,7 +377,7 @@ export function SolanaTokenPanel({ projectId = null }: { projectId?: string | nu
         </Button>
       </Card>
 
-      <section className="space-y-3">
+      <section id="history" className="scroll-mt-4 space-y-3">
         <h2 className="text-lg font-medium text-ink">Your Solana tokens</h2>
         <SolanaTokenHistory
           launches={history}

@@ -72,7 +72,7 @@ test.describe('authenticated app shell', () => {
     await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
   })
 
-  for (const route of ['/dashboard', '/tokens', '/tokens?chain=solana', '/nft', '/nft/deploy-evm', '/mint', '/market', '/defi', '/marketplace']) {
+  for (const route of ['/dashboard', '/tools', '/tokens', '/nfts', '/contracts', '/drops', '/liquidity', '/research', '/tokens/create', '/tokens/create?chain=solana', '/nfts/generator', '/nfts/deploy-evm', '/contracts/deploy', '/contracts/templates', '/drops/launch', '/research/market', '/research/defi']) {
     test(`${route} has no WCAG 2 A/AA violations`, async ({ page }) => {
       await page.goto(route)
       const { violations } = await auditPage(page)
@@ -114,4 +114,19 @@ test('a deployed token’s history row, Manage and Liquidity panels have no WCAG
   await expect(panel.getByTestId('liquidity-remove')).toBeVisible({ timeout: 20_000 })
   await panel.getByLabel('Share of your position (%)', { exact: true }).fill('10')
   await scan('Liquidity panel, live pool with removal')
+})
+
+// Old URLs (bookmarks, shared project links) land on the page that moved,
+// query string intact.
+test('old URLs redirect to where their page lives now', async ({ page }) => {
+  for (const [from, to] of [
+    ['/nft?project=p1', '/nfts/generator?project=p1'],
+    ['/mint?collection=c1', '/drops/launch?collection=c1'],
+    ['/marketplace', '/contracts/templates'],
+    ['/tokens?chain=solana', '/tokens/create?chain=solana'],
+    ['/contracts?template=token_timelock', '/contracts/deploy?template=token_timelock'],
+  ]) {
+    await page.goto(from)
+    await expect(page).toHaveURL(new RegExp(`${to.replace(/[?]/g, '\\?')}$`))
+  }
 })

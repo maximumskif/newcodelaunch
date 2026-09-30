@@ -111,7 +111,7 @@ function HeroPreview() {
       <div className="relative rounded-2xl border border-border-strong bg-[#101012]/90 p-5 shadow-elevated backdrop-blur">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span aria-hidden className="grid h-10 w-10 place-items-center rounded-full bg-[image:var(--gradient-accent)] font-display font-semibold text-white">
+            <span aria-hidden className="grid h-10 w-10 place-items-center rounded-full bg-[image:var(--gradient-accent)] font-display font-semibold text-canvas">
               N
             </span>
             <div>

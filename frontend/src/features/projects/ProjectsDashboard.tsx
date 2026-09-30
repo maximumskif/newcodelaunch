@@ -207,10 +207,10 @@ export function ProjectsDashboard() {
 }
 
 const QUICK_START = [
-  { icon: IconCoin, title: 'Launch a token', description: 'ERC-20 or SPL, with taxes, limits and verified source.', href: '/tokens' },
-  { icon: IconLayers, title: 'Build an NFT collection', description: 'Layers, rarity and rules — generated and published to IPFS.', href: '/nft' },
-  { icon: IconCandy, title: 'Launch a drop', description: 'Sell a collection on Solana with phases and mint limits.', href: '/mint' },
-  { icon: IconCode, title: 'Deploy a contract', description: 'Any template, including LP time-locks and NFT contracts.', href: '/contracts' },
+  { icon: IconCoin, title: 'Launch a token', description: 'ERC-20 or SPL, with taxes, limits and verified source.', href: '/tokens/create' },
+  { icon: IconLayers, title: 'Build an NFT collection', description: 'Layers, rarity and rules — generated and published to IPFS.', href: '/nfts/generator' },
+  { icon: IconCandy, title: 'Launch a drop', description: 'Sell a collection on Solana with phases and mint limits.', href: '/drops/launch' },
+  { icon: IconCode, title: 'Deploy a contract', description: 'Any template, including LP time-locks and NFT contracts.', href: '/contracts/deploy' },
 ]
 
 // Straight into a product — the dashboard's job isn't only listing projects.

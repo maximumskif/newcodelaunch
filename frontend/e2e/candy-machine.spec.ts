@@ -65,7 +65,7 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   // the mint step even starts.
   test.setTimeout(120_000)
 
-  await page.goto('/nft')
+  await page.goto('/nfts/generator')
 
   // WalletProvider's `autoConnect` (see solanaWallets.tsx) should already
   // have this connected by the time the page settles, since the fake
@@ -156,7 +156,7 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   // signatures from the fixture's keypair, real on-chain confirmation
   // against the local validator, real backend re-verification before
   // recording (candy_machine.record_candy_machine).
-  await page.goto(`/mint?collection=${collection.id}`)
+  await page.goto(`/drops/launch?collection=${collection.id}`)
 
   const goLiveInput = page.getByLabel('Go-live date')
   // A go-live date already in the past — the public storefront step below
@@ -189,7 +189,7 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   // The creator's dashboard (/mint with no collection) reads that sale back
   // live from the chain: 1 of 1 minted, sold out, revenue = 1 x the 0.1 SOL
   // default price.
-  await page.goto('/mint')
+  await page.goto('/drops/launch')
   const row = page.getByRole('row', { name: /E2E Candy Collection/ })
   await expect(row).toContainText('1 / 1')
   await expect(row).toContainText('Sold out')

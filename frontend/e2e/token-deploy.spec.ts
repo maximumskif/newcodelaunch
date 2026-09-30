@@ -22,7 +22,7 @@ test('a real token deploy: connect, sign in, compile, estimate, deploy, and reco
   // in a browser extension — everything downstream of "wallet approves" is
   // the actual app talking to an actual (local, throwaway) chain and an
   // actual backend. See e2e/README.md.
-  await page.goto('/tokens')
+  await page.goto('/tokens/create')
 
   await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
   await page.getByRole('button', { name: /^Sign in with/ }).click()

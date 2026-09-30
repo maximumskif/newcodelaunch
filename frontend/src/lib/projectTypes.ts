@@ -35,7 +35,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   token: {
     label: 'Token',
     description: 'An ERC-20 on Ethereum, Polygon or BSC, or an SPL token on Solana.',
-    path: '/tokens',
+    path: '/tokens/create',
     icon: IconCoin,
     needsNetwork: true,
     creatableViaWizard: true,
@@ -43,7 +43,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   nft_collection: {
     label: 'NFT Collection',
     description: 'Build a layered trait collection and publish it to IPFS.',
-    path: '/nft',
+    path: '/nfts/generator',
     icon: IconLayers,
     needsNetwork: false,
     creatableViaWizard: true,
@@ -51,7 +51,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   contract: {
     label: 'Custom Contract',
     description: 'Deploy any template from the Smart Contracts Hub.',
-    path: '/contracts',
+    path: '/contracts/deploy',
     icon: IconCode,
     needsNetwork: true,
     creatableViaWizard: true,
@@ -59,7 +59,7 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
   candy_machine: {
     label: 'Candy Machine',
     description: 'Launch a Solana Candy Machine from a published NFT collection.',
-    path: '/mint',
+    path: '/drops/launch',
     icon: IconCandy,
     needsNetwork: true,
     creatableViaWizard: false,

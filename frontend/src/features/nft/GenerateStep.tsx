@@ -396,12 +396,12 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
               <p className="text-sm text-ink-muted">Launch a Solana mint site with Candy Machine, or deploy it as an ERC-721 on EVM.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link to={`/mint?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
+              <Link to={`/drops/launch?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
                 <Button variant="primary" size="sm">
                   Launch Mint Site (Solana)
                 </Button>
               </Link>
-              <Link to={`/nft/deploy-evm?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
+              <Link to={`/nfts/deploy-evm?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>
                 <Button variant="secondary" size="sm">
                   Deploy on EVM
                 </Button>

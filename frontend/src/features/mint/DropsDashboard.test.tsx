@@ -138,10 +138,10 @@ describe('DropsDashboard', () => {
     renderDashboard()
 
     expect(await screen.findByText('No drops yet')).toBeInTheDocument()
-    expect(await screen.findByRole('link', { name: 'Launch 8 items' })).toHaveAttribute('href', '/mint?collection=ready')
+    expect(await screen.findByRole('link', { name: 'Launch 8 items' })).toHaveAttribute('href', '/drops/launch?collection=ready')
     expect(screen.getByText('0 of 4 items published to IPFS')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Publish items in the generator' })).toHaveAttribute('href', '/nft')
-    expect(screen.getByRole('link', { name: 'Generate items in the generator' })).toHaveAttribute('href', '/nft')
+    expect(screen.getByRole('link', { name: 'Publish items in the generator' })).toHaveAttribute('href', '/nfts/generator')
+    expect(screen.getByRole('link', { name: 'Generate items in the generator' })).toHaveAttribute('href', '/nfts/generator')
   })
 
   it('reports a load failure and can refresh', async () => {

@@ -37,7 +37,7 @@ export function TemplateMarketplacePage() {
   }, [])
 
   const selectTemplate = (template: ContractTemplateSummary) => {
-    const path = template.type === 'erc20' ? '/tokens' : '/contracts'
+    const path = template.type === 'erc20' ? '/tokens/create' : '/contracts/deploy'
     navigate(`${path}?template=${template.id}`)
   }
 

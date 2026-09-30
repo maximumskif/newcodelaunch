@@ -13,7 +13,7 @@ export function PublicLayout() {
       <header className="border-b border-border px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-ink">
-            <span aria-hidden className="grid h-6 w-6 place-items-center rounded-md bg-[image:var(--gradient-accent)] text-xs text-white">
+            <span aria-hidden className="grid h-6 w-6 place-items-center rounded-md bg-[image:var(--gradient-accent)] text-xs text-canvas">
               N
             </span>
             NewCodeLaunch

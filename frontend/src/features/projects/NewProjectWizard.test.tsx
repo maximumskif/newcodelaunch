@@ -125,7 +125,7 @@ describe('NewProjectWizard', () => {
         network: 'sepolia',
       }),
     )
-    expect(navigateMock).toHaveBeenCalledWith('/tokens?project=proj-1')
+    expect(navigateMock).toHaveBeenCalledWith('/tokens/create?project=proj-1')
   })
 
   it('creates a Solana token project and opens the Launchpad on its Solana tab', async () => {
@@ -166,7 +166,7 @@ describe('NewProjectWizard', () => {
         network: 'solana_devnet',
       }),
     )
-    expect(navigateMock).toHaveBeenCalledWith('/tokens?project=proj-sol&chain=solana')
+    expect(navigateMock).toHaveBeenCalledWith('/tokens/create?project=proj-sol&chain=solana')
   })
 })
 

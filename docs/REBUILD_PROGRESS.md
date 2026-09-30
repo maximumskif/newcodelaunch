@@ -1021,3 +1021,14 @@ The user tried the app locally and reported that the Smart Contracts Hub, Market
 **Verified end to end on real devnet through the UI** (a throwaway audit script, with the fixture wallet funded on devnet and the Pinata stub standing in for IPFS): sign in, build a 2-layer collection, generate 4, publish all, launch from `/mint`, mint from the public storefront, and the dashboard shows 1/4 minted and 0.1 SOL. pytest 375 passed / 2 skipped; Vitest 209/209; Playwright 27/27.
 
 **Still needs the user:** a Pinata JWT for real IPFS publishing. The design pass comes next.
+
+## Redesign foundation: six areas, terminal look, command bar, 2026-09-30
+
+The user asked for the site to read as an all-in-one Web3 builder, in a unique terminal style that doesn't look the same everywhere. The approved direction (mockups on a design canvas) is now the foundation:
+
+- **Six areas ("pillars")** in `lib/pillars.ts`: tokens, NFTs, smart contracts, drops, liquidity & distribution, research. That one list drives the sidebar, the marketing products menu, the All tools page, each area's home page and the command bar. Tools that aren't built yet are listed as "soon", with no link.
+- **New URLs:** area home pages at `/tokens`, `/nfts`, `/contracts`, `/drops`, `/liquidity`, `/research`; tools under them (`/tokens/create`, `/nfts/generator`, `/nfts/deploy-evm`, `/contracts/deploy`, `/contracts/templates`, `/drops/launch`, `/research/market`, `/research/defi`); `/tools` for the directory. Old URLs redirect with their query string and hash (`/nft`, `/mint`, `/market`, …). `/tokens?…` and `/contracts?…`, as used by saved project links, forward to the tool they meant. `/mint/buy/:id` and `/token/:network/:address` are unchanged, since those links are shared publicly.
+- **Look:** IBM Plex Mono for the terminal voice (headings, navigation, labels, buttons), IBM Plex Sans for body text, and a near-black ground. Each area has its own terminal-palette color, and `[data-pillar]` re-points the accent scale, so every existing accent utility takes the current area's color automatically. Gradients are gone; primary buttons are a solid area color with dark text (above 8:1).
+- **Shell:** a folder-tree sidebar (the current area expanded), breadcrumbs, and a `ctrl+k` / `cmd+k` command bar (an accessible combobox: search by name, description or keyword; "soon" tools listed but not openable) in both the app and marketing headers.
+
+**Verified**: Vitest 227 (new: every live tool points at a real route; every legacy redirect target exists; area/tool lookup; command bar search, Enter, disabled "soon" entries, arrow keys, Escape; All tools search and filters; hub content and query forwarding). Playwright: accessibility scans extended to all six area pages, `/tools` and the new tool URLs, plus a redirect test. The first run caught "soon" cards dimmed below accessible contrast, now dashed instead of faded.

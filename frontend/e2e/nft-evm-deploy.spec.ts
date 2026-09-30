@@ -53,7 +53,7 @@ test('a real ERC-721 deploy of a generated collection: metadata folder pinned, d
 }) => {
   test.setTimeout(90_000)
 
-  await page.goto('/nft')
+  await page.goto('/nfts/generator')
   await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
   await page.getByRole('button', { name: /^Sign in with/ }).click()
   await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
@@ -69,7 +69,7 @@ test('a real ERC-721 deploy of a generated collection: metadata folder pinned, d
 
   // The real part: deploy through the actual page, reached the way a user
   // reaches it (the NFT Generator hands off via ?collection=).
-  await page.goto(`/nft/deploy-evm?collection=${collection.id}`)
+  await page.goto(`/nfts/deploy-evm?collection=${collection.id}`)
   await expect(page.getByText(/2 of 2 generated items published/)).toBeVisible()
   await expect(page.getByLabel('Symbol')).toHaveValue('E2ECOOLAPE')
   await page.getByLabel('Mint price (ETH)').fill('0.01')

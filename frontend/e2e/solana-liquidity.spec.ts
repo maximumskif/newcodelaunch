@@ -44,7 +44,7 @@ test('Raydium liquidity for a launched SPL token: pool created, traded by anothe
 }) => {
   test.setTimeout(150_000)
 
-  await page.goto('/tokens?chain=solana')
+  await page.goto('/tokens/create?chain=solana')
   const connectButton = page.getByRole('button', { name: 'Connect Solana Wallet' })
   if (await connectButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await connectButton.click()

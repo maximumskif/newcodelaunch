@@ -265,7 +265,7 @@ describe('GenerateStep "Launch Mint Site" link', () => {
     )
 
     const link = await screen.findByText('Launch Mint Site (Solana)')
-    expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}&project=proj-1`)
+    expect(link.closest('a')).toHaveAttribute('href', `/drops/launch?collection=${collection.id}&project=proj-1`)
   })
 
   it('omits the project param when there is no project in context', async () => {
@@ -276,7 +276,7 @@ describe('GenerateStep "Launch Mint Site" link', () => {
     )
 
     const link = await screen.findByText('Launch Mint Site (Solana)')
-    expect(link.closest('a')).toHaveAttribute('href', `/mint?collection=${collection.id}`)
+    expect(link.closest('a')).toHaveAttribute('href', `/drops/launch?collection=${collection.id}`)
   })
 })
 

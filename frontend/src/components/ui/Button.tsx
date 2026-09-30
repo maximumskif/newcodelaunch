@@ -12,14 +12,11 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  // A real violet→cyan gradient (index.css's --gradient-accent) plus a
-  // hero-scale glow on hover — the 2026-10 design pass's deliberate
-  // reversal of the earlier flat-color choice, see index.css's own comment
-  // on that reversal. bg-size-200 + hover:bg-right-bottom slides the
-  // gradient itself on hover (a cheap, real motion cue, not just a color
-  // swap) rather than a static two-stop fill.
-  primary:
-    'bg-[image:var(--gradient-accent)] bg-[length:200%_200%] bg-left-top text-white hover:bg-right-bottom hover:shadow-glow-accent',
+  // Solid area color with dark text (the terminal redesign): the accent
+  // scale follows the page's data-pillar, so a primary button is green in
+  // Tokens, magenta in NFTs, and so on. Dark on these light accents is
+  // above 8:1.
+  primary: 'bg-accent-500 text-canvas hover:bg-accent-400',
   secondary: 'border border-border text-ink hover:border-border-strong hover:bg-surface-hover',
   ghost: 'text-ink-muted hover:text-ink hover:bg-surface-hover',
   danger: 'bg-danger-strong text-white hover:bg-danger-stronger',
@@ -45,7 +42,7 @@ export function buttonClassName(variant: ButtonVariant = 'secondary', size: Butt
   // screen) should never wrap the label across multiple lines inside the
   // button — the row wrapping the buttons themselves is the right behavior,
   // not the text inside one.
-  return `inline-flex items-center justify-center rounded-md font-medium whitespace-nowrap transition-all duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`
+  return `inline-flex items-center justify-center rounded-md font-mono font-medium whitespace-nowrap transition-all duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`
 }
 
 // The one place button styling is decided app-wide — every feature should

@@ -22,7 +22,7 @@ export function LaunchPicker({ token }: { token: string }) {
           <h2 id="launch-heading" className="text-lg font-medium text-ink">Launch a new drop</h2>
           <p className="text-sm text-ink-muted">Pick a collection. Its published items become the drop's NFTs.</p>
         </div>
-        <Link to="/nft">
+        <Link to="/nfts/generator">
           <Button variant="secondary" size="sm">New collection</Button>
         </Link>
       </div>
@@ -45,11 +45,11 @@ export function LaunchPicker({ token }: { token: string }) {
                   </p>
                 </div>
                 {published > 0 ? (
-                  <Link to={`/mint?collection=${collection.id}`}>
+                  <Link to={`/drops/launch?collection=${collection.id}`}>
                     <Button size="sm">Launch {published} item{published === 1 ? '' : 's'}</Button>
                   </Link>
                 ) : (
-                  <Link to="/nft" className="text-sm text-accent-300 hover:underline">
+                  <Link to="/nfts/generator" className="text-sm text-accent-300 hover:underline">
                     {items === 0 ? 'Generate items' : 'Publish items'} in the generator
                   </Link>
                 )}

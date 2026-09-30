@@ -55,7 +55,7 @@ export async function deployAdvancedToken(
   page: Page,
   { marketing, liquidity, maxTx = '10000', maxWallet = '20000' }: { marketing: Address; liquidity: Address; maxTx?: string; maxWallet?: string },
 ): Promise<Address> {
-  await page.goto('/tokens')
+  await page.goto('/tokens/create')
   await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
   await page.getByRole('button', { name: /^Sign in with/ }).click()
   await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
