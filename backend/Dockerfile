@@ -10,7 +10,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# No apt-get step, on purpose: every pin in requirements.txt has a prebuilt
+# No apt-get step for Python packages, on purpose: every pin in requirements.txt has a prebuilt
 # wheel for this exact Python version (that was the whole point of pinning
 # to 3.11), including psycopg2-binary — which bundles its own libpq
 # statically and needs neither a compiler nor libpq-dev at build or run
@@ -27,11 +27,15 @@ COPY wsgi.py ./
 # from this same image.
 COPY scripts ./scripts
 
-# The Solidity compiler, downloaded now rather than by the first compile
-# request (solcx installs lazily into ~/.solcx, which a fresh container
-# doesn't have — so every new container's first deploy would wait on, and
-# depend on, a GitHub download). Version read from the one place it's set.
-RUN python -c "import re, solcx; v = re.search(r'SOLC_VERSION = \"(.+?)\"', open('app/services/solidity.py').read()).group(1); solcx.install_solc(v); print('solc', v)"
+# The Solidity compiler, installed now rather than by the first compile
+# request. Native solc 0.8.19 exists only for x86-64; on ARM (Oracle's free
+# Ampere servers) the same compiler runs as its official WebAssembly build
+# through Node — byte-identical output (tests/test_solidity_backends.py).
+# Node comes from Debian's own packages; it only runs solc-js.
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm && rm -rf /var/lib/apt/lists/*
+COPY solcjs/package.json solcjs/package-lock.json solcjs/compile.cjs ./solcjs/
+RUN cd solcjs && npm ci --omit=dev --no-audit --no-fund
+RUN if [ "$(uname -m)" = "x86_64" ]; then python -c "import re, solcx; v = re.search(r'SOLC_VERSION = \"(.+?)\"', open('app/services/solidity.py').read()).group(1); solcx.install_solc(v); print('native solc', v)"; fi
 
 EXPOSE 5000
 

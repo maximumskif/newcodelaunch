@@ -1,0 +1,8 @@
+{
+  "name": "newcodelaunch-solcjs",
+  "private": true,
+  "description": "The official WebAssembly build of solc 0.8.19, for platforms with no native 0.8.19 binary (linux-arm64). See app/services/solidity.py.",
+  "dependencies": {
+    "solc": "0.8.19"
+  }
+}

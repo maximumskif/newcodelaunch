@@ -40,6 +40,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # The WebAssembly solc 0.8.19 (used on ARM servers) — installed so
+      # tests/test_solidity_backends.py checks it byte-for-byte against the
+      # native compiler instead of skipping.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install WebAssembly solc
+        run: npm ci --no-audit --no-fund
+        working-directory: backend/solcjs
+
       - name: Compile check (py_compile)
         run: python -m compileall -q app
 
@@ -227,3 +237,27 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env logs --tail 200
+
+  docker-arm:
+    name: Docker on ARM (backend image compiles with WebAssembly solc)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      # Oracle Cloud's free servers are ARM, where no native solc 0.8.19
+      # exists: the image must build there and compile through solc-js,
+      # producing the same bytes the x86 image does.
+      - name: Build the backend image
+        run: docker build -t backend-arm backend
+      - name: Compile a template inside it
+        run: |
+          docker run --rm -e SECRET_KEY=ci -e JWT_SECRET_KEY=ci backend-arm python -c "
+          from app import create_app
+          from app.services import contract_templates, solidity
+          app = create_app()
+          with app.app_context():
+              assert solidity._backend() == 'wasm', solidity._backend()
+              r = contract_templates.render_contract('erc20_basic', {'TOKEN_NAME': 'CI', 'TOKEN_SYMBOL': 'CI', 'TOKEN_DECIMALS': 18, 'TOKEN_SUPPLY': 1000})
+              c = solidity.compile_contract(r['contract_code'], r['contract_name'])
+              assert c.success, c.error_message
+              print('compiled on', __import__('platform').machine(), 'with', solidity.compiler_version(), len(c.bytecode) // 2, 'bytes')
+          "

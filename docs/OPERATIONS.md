@@ -27,6 +27,8 @@ One small Linux server running the Compose stack, with Caddy in front for HTTPS:
 
 **What the production override changes:** only Caddy publishes ports. `/api/*` and the frontend share one origin. The Postgres password comes from `deploy/.env`. Uploads live on a named volume. gunicorn runs 2 workers × 4 threads with a 120 s timeout. `TRUSTED_PROXY_COUNT=1`, so rate limits apply per visitor instead of to Caddy's address. CI's `docker` job builds every image and boots this exact configuration on each push, then checks readiness, the frontend, a real compile, closed ports and a scheduler round through Caddy.
 
+**ARM servers (e.g. Oracle Cloud's free Ampere instances):** supported. There is no native solc 0.8.19 for linux-arm64 (official ARM builds start at 0.8.31), so the backend image compiles with the official WebAssembly build of the same compiler through Node (`backend/solcjs`). It chooses automatically (`SOLC_BACKEND=auto`; `native`/`wasm` force one). Output is byte-identical to the native compiler, metadata hash included — `tests/test_solidity_backends.py` checks every template, and CI's `docker-arm` job builds the image and compiles inside it on a real ARM runner. The version pin stays because code-match checks and explorer verification must reproduce deployed bytecode exactly.
+
 **Backups:** `docker compose ... exec postgres pg_dump -U launchpad launchpad > backup.sql`, plus the `uploads` volume. Automate both before real users arrive (see [Caveats](#operational-caveats)).
 
 ## Environment variables

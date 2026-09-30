@@ -10,8 +10,13 @@ blockchain_manager.py. Here, install is lazy and cached after the first call.
 
 from __future__ import annotations
 
+import json
+import os
+import platform
+import subprocess
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional
 
 from solcx import compile_standard, get_solc_version, install_solc, set_solc_version
@@ -29,16 +34,56 @@ SOURCE_NAME = "<stdin>"
 _install_lock = threading.Lock()
 _installed = False
 
+# Two ways to run the same compiler. Official native solc builds exist for
+# linux-amd64 but not linux-arm64 until 0.8.31, so on ARM (e.g. Oracle
+# Cloud's free Ampere servers) 0.8.19 runs as its official WebAssembly build
+# through Node (backend/solcjs). Same compiler commit (7dd6d404); checked
+# byte-for-byte on every template, metadata hash included — which matters,
+# since code-match checks and explorer verification depend on reproducing
+# deployed bytecode exactly. SOLC_BACKEND: auto (default) | native | wasm.
+SOLCJS_DIR = Path(__file__).resolve().parents[2] / "solcjs"
+
+
+def _backend() -> str:
+    choice = os.environ.get("SOLC_BACKEND", "").strip().lower() or "auto"
+    if choice in ("native", "wasm"):
+        return choice
+    return "native" if platform.machine().lower() in ("x86_64", "amd64") else "wasm"
+
+
+def _run_solcjs(args: list[str], stdin: str = "") -> str:
+    try:
+        result = subprocess.run(
+            ["node", str(SOLCJS_DIR / "compile.cjs"), *args],
+            input=stdin, capture_output=True, text=True, timeout=120, cwd=SOLCJS_DIR, check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        detail = getattr(exc, "stderr", "") or str(exc)
+        raise RuntimeError(f"WebAssembly solc failed (is Node installed and backend/solcjs installed with npm ci?): {detail}") from exc
+    return result.stdout
+
 
 def ensure_solc_installed() -> None:
     global _installed
-    if _installed:
+    if _installed or _backend() == "wasm":
         return
     with _install_lock:
         if _installed:
             return
         install_solc(SOLC_VERSION)
         _installed = True
+
+
+def _compile_standard(compiler_input: dict[str, Any]) -> dict[str, Any]:
+    if _backend() == "wasm":
+        output = json.loads(_run_solcjs([], json.dumps(compiler_input)))
+        errors = [e for e in output.get("errors", []) if e.get("severity") == "error"]
+        if errors:
+            raise RuntimeError("; ".join(e.get("formattedMessage", e.get("message", "")) for e in errors))
+        return output
+    ensure_solc_installed()
+    set_solc_version(SOLC_VERSION)
+    return compile_standard(compiler_input)
 
 
 @dataclass
@@ -72,17 +117,17 @@ def standard_json_input(source: str) -> dict[str, Any]:
 def compiler_version() -> str:
     """Full version string in the form block explorers expect, e.g.
     "v0.8.19+commit.7dd6d404"."""
+    if _backend() == "wasm":
+        # "0.8.19+commit.7dd6d404.Emscripten.clang" -> "v0.8.19+commit.7dd6d404"
+        return "v" + _run_solcjs(["--version"]).strip().removesuffix(".Emscripten.clang")
     ensure_solc_installed()
     set_solc_version(SOLC_VERSION)
     return f"v{get_solc_version(with_commit_hash=True)}"
 
 
 def compile_contract(source: str, contract_name: str) -> CompilationResult:
-    ensure_solc_installed()
-    set_solc_version(SOLC_VERSION)
-
     try:
-        output = compile_standard(standard_json_input(source))
+        output = _compile_standard(standard_json_input(source))
     except Exception as exc:  # noqa: BLE001 — surfaced to the caller as a compile error
         return CompilationResult(success=False, error_message=str(exc))
 

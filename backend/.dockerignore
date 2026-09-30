@@ -6,3 +6,4 @@ instance
 .env
 tests
 *.db
+solcjs/node_modules
