@@ -60,7 +60,7 @@ test('Raydium liquidity for a launched SPL token: pool created, traded by anothe
   await page.getByLabel('Decimals').fill('6')
   await page.getByRole('button', { name: 'Launch token' }).click()
   await expect(page.getByText(/Pool Token \(POOLT\) launched/)).toBeVisible({ timeout: 45_000 })
-  const mint = new PublicKey((await page.locator('p.font-mono').first().textContent())!.trim())
+  const mint = new PublicKey((await page.getByTestId('launched-mint').textContent())!.trim())
   const creator = new PublicKey(CREATOR_PUBLIC_KEY)
 
   // --- Create the pool: 100,000 POOLT + 1 SOL.

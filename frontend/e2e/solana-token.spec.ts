@@ -86,7 +86,7 @@ test('a real SPL token launch: metadata pinned, wallet-signed, fixed supply — 
   await expect(historyRow).toContainText('Fixed')
   await expect(historyRow).not.toContainText('Freezable')
 
-  const mintAddress = (await page.locator('p.font-mono').first().textContent())?.trim()
+  const mintAddress = (await page.getByTestId('launched-mint').textContent())?.trim()
   expect(mintAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
 
   // And check the chain directly, independent of anything the app reports.
@@ -143,7 +143,7 @@ test('owner tools on a token that kept its authorities: mint more, revoke freeze
   await page.getByLabel(/Revoke freeze authority/).uncheck()
   await page.getByRole('button', { name: 'Launch token' }).click()
   await expect(page.getByText(/Keeper Token \(KEEP\) launched/)).toBeVisible({ timeout: 45_000 })
-  const mint = new PublicKey((await page.locator('p.font-mono').first().textContent())!.trim())
+  const mint = new PublicKey((await page.getByTestId('launched-mint').textContent())!.trim())
 
   // .first(): once Manage is open, the expanded panel's row mentions the
   // token too; the token's own row always comes first.

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { marketApi, type DefiProtocol } from '../../lib/marketApi'
@@ -25,7 +26,7 @@ describe('DefiScannerPage filters', () => {
         protocol('Jito', 'Liquid Staking', ['Solana'], 3e9, 1),
       ],
     })
-    render(<QueryClientProvider client={new QueryClient()}><DefiScannerPage /></QueryClientProvider>)
+    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><DefiScannerPage /></MemoryRouter></QueryClientProvider>)
 
     expect(await screen.findByText('Lido')).toBeInTheDocument()
     expect(screen.queryByText('Binance CEX')).not.toBeInTheDocument()

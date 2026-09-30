@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '../../components/ui/Button'
@@ -13,7 +14,10 @@ export function LaunchPicker({ token }: { token: string }) {
     queryKey: ['nft-collections', token],
     queryFn: () => nftApi.listCollections(token),
   })
-  const collections = data?.collections ?? []
+  // Ready to launch first (most published items), then the rest.
+  const collections = [...(data?.collections ?? [])].sort((a, b) => (b.published_count ?? 0) - (a.published_count ?? 0))
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? collections : collections.slice(0, 6)
 
   return (
     <section aria-labelledby="launch-heading" className="space-y-3 rounded-xl border border-border bg-surface p-5">
@@ -33,7 +37,7 @@ export function LaunchPicker({ token }: { token: string }) {
       )}
       {collections.length > 0 && (
         <ul className="divide-y divide-border rounded-lg border border-border bg-canvas">
-          {collections.map((collection) => {
+          {visible.map((collection) => {
             const items = collection.item_count ?? 0
             const published = collection.published_count ?? 0
             return (
@@ -57,6 +61,11 @@ export function LaunchPicker({ token }: { token: string }) {
             )
           })}
         </ul>
+      )}
+      {collections.length > 6 && (
+        <button type="button" onClick={() => setShowAll((v) => !v)} className="font-mono text-xs text-ink-faint hover:text-accent-400">
+          {showAll ? 'show fewer' : `show all ${collections.length} collections`}
+        </button>
       )}
     </section>
   )

@@ -357,7 +357,7 @@ export function SolanaTokenPanel({ projectId = null }: { projectId?: string | nu
               {result.name} ({result.symbol}) launched — {formatTokenAmount(result.supply_raw, result.decimals)} tokens
               in your wallet.
             </p>
-            <p className="mt-1 break-all font-mono text-xs text-ink-muted">{result.mint_address}</p>
+            <p className="mt-1 break-all font-mono text-xs text-ink-muted" data-testid="launched-mint">{result.mint_address}</p>
             {result.explorer_url && (
               <a href={result.explorer_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-accent-400 underline">
                 View on explorer
