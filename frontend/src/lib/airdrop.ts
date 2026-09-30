@@ -31,11 +31,13 @@ export function toBaseUnits(text: string, decimals: number): bigint | null {
   return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, '0') || '0')
 }
 
-export function fromBaseUnits(amount: bigint, decimals: number): string {
+// 12500000n with 6 decimals → "12.5" ("1,234.5" grouped for display;
+// ungrouped for files other tools read back, like a CSV).
+export function fromBaseUnits(amount: bigint, decimals: number, { grouped = true } = {}): string {
   const scale = 10n ** BigInt(decimals)
   const whole = amount / scale
   const fraction = (amount % scale).toString().padStart(decimals, '0').replace(/0+$/, '')
-  return `${whole.toLocaleString('en-US')}${fraction ? `.${fraction}` : ''}`
+  return `${grouped ? whole.toLocaleString('en-US') : whole.toString()}${fraction ? `.${fraction}` : ''}`
 }
 
 // One recipient per line: address and amount, separated by a comma, tab or

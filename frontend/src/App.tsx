@@ -20,6 +20,7 @@ import { TokenLaunchpadPage } from './features/tokens/TokenLaunchpadPage'
 import { AllToolsPage } from './features/pillars/AllToolsPage'
 import { TokenCheckerPage } from './features/research/TokenCheckerPage'
 import { AirdropPage } from './features/distribute/AirdropPage'
+import { HolderSnapshotPage } from './features/distribute/HolderSnapshotPage'
 import { PillarHubPage } from './features/pillars/PillarHubPage'
 import { LEGACY_REDIRECTS, PILLARS } from './lib/pillars'
 
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/research/defi" element={<DefiScannerPage />} />
           <Route path="/research/check" element={<TokenCheckerPage />} />
           <Route path="/liquidity/airdrop" element={<AirdropPage />} />
+          <Route path="/liquidity/snapshot" element={<HolderSnapshotPage />} />
           {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
             <Route key={from} path={from} element={<Redirect to={to} />} />
           ))}

@@ -1,7 +1,7 @@
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, request
 
 from ..extensions import limiter
-from ..services import token_checker, token_pages
+from ..services import holder_snapshot, token_checker, token_pages
 
 token_pages_bp = Blueprint("token_pages", __name__)
 
@@ -46,4 +46,24 @@ def check_token(network: str, address: str):
     except token_checker.CheckError as exc:
         return jsonify(error=str(exc)), 400
     except token_checker.ChainReadError as exc:
+        return _chain_error(exc)
+
+
+@token_pages_bp.get("/holders/<network>/<address>")
+@limiter.limit("10/minute")
+def token_holders(network: str, address: str):
+    """Public: every holder of a token (EVM: launched here; ?block= for a
+    past block). Holder lists are public on-chain data."""
+    block = request.args.get("block")
+    if block is not None and not block.isdigit():
+        return jsonify(error="block must be a block number"), 400
+    try:
+        if network.startswith("solana"):
+            if block is not None:
+                return jsonify(error="Solana snapshots are always of now"), 400
+            return jsonify(holder_snapshot.snapshot_solana(network, address))
+        return jsonify(holder_snapshot.snapshot_evm(network, address, int(block) if block else None))
+    except holder_snapshot.SnapshotError as exc:
+        return jsonify(error=str(exc)), 400
+    except holder_snapshot.ChainReadError as exc:
         return _chain_error(exc)

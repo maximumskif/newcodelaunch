@@ -18,6 +18,7 @@ describe('amounts', () => {
     expect(toBaseUnits('0.0000001', 6)).toBeNull()
     expect(toBaseUnits('1e5', 6)).toBeNull()
     expect(fromBaseUnits(1_234_500_000n, 6)).toBe('1,234.5')
+    expect(fromBaseUnits(1_234_500_000n, 6, { grouped: false })).toBe('1234.5')
   })
 })
 

@@ -91,6 +91,7 @@ export function MyStuff({ token }: { token: string }) {
           { label: 'manage', to: '/tokens/create#history' },
           { label: 'public page', to: tokenPagePath(d.network, d.contract_address) },
           { label: 'airdrop', to: `/liquidity/airdrop?network=${d.network}&token=${d.contract_address}` },
+          { label: 'holders', to: `/liquidity/snapshot?network=${d.network}&address=${d.contract_address}` },
         ],
       })),
     ...(solana.data?.tokens ?? []).map((t) => ({
@@ -101,6 +102,7 @@ export function MyStuff({ token }: { token: string }) {
         { label: 'manage', to: '/tokens/create?chain=solana#history' },
         { label: 'public page', to: tokenPagePath(t.network, t.mint_address) },
         { label: 'airdrop', to: `/liquidity/airdrop?chain=solana&network=${t.network}&mint=${t.mint_address}` },
+        { label: 'holders', to: `/liquidity/snapshot?network=${t.network}&address=${t.mint_address}` },
       ],
     })),
   ]

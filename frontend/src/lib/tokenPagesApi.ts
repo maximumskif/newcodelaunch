@@ -81,7 +81,26 @@ export interface TokenCheckResult {
   explorer_url: string
 }
 
+export interface HolderSnapshot {
+  chain: 'evm' | 'solana'
+  network: string
+  address: string
+  symbol: string | null
+  decimals: number
+  total_supply: string
+  holder_count: number
+  // Only the largest 10,000 holders are listed when there are more.
+  truncated: boolean
+  holders: { address: string; balance: string; share: number }[]
+  as_of: { block: number | null; latest: boolean }
+  burn_addresses: string[]
+}
+
 export const tokenPagesApi = {
+  holders: (network: string, address: string, block?: string) =>
+    request<HolderSnapshot>(
+      `/token-pages/holders/${encodeURIComponent(network)}/${encodeURIComponent(address.trim())}${block ? `?block=${encodeURIComponent(block)}` : ''}`,
+    ),
   check: (network: string, address: string) =>
     request<TokenCheckResult>(`/token-pages/check/${encodeURIComponent(network)}/${encodeURIComponent(address.trim())}`),
   get: (network: string, address: string) =>
