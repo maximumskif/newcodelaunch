@@ -54,7 +54,7 @@ Optional (default in brackets):
 
 | Variable | Notes |
 |---|---|
-| `SEPOLIA_RPC_URL`, `ETHEREUM_RPC_URL`, `POLYGON_AMOY_RPC_URL`, `POLYGON_RPC_URL`, `BSC_TESTNET_RPC_URL`, `BSC_RPC_URL`, `SOLANA_DEVNET_RPC_URL`, `SOLANA_RPC_URL` | [public endpoints] Optional to start, but see [RPC providers](#rpc-providers). |
+| `SEPOLIA_RPC_URL`, `ETHEREUM_RPC_URL`, `POLYGON_AMOY_RPC_URL`, `POLYGON_RPC_URL`, `BSC_TESTNET_RPC_URL`, `BSC_RPC_URL`, `BASE_SEPOLIA_RPC_URL`, `BASE_RPC_URL`, `SOLANA_DEVNET_RPC_URL`, `SOLANA_RPC_URL` | [public endpoints] Optional to start, but see [RPC providers](#rpc-providers). |
 | `JWT_ACCESS_TOKEN_EXPIRES_SECONDS` | [3600] |
 | `WALLET_NONCE_TTL_SECONDS` | [300] Also what `prune-nonces` uses as its cutoff. |
 | `NFT_GENERATION_JOB_STALE_SECONDS` | [600] How long a generation job can go without progress before the reaper fails it. |
@@ -90,7 +90,7 @@ Vite inlines these into the static bundle when it's built; changing one means re
 |---|---|
 | `VITE_API_BASE_URL` | **Required** for any deployment not on localhost (default `http://localhost:5000/api`). The backend's public URL plus `/api`. |
 | `VITE_SOLANA_RPC_URL`, `VITE_SOLANA_DEVNET_RPC_URL` | [public Solana endpoints] |
-| `VITE_SEPOLIA_RPC_URL`, `VITE_ETHEREUM_RPC_URL`, `VITE_POLYGON_AMOY_RPC_URL`, `VITE_POLYGON_RPC_URL`, `VITE_BSC_TESTNET_RPC_URL`, `VITE_BSC_RPC_URL` | [viem's public default for that chain] |
+| `VITE_SEPOLIA_RPC_URL`, `VITE_ETHEREUM_RPC_URL`, `VITE_POLYGON_AMOY_RPC_URL`, `VITE_POLYGON_RPC_URL`, `VITE_BSC_TESTNET_RPC_URL`, `VITE_BSC_RPC_URL`, `VITE_BASE_SEPOLIA_RPC_URL`, `VITE_BASE_RPC_URL` | [viem's public default for that chain] |
 
 ## Deploying and migrations
 

@@ -20,6 +20,8 @@ export const EVM_NETWORKS: EvmNetwork[] = [
   { id: 'polygon', label: 'Polygon', isTestnet: false, nativeToken: 'POL' },
   { id: 'bsc_testnet', label: 'BSC Testnet', isTestnet: true, nativeToken: 'tBNB' },
   { id: 'bsc', label: 'BNB Smart Chain', isTestnet: false, nativeToken: 'BNB' },
+  { id: 'base_sepolia', label: 'Base Sepolia', isTestnet: true, nativeToken: 'ETH' },
+  { id: 'base', label: 'Base', isTestnet: false, nativeToken: 'ETH' },
 ]
 
 // Fails closed on an unrecognized network id (bad data, future rename) —

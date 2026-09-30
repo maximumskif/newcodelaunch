@@ -16,6 +16,8 @@ export const NETWORK_TO_CHAIN_ID: Record<string, number> = {
   polygon_amoy: 80002,
   polygon: 137,
   bsc_testnet: 97,
+  base_sepolia: 84532,
+  base: 8453,
   bsc: 56,
 }
 

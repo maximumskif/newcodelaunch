@@ -91,6 +91,22 @@ EVM_NETWORKS = {
         "poa": True,
         "is_testnet": False,
     },
+    "base_sepolia": {
+        "name": "Base Sepolia",
+        "chain_id": 84532,
+        "explorer_url": "https://sepolia.basescan.org",
+        "native_token": "ETH",
+        "poa": False,
+        "is_testnet": True,
+    },
+    "base": {
+        "name": "Base",
+        "chain_id": 8453,
+        "explorer_url": "https://basescan.org",
+        "native_token": "ETH",
+        "poa": False,
+        "is_testnet": False,
+    },
 }
 
 SOLANA_NETWORKS = {
@@ -119,6 +135,8 @@ _RPC_CONFIG_KEYS = {
     "polygon": "POLYGON_RPC_URL",
     "bsc_testnet": "BSC_TESTNET_RPC_URL",
     "bsc": "BSC_RPC_URL",
+    "base_sepolia": "BASE_SEPOLIA_RPC_URL",
+    "base": "BASE_RPC_URL",
     "solana_devnet": "SOLANA_DEVNET_RPC_URL",
     "solana": "SOLANA_RPC_URL",
 }

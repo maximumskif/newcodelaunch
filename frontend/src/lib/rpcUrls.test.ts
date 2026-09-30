@@ -50,6 +50,8 @@ describe('resolved RPC URLs', () => {
       'VITE_POLYGON_RPC_URL',
       'VITE_BSC_TESTNET_RPC_URL',
       'VITE_BSC_RPC_URL',
+      'VITE_BASE_SEPOLIA_RPC_URL',
+      'VITE_BASE_RPC_URL',
     ]) {
       vi.stubEnv(name, '')
     }
@@ -83,6 +85,8 @@ describe('resolved RPC URLs', () => {
       VITE_POLYGON_RPC_URL: 'https://polygon.example',
       VITE_BSC_TESTNET_RPC_URL: 'https://bsc-testnet.example',
       VITE_BSC_RPC_URL: 'https://bsc.example',
+      VITE_BASE_SEPOLIA_RPC_URL: 'https://base-sepolia.example',
+      VITE_BASE_RPC_URL: 'https://base.example',
       VITE_SOLANA_DEVNET_RPC_URL: 'https://solana-devnet.example',
       VITE_SOLANA_RPC_URL: 'https://solana-mainnet.example',
     }
@@ -106,6 +110,8 @@ describe('resolved RPC URLs', () => {
       Polygon: 'https://polygon.example',
       'BNB Smart Chain Testnet': 'https://bsc-testnet.example',
       'BNB Smart Chain': 'https://bsc.example',
+      'Base Sepolia': 'https://base-sepolia.example',
+      Base: 'https://base.example',
     })
   })
 })

@@ -1,5 +1,5 @@
 import { fallback, http, createConfig } from 'wagmi'
-import { bsc, bscTestnet, mainnet, polygon, polygonAmoy, sepolia } from 'wagmi/chains'
+import { base, baseSepolia, bsc, bscTestnet, mainnet, polygon, polygonAmoy, sepolia } from 'wagmi/chains'
 import { injected, metaMask } from 'wagmi/connectors'
 
 import { evmRpcUrls } from './rpcUrls'
@@ -10,7 +10,7 @@ import { evmRpcUrls } from './rpcUrls'
 // at a local anvil instance (see frontend/e2e/README.md).
 const transport = (network: Parameters<typeof evmRpcUrls>[0]) => fallback(evmRpcUrls(network).map((url) => http(url)))
 export const wagmiConfig = createConfig({
-  chains: [sepolia, mainnet, polygonAmoy, polygon, bscTestnet, bsc],
+  chains: [sepolia, mainnet, polygonAmoy, polygon, bscTestnet, bsc, baseSepolia, base],
   connectors: [metaMask(), injected()],
   // wagmi defaults to { multicall: true }, which silently folds contract
   // reads made in the same tick into one call to the Multicall3 contract —
@@ -26,5 +26,7 @@ export const wagmiConfig = createConfig({
     [polygon.id]: transport('polygon'),
     [bscTestnet.id]: transport('bsc_testnet'),
     [bsc.id]: transport('bsc'),
+    [baseSepolia.id]: transport('base_sepolia'),
+    [base.id]: transport('base'),
   },
 })

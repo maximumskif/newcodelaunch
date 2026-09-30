@@ -150,6 +150,12 @@ class Config:
     BSC_RPC_URL = _rpc_urls_env(
         "BSC_RPC_URL", ["https://bsc-dataseed1.defibit.io", "https://1rpc.io/bnb", "https://bsc-rpc.publicnode.com", "https://bsc-dataseed.binance.org"]
     )
+    BASE_SEPOLIA_RPC_URL = _rpc_urls_env(
+        "BASE_SEPOLIA_RPC_URL", ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.drpc.org"]
+    )
+    BASE_RPC_URL = _rpc_urls_env(
+        "BASE_RPC_URL", ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://1rpc.io/base", "https://base.drpc.org"]
+    )
     SOLANA_DEVNET_RPC_URL = _rpc_url_env("SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com")
     SOLANA_RPC_URL = _rpc_url_env("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 

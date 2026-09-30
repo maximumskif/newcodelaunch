@@ -92,7 +92,7 @@ export function HomePage() {
                 create a token →
               </Link>
             </div>
-            <p className="font-mono text-xs text-ink-faint">solana · ethereum · polygon · bnb chain — testnets and mainnets</p>
+            <p className="font-mono text-xs text-ink-faint">solana · ethereum · base · polygon · bnb chain — testnets and mainnets</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {PILLARS.map((pillar) => (

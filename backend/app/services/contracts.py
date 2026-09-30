@@ -27,6 +27,8 @@ NATIVE_TOKENS = {
     "polygon": "POL",
     "bsc_testnet": "tBNB",
     "bsc": "BNB",
+    "base_sepolia": "ETH",
+    "base": "ETH",
 }
 
 

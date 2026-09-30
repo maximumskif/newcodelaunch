@@ -56,6 +56,20 @@ _BUILT_IN_DEXES: dict[str, dict[str, str]] = {
         "factory": "0x6725F303b657a9451d8BA641348b6761A6CC7a17",
         "wrapped_native": "0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd",
     },
+    # Checked 2026-09-30 against each live chain: router.factory() and
+    # router.WETH() return exactly these (WETH is Base's predeploy).
+    "base": {
+        "name": "Uniswap V2",
+        "router": "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+        "factory": "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
+        "wrapped_native": "0x4200000000000000000000000000000000000006",
+    },
+    "base_sepolia": {
+        "name": "Uniswap V2",
+        "router": "0x1689E7B1F10000AE47eBfE339a4f69dECd19F602",
+        "factory": "0x7Ae58f10f7849cA6F5fB71b7f45CB416c9204b1e",
+        "wrapped_native": "0x4200000000000000000000000000000000000006",
+    },
 }
 
 _FACTORY_ABI = [

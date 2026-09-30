@@ -98,7 +98,7 @@ def _chain(monkeypatch, **kwargs):
 
 def test_dexes_lists_verified_networks_only(app, client):
     body = client.get("/api/contracts/dexes").get_json()["dexes"]
-    assert set(body) == {"ethereum", "sepolia", "polygon", "bsc", "bsc_testnet"}
+    assert set(body) == {"ethereum", "sepolia", "polygon", "bsc", "bsc_testnet", "base", "base_sepolia"}
     assert body["sepolia"]["router"] == ROUTER
     assert body["bsc"]["name"] == "PancakeSwap V2"
 

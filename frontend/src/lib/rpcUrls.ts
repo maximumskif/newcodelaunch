@@ -28,6 +28,8 @@ export const EVM_RPC_URL_OVERRIDES = {
   polygon: rpcOverride(env.VITE_POLYGON_RPC_URL),
   bsc_testnet: rpcOverride(env.VITE_BSC_TESTNET_RPC_URL),
   bsc: rpcOverride(env.VITE_BSC_RPC_URL),
+  base_sepolia: rpcOverride(env.VITE_BASE_SEPOLIA_RPC_URL),
+  base: rpcOverride(env.VITE_BASE_RPC_URL),
 }
 
 // Public endpoints tried after the override, in order — the same list as the
@@ -48,6 +50,8 @@ export const EVM_PUBLIC_RPC_URLS: Record<keyof typeof EVM_RPC_URL_OVERRIDES, str
     'https://bsc-testnet-rpc.publicnode.com',
   ],
   bsc: ['https://bsc-dataseed1.defibit.io', 'https://1rpc.io/bnb', 'https://bsc-rpc.publicnode.com', 'https://bsc-dataseed.binance.org'],
+  base_sepolia: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com', 'https://base-sepolia.drpc.org'],
+  base: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://1rpc.io/base', 'https://base.drpc.org'],
 }
 
 // The endpoints wagmi tries for a network, in order. A local node (anvil in
