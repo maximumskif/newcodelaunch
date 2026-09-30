@@ -187,7 +187,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <section aria-labelledby="configure-heading" className="rounded-xl border border-border bg-surface p-6">
             <div className="mb-6 flex items-center gap-3 border-b border-border pb-5">
-              <span className="grid h-10 w-10 place-items-center rounded-lg bg-[image:var(--gradient-accent)] text-canvas">
+              <span className="grid h-10 w-10 place-items-center rounded-lg bg-accent-500 text-canvas">
                 <meta.icon className="h-5 w-5" />
               </span>
               <div>
@@ -307,7 +307,7 @@ function TemplateCard({ template, selected, onSelect }: { template: ContractTemp
     >
       <div className="flex items-start justify-between">
         <span
-          className={`grid h-9 w-9 place-items-center rounded-lg ${selected ? 'bg-[image:var(--gradient-accent)] text-canvas' : 'bg-surface-raised text-accent-300'}`}
+          className={`grid h-9 w-9 place-items-center rounded-lg ${selected ? 'bg-accent-500 text-canvas' : 'bg-surface-raised text-accent-300'}`}
         >
           <Icon className="h-[18px] w-[18px]" />
         </span>

@@ -98,7 +98,7 @@ export function TemplateMarketplacePage() {
 function TemplateIcon({ id }: { id: string }) {
   const { icon: Icon } = templateMeta(id)
   return (
-    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
+    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-500/15 text-accent-300">
       <Icon className="h-5 w-5" />
     </span>
   )

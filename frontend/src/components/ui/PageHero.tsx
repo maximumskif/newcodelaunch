@@ -15,7 +15,7 @@ interface Props {
 export function PageHero({ eyebrow, title, description, children }: Props) {
   return (
     <div className="animate-fade-up relative overflow-hidden rounded-xl border border-border bg-surface p-5 sm:p-8">
-      <div className="absolute inset-y-0 left-0 w-[3px] bg-[image:var(--gradient-accent)]" />
+      <div className="absolute inset-y-0 left-0 w-[3px] bg-accent-500" />
       <p className="text-xs font-semibold uppercase tracking-widest text-accent-400">{eyebrow}</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{title}</h1>
       <p className="mt-2 max-w-2xl text-ink-muted">{description}</p>

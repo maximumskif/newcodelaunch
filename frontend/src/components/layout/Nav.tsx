@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 
-import { WalletConnect } from '../../features/auth/WalletConnect'
 import { PILLARS } from '../../lib/pillars'
 import { buttonClassName } from '../ui/Button'
 import { Dropdown } from '../ui/Dropdown'
@@ -50,13 +49,9 @@ export function Nav() {
           >
             <span aria-hidden>&gt;</span> search tools <kbd className="rounded border border-border px-1">ctrl k</kbd>
           </button>
-          {/* Wallet buttons on wide screens only; on smaller ones the one
-              action is opening the app, where connecting happens. */}
-          <div className="hidden items-center gap-3 xl:flex">
-            <WalletConnect />
-          </div>
-          <Link to="/tools" className={buttonClassName('primary', 'sm')}>
-            open app
+          {/* One action: into the app, where connecting a wallet happens. */}
+          <Link to="/tools" className={buttonClassName('primary', 'md')}>
+            open app →
           </Link>
         </div>
       </div>

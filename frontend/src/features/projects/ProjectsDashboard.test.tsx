@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -11,6 +12,24 @@ import { ProjectsDashboard } from './ProjectsDashboard'
 vi.mock('../auth/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
+
+// "My stuff" loads these; empty unless a test says otherwise.
+vi.mock('../../lib/contractsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/contractsApi')>()
+  return { ...actual, contractsApi: { ...actual.contractsApi, listDeployments: vi.fn(async () => ({ deployments: [] })) } }
+})
+vi.mock('../../lib/solanaTokensApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/solanaTokensApi')>()
+  return { ...actual, solanaTokensApi: { ...actual.solanaTokensApi, list: vi.fn(async () => ({ tokens: [] })) } }
+})
+vi.mock('../../lib/nftApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/nftApi')>()
+  return { ...actual, nftApi: { ...actual.nftApi, listCollections: vi.fn(async () => ({ collections: [] })) } }
+})
+vi.mock('../../lib/candyMachineApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/candyMachineApi')>()
+  return { ...actual, candyMachineApi: { ...actual.candyMachineApi, dashboard: vi.fn(async () => ({ drops: [], totals_by_network: {} })) } }
+})
 
 vi.mock('../../lib/projectsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/projectsApi')>()
@@ -63,9 +82,11 @@ const baseProject: Project = {
 
 function renderDashboard() {
   return render(
-    <MemoryRouter>
-      <ProjectsDashboard />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter>
+        <ProjectsDashboard />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

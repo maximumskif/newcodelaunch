@@ -230,7 +230,7 @@ function PillarTree({ pillar, expanded, collapsed, onNavigate }: { pillar: Pilla
         }
       >
         <span aria-hidden className="w-4 shrink-0 text-center font-bold">{pillar.glyph}</span>
-        {!collapsed && <span className="truncate">{pillar.name.toLowerCase()}/</span>}
+        {!collapsed && <span className="truncate">{pillar.short}/</span>}
       </NavLink>
       {expanded && (
         <ul className="mt-0.5 space-y-px">

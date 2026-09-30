@@ -12,6 +12,7 @@ import { PageHero } from '../../components/ui/PageHero'
 import { PROJECT_TYPES, projectHref } from '../../lib/projectTypes'
 import { projectsApi, type Project, type ProjectStatus } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
+import { MyStuff } from './MyStuff'
 
 const STATUS_TONE: Record<ProjectStatus, BadgeTone> = {
   draft: 'neutral',
@@ -98,9 +99,9 @@ export function ProjectsDashboard() {
   return (
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
-        eyebrow="Overview"
-        title="Dashboard"
-        description="Every project you've started — resume a draft where you left off, or jump back into something already deployed."
+        eyebrow="My stuff"
+        title="Everything you've made"
+        description="Your tokens, NFT collections, contracts and drops in one place — each with what to do next. Start something new from the tiles below."
       />
 
       <QuickStart />
@@ -111,9 +112,10 @@ export function ProjectsDashboard() {
         </Card>
       ) : (
         <>
-          <div className="flex items-center justify-between">
+          <MyStuff token={accessToken} />
+          <div className="flex items-center justify-between pt-4">
             <h2 className="font-display text-lg font-semibold text-ink">
-              Your projects{' '}
+              Drafts &amp; projects{' '}
               <span className="text-sm font-normal text-ink-faint">
               {isLoading ? 'Loading…' : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
               </span>
@@ -207,10 +209,10 @@ export function ProjectsDashboard() {
 }
 
 const QUICK_START = [
-  { icon: IconCoin, title: 'Launch a token', description: 'ERC-20 or SPL, with taxes, limits and verified source.', href: '/tokens/create' },
-  { icon: IconLayers, title: 'Build an NFT collection', description: 'Layers, rarity and rules — generated and published to IPFS.', href: '/nfts/generator' },
-  { icon: IconCandy, title: 'Launch a drop', description: 'Sell a collection on Solana with phases and mint limits.', href: '/drops/launch' },
-  { icon: IconCode, title: 'Deploy a contract', description: 'Any template, including LP time-locks and NFT contracts.', href: '/contracts/deploy' },
+  { pillar: 'tokens', icon: IconCoin, title: 'Launch a token', description: 'ERC-20 or SPL, with taxes, limits and verified source.', href: '/tokens/create' },
+  { pillar: 'nfts', icon: IconLayers, title: 'Build an NFT collection', description: 'Layers, rarity and rules — generated and published to IPFS.', href: '/nfts/generator' },
+  { pillar: 'drops', icon: IconCandy, title: 'Launch a drop', description: 'Sell a collection on Solana with phases and mint limits.', href: '/drops/launch' },
+  { pillar: 'contracts', icon: IconCode, title: 'Deploy a contract', description: 'Any template, including LP time-locks and NFT contracts.', href: '/contracts/deploy' },
 ]
 
 // Straight into a product — the dashboard's job isn't only listing projects.
@@ -219,13 +221,14 @@ function QuickStart() {
     <section aria-labelledby="quick-start-heading">
       <h2 id="quick-start-heading" className="sr-only">Quick start</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {QUICK_START.map(({ icon: Icon, title, description, href }) => (
+        {QUICK_START.map(({ pillar, icon: Icon, title, description, href }) => (
           <Link
             key={title}
             to={href}
+            data-pillar={pillar}
             className="group flex flex-col rounded-xl border border-border bg-surface p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-500/40 hover:bg-surface-hover"
           >
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-[image:var(--gradient-accent-soft)] text-accent-300">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-500/15 text-accent-300">
               <Icon className="h-[18px] w-[18px]" />
             </span>
             <span className="mt-3 flex items-center gap-1.5 font-medium text-ink">

@@ -57,7 +57,7 @@ export function AllToolsPage() {
               }`}
             >
               <span className={`h-2 w-2 rounded-full ${id ? 'bg-accent-500' : 'bg-ink'}`} aria-hidden />
-              {pillar ? pillar.name.toLowerCase() : 'all'}
+              {pillar ? pillar.short : 'all'}
             </button>
           )
         })}

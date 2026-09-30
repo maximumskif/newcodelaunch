@@ -22,6 +22,8 @@ export interface Tool {
 export interface Pillar {
   id: PillarId
   name: string
+  // For tight spots: sidebar, filter chips.
+  short: string
   glyph: string
   path: string
   tagline: string
@@ -46,6 +48,7 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
 export const PILLARS: Pillar[] = [
   {
     id: 'tokens',
+    short: 'tokens',
     name: 'Tokens',
     glyph: '$',
     path: '/tokens',
@@ -69,6 +72,7 @@ export const PILLARS: Pillar[] = [
   },
   {
     id: 'nfts',
+    short: 'nfts',
     name: 'NFTs',
     glyph: '◆',
     path: '/nfts',
@@ -90,6 +94,7 @@ export const PILLARS: Pillar[] = [
   },
   {
     id: 'contracts',
+    short: 'contracts',
     name: 'Smart contracts',
     glyph: '{}',
     path: '/contracts',
@@ -112,6 +117,7 @@ export const PILLARS: Pillar[] = [
   },
   {
     id: 'drops',
+    short: 'drops',
     name: 'Drops',
     glyph: '▲',
     path: '/drops',
@@ -132,6 +138,7 @@ export const PILLARS: Pillar[] = [
   },
   {
     id: 'liquidity',
+    short: 'liquidity',
     name: 'Liquidity & distribution',
     glyph: '≈',
     path: '/liquidity',
@@ -154,6 +161,7 @@ export const PILLARS: Pillar[] = [
   },
   {
     id: 'research',
+    short: 'research',
     name: 'Research',
     glyph: '?',
     path: '/research',

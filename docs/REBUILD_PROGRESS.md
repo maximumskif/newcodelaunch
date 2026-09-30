@@ -1032,3 +1032,12 @@ The user asked for the site to read as an all-in-one Web3 builder, in a unique t
 - **Shell:** a folder-tree sidebar (the current area expanded), breadcrumbs, and a `ctrl+k` / `cmd+k` command bar (an accessible combobox: search by name, description or keyword; "soon" tools listed but not openable) in both the app and marketing headers.
 
 **Verified**: Vitest 227 (new: every live tool points at a real route; every legacy redirect target exists; area/tool lookup; command bar search, Enter, disabled "soon" entries, arrow keys, Escape; All tools search and filters; hub content and query forwarding). Playwright: accessibility scans extended to all six area pages, `/tools` and the new tool URLs, plus a redirect test. The first run caught "soon" cards dimmed below accessible contrast, now dashed instead of faded.
+
+## All-in-one home page and "My stuff", 2026-09-30
+
+- **Home page** rebuilt from the approved mockup. The hero ("Build anything on-chain.", blinking cursor) sits beside all six areas as colored tiles. Below that: feature panels for tokens, NFTs and contracts with labelled example previews, compact panels for drops, liquidity and research, and a command-bar showcase whose "try it" button opens the real one. Tool counts come from `lib/pillars.ts`. The marketing bar's two wallet buttons are gone; its single action is "open app".
+- **My stuff** (`/dashboard`) shows everything the account has made, by area: tokens (EVM and Solana, with manage and public-page links), NFT collections (continue/publish/open, plus sell once published), contracts (non-token deployments with verification status) and drops (minted counts, storefront, manage). Each section is in its area's color, shows five items with "show all", and has an empty-state link to start. Projects stay below as "Drafts & projects". The generator now opens `?collection=<id>`.
+- Area pages keep their color everywhere: gradient fills were replaced with accent classes, since the gradient variables resolve at the root and ignored `[data-pillar]` (the NFT page's header stripe stayed green). Short area names are used in the sidebar and filters.
+- **Found by axe:** the home page's code preview scrolled horizontally without keyboard access; it wraps now.
+
+**Verified**: Vitest 228 (new: My stuff grouping and next-step links); full Playwright suite plus the accessibility re-run (all 20 axe scans clean).

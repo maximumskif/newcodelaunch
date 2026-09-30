@@ -95,7 +95,8 @@
   --shadow-glow-hero: 0 0 0 1px var(--color-border-strong);
 
   /* Flat fills — kept as variables because many components paint with
-     bg-[image:var(--gradient-accent)]; both are now solid colors. */
+     gradients; both are now solid colors. Prefer bg-accent-500, which also
+     follows [data-pillar] (these variables resolve once, at the root). */
   --gradient-accent: linear-gradient(var(--color-accent-500), var(--color-accent-500));
   --gradient-accent-soft: linear-gradient(
     color-mix(in oklab, var(--color-accent-500) 16%, transparent),

@@ -21,6 +21,8 @@ export function NFTGeneratorPage() {
   const { accessToken } = useAuth()
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('project')
+  // ?collection=<id> opens that collection (links from My stuff).
+  const linkedCollectionId = searchParams.get('collection')
 
   const [collections, setCollections] = useState<NFTCollection[]>([])
   const [isLoadingCollections, setIsLoadingCollections] = useState(false)
@@ -38,7 +40,7 @@ export function NFTGeneratorPage() {
     try {
       const { collections: fetched } = await nftApi.listCollections(token)
       setCollections(fetched)
-      setSelectedId((current) => current ?? fetched[0]?.id ?? null)
+      setSelectedId((current) => current ?? (fetched.some((c) => c.id === linkedCollectionId) ? linkedCollectionId : null) ?? fetched[0]?.id ?? null)
     } finally {
       setIsLoadingCollections(false)
     }
@@ -77,6 +79,7 @@ export function NFTGeneratorPage() {
     // ahead of the request is the standard fetch-effect idiom.
     // oxlint-disable-next-line react/set-state-in-effect
     if (accessToken) void refreshCollections(accessToken)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs per sign-in, not per render
   }, [accessToken])
 
   // Resume: arriving via ?project= either jumps straight to the collection
