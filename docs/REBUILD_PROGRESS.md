@@ -1111,3 +1111,13 @@ Signed in with a fresh test account on the e2e stack, then screenshotted the emp
 - **Wording:** "NFT Generator" is now "collection generator" everywhere, matching the page. The drops page links to it when you have no collections. The project type is "NFT drop", not "Candy Machine".
 
 **Verified**: Vitest 242 (new: My stuff shows only filled areas; a new account gets the one-line state); Playwright: the token deploy spec checks the next-step links; full suite 46 passed after axe caught the new "start one" link told apart by colour alone (inline links in sentences are underlined now).
+
+## Where we left off, 2026-09-30
+
+Suggested order for the next session:
+
+1. **Hands-on walkthrough by the owner.** Everything since the redesign (six areas, token checker, airdrop, holder snapshot, burn, polish passes 1–2) has been verified by automated tests and screenshots only. Click through it locally and note what feels confusing or generic.
+2. **Private test deploy.** The Oracle Always Free ARM instance (Phoenix, AD-1) has no public IP because it's in a private subnet. Fix that in the Oracle console, then run `deploy/bootstrap.sh`.
+3. **Then features, guided by the walkthrough.** Candidates: vesting (the last "soon" tool in liquidity & distribution; builds on the time-lock template), the bonding-curve launch, and the platform-fee decision.
+
+Before anything goes public: rotate the Pinata, Etherscan and Helius keys that were shared in chat. They're only stored in the gitignored `backend/.env`.
