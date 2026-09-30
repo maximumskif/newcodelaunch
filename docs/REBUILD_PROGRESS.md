@@ -1100,3 +1100,14 @@ Screenshotted every page signed out at 1440 px and 390 px, then fixed what a fir
 - **Housekeeping:** the Multisend template is hidden from template pickers (it's the airdrop's plumbing). The home page and liquidity area no longer say airdrops and snapshots are "coming".
 
 **Verified**: pytest 401 / 2 skipped; Vitest 241 (new: most-specific tool match for shared pages; error mapping, including passing through unknown errors and viem short messages); Playwright 46 passed, all axe scans clean.
+
+## Polish pass, part 2, 2026-09-30
+
+Signed in with a fresh test account on the e2e stack, then screenshotted the empty and "just made something" states at 1440 px and 390 px:
+
+- **My stuff for a new account** was a long scroll on a phone: four tall start tiles, four empty sections repeating the same links, and a large empty projects box. Now only areas with something in them get a section. A brand-new account sees the start tiles and one line ("Nothing here yet…"). On a phone the tiles are a 2×2 grid of titles. Empty drafts collapse to one line that says what a project is for.
+- **Collection generator, first visit:** the only way in was a small "+" and grey text. With no collections the create form is simply open, and the main panel shows "how it works" (layers → rarity and rules → generate → publish and sell). The AI bulk-analysis toggle waits until there's something to analyse, and the page doesn't flash this first-run view while collections load.
+- **After deploying a token:** the result card now offers next steps: public page, add liquidity, airdrop, holders.
+- **Wording:** "NFT Generator" is now "collection generator" everywhere, matching the page. The drops page links to it when you have no collections. The project type is "NFT drop", not "Candy Machine".
+
+**Verified**: Vitest 242 (new: My stuff shows only filled areas; a new account gets the one-line state); Playwright: the token deploy spec checks the next-step links; full suite 46 passed after axe caught the new "start one" link told apart by colour alone (inline links in sentences are underlined now).

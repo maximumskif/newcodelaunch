@@ -67,7 +67,7 @@ describe('NewProjectWizard', () => {
     expect(screen.getByText('Token')).toBeInTheDocument()
     expect(screen.getByText('NFT Collection')).toBeInTheDocument()
     expect(screen.getByText('Custom Contract')).toBeInTheDocument()
-    expect(screen.queryByText('Candy Machine')).not.toBeInTheDocument()
+    expect(screen.queryByText('NFT drop')).not.toBeInTheDocument()
   })
 
   it('hides the network picker for a type that has no network concept', async () => {

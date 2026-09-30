@@ -330,7 +330,7 @@ export function MintLaunchPage() {
       {!isLoading && collection && publishedItems.length === 0 && (
         <EmptyState
           title="No published items yet"
-          description="Publish at least one generated item to IPFS from the NFT Generator before launching."
+          description="Publish at least one generated item to IPFS in the collection generator before launching."
         />
       )}
 

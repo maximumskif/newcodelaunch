@@ -33,7 +33,12 @@ export function LaunchPicker({ token }: { token: string }) {
       {error && <InlineError>{(error as Error).message}</InlineError>}
       {isLoading && <p className="text-sm text-ink-faint">Loading your collections…</p>}
       {data && collections.length === 0 && (
-        <p className="text-sm text-ink-muted">No collections yet — build one in the NFT Generator first.</p>
+        <p className="text-sm text-ink-muted">
+          No collections yet.{' '}
+          <Link to="/nfts/generator" className="text-accent-400 underline underline-offset-2">
+            Build one in the collection generator →
+          </Link>
+        </p>
       )}
       {collections.length > 0 && (
         <ul className="divide-y divide-border rounded-lg border border-border bg-canvas">

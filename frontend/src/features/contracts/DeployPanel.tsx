@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
 import { Badge } from '../../components/ui/Badge'
@@ -9,6 +10,7 @@ import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckb
 import { SignInPrompt } from '../../components/ui/SignInPrompt'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
+import { tokenPagePath } from '../../lib/tokenPagesApi'
 import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
@@ -274,6 +276,23 @@ export function DeployPanel({ title, description, templateType, projectId, prese
                   )}
                   <VerifySource key={deployment.id} deployment={deployment} compact />
                 </div>
+                {deployment.contract_type === 'erc20' && (
+                  <div className="border-t border-success/20 pt-2">
+                    <p className="font-mono text-xs text-ink-faint">next</p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
+                      {[
+                        ['public page', tokenPagePath(deployment.network, deployment.contract_address)],
+                        ['add liquidity ↓', '#history'],
+                        ['airdrop', `/liquidity/airdrop?network=${deployment.network}&token=${deployment.contract_address}`],
+                        ['holders', `/liquidity/snapshot?network=${deployment.network}&address=${deployment.contract_address}`],
+                      ].map(([label, to]) => (
+                        <Link key={label} to={to} className="text-accent-300 hover:underline">
+                          {label} →
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </aside>

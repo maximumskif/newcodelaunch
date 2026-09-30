@@ -3,6 +3,9 @@ import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
+import { contractsApi } from '../../lib/contractsApi'
+import { nftApi } from '../../lib/nftApi'
+import { solanaTokensApi } from '../../lib/solanaTokensApi'
 import { MyStuff } from './MyStuff'
 
 vi.mock('../../lib/contractsApi', async (importOriginal) => {
@@ -69,7 +72,20 @@ describe('MyStuff', () => {
     const contracts = screen.getByRole('region', { name: /contracts/ })
     expect(within(contracts).getByText('Token Time-Lock')).toBeInTheDocument()
 
-    const drops = screen.getByRole('region', { name: /drops/ })
-    expect(within(drops).getByRole('link', { name: 'Launch a drop →' })).toHaveAttribute('href', '/drops/launch')
+    // No drops: no empty section (the start tiles above cover it).
+    expect(screen.queryByRole('region', { name: /drops/ })).not.toBeInTheDocument()
+  })
+
+  it('says so, in one line, when nothing has been made yet', async () => {
+    vi.mocked(contractsApi.listDeployments).mockResolvedValueOnce({ deployments: [] })
+    vi.mocked(solanaTokensApi.list).mockResolvedValueOnce({ tokens: [] })
+    vi.mocked(nftApi.listCollections).mockResolvedValueOnce({ collections: [] })
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter><MyStuff token="tok" /></MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText(/^Nothing here yet/)).toBeInTheDocument()
+    expect(screen.queryByRole('region')).not.toBeInTheDocument()
   })
 })

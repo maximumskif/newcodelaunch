@@ -57,8 +57,8 @@ export const PROJECT_TYPES: Record<ProjectType, ProjectTypeMeta> = {
     creatableViaWizard: true,
   },
   candy_machine: {
-    label: 'Candy Machine',
-    description: 'Launch a Solana Candy Machine from a published NFT collection.',
+    label: 'NFT drop',
+    description: 'Sell a published NFT collection on Solana with a mint page.',
     path: '/drops/launch',
     icon: IconCandy,
     needsNetwork: true,

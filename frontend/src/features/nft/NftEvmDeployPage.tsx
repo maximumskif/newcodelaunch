@@ -166,11 +166,11 @@ export function NftEvmDeployPage() {
         />
         <EmptyState
           title="Pick a collection to deploy"
-          description={'Publish at least one item to IPFS in the NFT Generator, then use "Deploy on EVM" there.'}
+          description={'Publish at least one item to IPFS in the collection generator, then use "Deploy on EVM" there.'}
           action={
             <Link to="/nfts/generator" className="mt-2 inline-flex">
               <Button variant="secondary" size="sm">
-                Go to NFT Generator
+                Go to the collection generator
               </Button>
             </Link>
           }
@@ -204,7 +204,7 @@ export function NftEvmDeployPage() {
           {publishedCount === 0 ? (
             <EmptyState
               title="No published items yet"
-              description="Publish at least one generated item to IPFS from the NFT Generator before deploying."
+              description="Publish at least one generated item to IPFS in the collection generator before deploying."
             />
           ) : (
             <>

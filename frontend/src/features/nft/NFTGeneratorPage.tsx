@@ -27,7 +27,9 @@ export function NFTGeneratorPage() {
   const linkedCollectionId = searchParams.get('collection')
 
   const [collections, setCollections] = useState<NFTCollection[]>([])
-  const [isLoadingCollections, setIsLoadingCollections] = useState(false)
+  // True until the first list arrives, so a signed-in visitor never
+  // glimpses the brand-new-account view (create form, "how it works").
+  const [isLoadingCollections, setIsLoadingCollections] = useState(Boolean(accessToken))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collection, setCollection] = useState<NFTCollection | null>(null)
   const [isLoadingCollection, setIsLoadingCollection] = useState(false)
@@ -149,6 +151,7 @@ export function NFTGeneratorPage() {
         <SignInPrompt purpose="create and manage NFT collections" />
       ) : (
         <>
+          {collections.length > 0 && (
           <button
             onClick={() => setShowBatchAnalyzer((v) => !v)}
             className="flex items-center gap-1 text-xs text-ink-faint hover:text-ink"
@@ -156,7 +159,8 @@ export function NFTGeneratorPage() {
             <IconChevronDown className={`h-3 w-3 transition-transform duration-150 ${showBatchAnalyzer ? '' : '-rotate-90'}`} />
             {showBatchAnalyzer ? 'Hide' : 'Show'} bulk trait analysis (AI)
           </button>
-          {showBatchAnalyzer && <BatchTraitAnalyzer token={accessToken} />}
+          )}
+          {showBatchAnalyzer && collections.length > 0 && <BatchTraitAnalyzer token={accessToken} />}
 
           <div className="grid items-start gap-5 lg:grid-cols-[260px_1fr]">
             <CollectionSidebar
@@ -184,7 +188,9 @@ export function NFTGeneratorPage() {
             />
 
             <div className="space-y-5">
-              {!collection ? (
+              {!collection && !isLoadingCollections && collections.length === 0 ? (
+                <HowItWorks />
+              ) : !collection ? (
                 <EmptyState
                   title={isLoadingCollection ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
                 />
@@ -269,5 +275,33 @@ function CollectionStats({ collection, listed }: { collection: NFTCollection; li
         </div>
       ))}
     </dl>
+  )
+}
+
+const STEPS = [
+  ['Add layers', 'One layer per part of the picture — background, body, eyes, hat — each with its trait images (PNGs, drawn at the same size).'],
+  ['Set rarity and rules', 'How often each trait appears, and which traits must or must never go together.'],
+  ['Generate', 'Every item is a unique mix of traits. Preview them and regenerate until you like them.'],
+  ['Publish and sell', 'Images and metadata go to IPFS. Then sell on Solana with a mint page, or deploy an ERC-721 on an EVM chain.'],
+]
+
+// What a first-time visitor sees next to the create form: the whole path
+// in four steps, so the first click isn't a leap in the dark.
+function HowItWorks() {
+  return (
+    <Card>
+      <h2 className="font-mono text-sm font-semibold text-accent-400">how it works</h2>
+      <ol className="mt-4 grid gap-4 sm:grid-cols-2">
+        {STEPS.map(([title, text], index) => (
+          <li key={title} className="flex gap-3">
+            <span aria-hidden className="font-mono text-2xl font-bold text-accent-400">{String(index + 1).padStart(2, '0')}</span>
+            <span>
+              <span className="block font-mono text-sm font-semibold text-ink">{title}</span>
+              <span className="mt-1 block text-sm text-ink-muted">{text}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Card>
   )
 }

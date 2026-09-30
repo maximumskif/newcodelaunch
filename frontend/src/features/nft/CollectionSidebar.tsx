@@ -47,6 +47,9 @@ export function CollectionSidebar({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // With no collections yet, the form is simply open: it's the only next step.
+  const showForm = isCreating || (!isLoading && collections.length === 0)
+
   const handleCreate = async () => {
     if (!name.trim()) {
       setError('Give your collection a name')
@@ -78,14 +81,14 @@ export function CollectionSidebar({
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink">
           <IconLayers className="h-4 w-4 text-ink-faint" />
-          Your Collections
+          Your collections
         </h2>
         <Button variant="ghost" size="sm" className="!p-0 h-6 w-6" onClick={() => setIsCreating((v) => !v)} aria-label="New collection">
           <IconPlus className="h-3.5 w-3.5" />
         </Button>
       </div>
 
-      {isCreating && (
+      {showForm && (
         <div className="space-y-2 rounded-md border border-border bg-canvas p-3">
           <input
             value={name}
@@ -127,7 +130,7 @@ export function CollectionSidebar({
           </div>
           {error && <InlineError className="text-xs text-danger">{error}</InlineError>}
           <Button variant="primary" size="sm" className="w-full" onClick={handleCreate} isLoading={isSubmitting}>
-            Create
+            Create collection
           </Button>
         </div>
       )}
@@ -140,7 +143,7 @@ export function CollectionSidebar({
           </div>
         )}
         {!isLoading && collections.length === 0 && (
-          <p className="px-1 py-2 text-xs text-ink-faint">No collections yet — create your first one above.</p>
+          <p className="px-1 py-1 text-xs text-ink-faint">Name your first collection above to start. You can change everything later.</p>
         )}
         {collections.map((collection) => (
           <div

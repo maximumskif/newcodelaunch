@@ -5,7 +5,6 @@ import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/Dialog'
-import { EmptyState } from '../../components/ui/EmptyState'
 import { IconArrowRight, IconCandy, IconCode, IconCoin, IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
@@ -116,7 +115,7 @@ export function ProjectsDashboard() {
           <div className="flex items-center justify-between pt-4">
             <h2 className="font-display text-lg font-semibold text-ink">
               Drafts &amp; projects{' '}
-              <span className="text-sm font-normal text-ink-faint">
+              <span className="whitespace-nowrap text-sm font-normal text-ink-faint">
               {isLoading ? 'Loading…' : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
               </span>
             </h2>
@@ -131,17 +130,13 @@ export function ProjectsDashboard() {
           {error && <InlineError>{error}</InlineError>}
 
           {!isLoading && projects.length === 0 ? (
-            <EmptyState
-              title="No projects yet"
-              description="Start a token, NFT collection, or contract — your progress is saved automatically."
-              action={
-                <Link to="/projects/new" className="mt-2 inline-flex">
-                  <Button variant="secondary" size="sm">
-                    Start your first project
-                  </Button>
-                </Link>
-              }
-            />
+            <p className="text-sm text-ink-faint">
+              <span className="text-ink-muted">No projects yet.</span> A project keeps a draft's settings while you work through the steps —{' '}
+              <Link to="/projects/new" className="text-accent-400 underline underline-offset-2">
+                start one
+              </Link>
+              .
+            </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {projects.map((project) => {
@@ -220,22 +215,23 @@ function QuickStart() {
   return (
     <section aria-labelledby="quick-start-heading">
       <h2 id="quick-start-heading" className="sr-only">Quick start</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {QUICK_START.map(({ pillar, icon: Icon, title, description, href }) => (
           <Link
             key={title}
             to={href}
             data-pillar={pillar}
-            className="group flex flex-col rounded-xl border border-border bg-surface p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-500/40 hover:bg-surface-hover"
+            className="group flex flex-col rounded-xl border border-border bg-surface p-3 transition-all sm:p-4 duration-150 hover:-translate-y-0.5 hover:border-accent-500/40 hover:bg-surface-hover"
           >
             <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-500/15 text-accent-300">
               <Icon className="h-[18px] w-[18px]" />
             </span>
-            <span className="mt-3 flex items-center gap-1.5 font-medium text-ink">
+            <span className="mt-3 flex items-center gap-1.5 text-sm font-medium text-ink sm:text-base">
               {title}
               <IconArrowRight className="h-3.5 w-3.5 text-ink-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-accent-300" />
             </span>
-            <span className="mt-1 text-sm text-ink-muted">{description}</span>
+            {/* On a phone the title says enough; four paragraphs made a long scroll. */}
+            <span className="mt-1 hidden text-sm text-ink-muted sm:block">{description}</span>
           </Link>
         ))}
       </div>

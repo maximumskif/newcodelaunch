@@ -113,7 +113,7 @@ describe('ProjectsDashboard', () => {
     renderDashboard()
 
     expect(await screen.findByText('My Drop')).toBeInTheDocument()
-    expect(screen.getByText(/Candy Machine/)).toBeInTheDocument()
+    expect(screen.getByText(/NFT drop/)).toBeInTheDocument()
     expect(screen.getByText('CM11111111…')).toBeInTheDocument()
   })
 
@@ -123,7 +123,7 @@ describe('ProjectsDashboard', () => {
 
     renderDashboard()
 
-    expect(await screen.findByText('No projects yet')).toBeInTheDocument()
+    expect(await screen.findByText('No projects yet.')).toBeInTheDocument()
   })
 
   it('archives a project and reflects the new status without a full reload', async () => {

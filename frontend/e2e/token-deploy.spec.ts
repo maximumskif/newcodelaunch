@@ -71,6 +71,10 @@ test('a real token deploy: connect, sign in, compile, estimate, deploy, and reco
   // other, already-verified deployments by the same anvil wallet from
   // earlier specs in the run, and an unscoped match would pass on those.
   const result = page.getByTestId('deploy-result')
+  // What to do next, for this token.
+  const address = (await deployedText.textContent())!.match(/0x[a-fA-F0-9]{40}/)![0]
+  await expect(result.getByRole('link', { name: 'airdrop →' })).toHaveAttribute('href', `/liquidity/airdrop?network=sepolia&token=${address}`)
+  await expect(result.getByRole('link', { name: 'public page →' })).toHaveAttribute('href', `/token/sepolia/${address}`)
   await result.getByRole('button', { name: 'Verify source' }).click()
   await expect(result.getByText('Verifying source…')).toBeVisible()
   await expect(result.getByRole('link', { name: 'Source verified' })).toBeVisible({ timeout: 20_000 })
