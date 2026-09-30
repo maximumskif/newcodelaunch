@@ -201,7 +201,14 @@ def lookup_token(address: str) -> list[dict[str, Any]]:
         body = _get_json(f"{DEXSCREENER_BASE_URL}/latest/dex/tokens/{address}", "DexScreener")
         pairs = body.get("pairs") if isinstance(body, dict) else None
         pairs = [_pair(p) for p in (pairs or []) if isinstance(p, dict)]
-        pairs.sort(key=lambda p: p["liquidity_usd"] or 0, reverse=True)
+        # A pair's priceUsd is its BASE token's price. Where the looked-up
+        # token is the quote side (USDC in most XYZ/USDC pools), that price
+        # is the other token's — found checking USDC, which showed $0.0009.
+        # Pools where it's the base come first, so pairs[0] prices it.
+        for pair in pairs:
+            base = pair["base_token"]["address"] or ""
+            pair["token_is_base"] = base.lower() == address.lower() if address.startswith("0x") else base == address
+        pairs.sort(key=lambda p: (p["token_is_base"], p["liquidity_usd"] or 0), reverse=True)
         return pairs[:20]
 
     return _cached(("lookup", address.lower() if address.startswith("0x") else address), _CACHE_TTL_SECONDS, fetch)

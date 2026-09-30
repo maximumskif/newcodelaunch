@@ -49,7 +49,41 @@ export type TokenPage = EvmTokenPage | SolanaTokenPage
 
 export const isSolanaNetworkId = (network: string) => network === 'solana_devnet' || network === 'solana'
 
+// The token checker (backend services/token_checker.py): any token.
+export interface TokenCheck {
+  id: string
+  // true: the reassuring answer; false: worth a closer look; null: unknown.
+  ok: boolean | null
+  label: string
+  detail: string
+}
+
+export interface TokenCheckResult {
+  chain: 'evm' | 'solana'
+  network: string
+  address: string
+  name: string | null
+  symbol: string | null
+  decimals: number
+  total_supply: string
+  owner: string | null
+  powers: string[]
+  contract_name: string | null
+  checks: TokenCheck[]
+  largest_holders: { address: string; share: number }[] | null
+  liquidity: {
+    chain: string
+    pools: number
+    total_liquidity_usd: number
+    top: { dex: string; pair_address: string; url: string | null; price_usd: number | null; liquidity_usd: number | null; volume_24h: number | null }
+  } | null
+  launched_here: string | null
+  explorer_url: string
+}
+
 export const tokenPagesApi = {
+  check: (network: string, address: string) =>
+    request<TokenCheckResult>(`/token-pages/check/${encodeURIComponent(network)}/${encodeURIComponent(address.trim())}`),
   get: (network: string, address: string) =>
     isSolanaNetworkId(network)
       ? request<SolanaTokenPage>(`/token-pages/solana/${encodeURIComponent(address)}`)

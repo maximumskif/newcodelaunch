@@ -409,3 +409,28 @@ def get_solana_mint_info(network: str, mint_address: str) -> dict:
         return asyncio.run(_fetch())
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "error": str(exc)}
+
+
+def get_solana_largest_accounts(network: str, mint_address: str) -> dict:
+    """The mint's largest token accounts (up to 20, the RPC's own cap), raw
+    amounts as strings. Accounts, not owners: a pool vault or an exchange
+    wallet counts as one holder. Same never-raises contract as above."""
+    if network not in SOLANA_NETWORKS:
+        return {"status": "error", "error": f"Not a Solana network: {network}"}
+    try:
+        pubkey = Pubkey.from_string(mint_address)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": f"Invalid mint address: {exc}"}
+
+    async def _fetch() -> dict:
+        async with _get_solana_client(network) as client:
+            resp = await client.get_token_largest_accounts(pubkey)
+            return {
+                "status": "success",
+                "accounts": [{"address": str(item.address), "amount": str(item.amount.amount)} for item in resp.value],
+            }
+
+    try:
+        return asyncio.run(_fetch())
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": str(exc)}

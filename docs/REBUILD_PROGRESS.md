@@ -1041,3 +1041,17 @@ The user asked for the site to read as an all-in-one Web3 builder, in a unique t
 - **Found by axe:** the home page's code preview scrolled horizontally without keyboard access; it wraps now.
 
 **Verified**: Vitest 228 (new: My stuff grouping and next-step links); full Playwright suite plus the accessibility re-run (all 20 axe scans clean).
+
+## Base chain and the token checker, 2026-09-30
+
+- **Base and Base Sepolia** are now supported for deploy, verify (Etherscan v2 covers Basescan with the same key) and liquidity. That includes the network entries, RPC fallbacks (each checked with `eth_chainId`), chain IDs for the wallet, and Uniswap V2 on both chains, with router, factory and WETH read back from the live chains before being written down.
+- **Token checker** (`/research/check`, `GET /api/token-pages/check/<network>/<address>`, public, 30/min): any token, not just ones launched here, reported as facts rather than a score.
+  - EVM: ERC-20 or not, owner renounced or not, source verified (Etherscan `getsourcecode`), upgradeable proxy, and the powerful functions found in the verified code (mint, blocklist, pause, fee and limit changes). For a proxy it reads the implementation's code, because the proxy's own ABI is just upgrade plumbing.
+  - Solana: mint and freeze authority, and the share held by the ten largest accounts (new `get_solana_largest_accounts`).
+  - Both: DEX liquidity on that network, and a link to the full public page when the token was launched here. The URL holds the query, so results can be shared.
+- **Found checking real USDC**, fixed in the shared DexScreener lookup (so the market page benefits too):
+  1. A pair's `priceUsd` is its base token's price, so where USDC is the quote side the price was the other token's. Pools where the looked-up token is the base now come first, and a price is only taken from those.
+  2. PulseChain copied every Ethereum address, so a worthless copy of USDC ranked as the top pool ($0.0009). The checker now counts only pools on the network being checked; testnets say "not tracked".
+  Verified live: USDC shows an owner, verified source, upgradeable proxy, the powers to mint, block wallets and pause, and $1.00 across its Uniswap pools.
+
+**Verified**: pytest 393 / 2 skipped (7 new checker tests: renounced owner with harmless powers, proxy implementation powers, non-ERC-20 refused, Solana authorities and concentration, non-mint refused, route errors without leaking RPC details, chain filtering and base-side pricing); Vitest 230; Playwright 37, including the checker page in the axe scans.

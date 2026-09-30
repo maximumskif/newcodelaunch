@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify
 
 from ..extensions import limiter
-from ..services import token_pages
+from ..services import token_checker, token_pages
 
 token_pages_bp = Blueprint("token_pages", __name__)
 
@@ -32,4 +32,18 @@ def solana_token_page(mint: str):
     except token_pages.NotFoundError as exc:
         return jsonify(error=str(exc)), 404
     except token_pages.ChainReadError as exc:
+        return _chain_error(exc)
+
+
+@token_pages_bp.get("/check/<network>/<address>")
+@limiter.limit("30/minute")
+def check_token(network: str, address: str):
+    """Public: the token checker — any token, not only ones launched here."""
+    try:
+        if network.startswith("solana"):
+            return jsonify(token_checker.check_solana(network, address))
+        return jsonify(token_checker.check_evm(network, address))
+    except token_checker.CheckError as exc:
+        return jsonify(error=str(exc)), 400
+    except token_checker.ChainReadError as exc:
         return _chain_error(exc)
