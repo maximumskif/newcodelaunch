@@ -1075,3 +1075,14 @@ The user asked for the site to read as an all-in-one Web3 builder, in a unique t
 - My stuff links every token to its holders.
 
 **Verified**: pytest 401 / 2 skipped (5 new: replay from the deploy block; a past block with a provider that refuses wide ranges, every block covered exactly once; tokens not launched here refused; Solana accounts summed per owner with the right filters and data slice; route input checks without leaking RPC details); Vitest 239 (CSV exactness and file name; URL-held query with a block only for EVM; 100 rows then all; burn label); Playwright: a real EVM snapshot on anvil (token deployed in the app, transfers, burn, CSV contents, then the same token at the block before the transfers) and a real Solana snapshot on the local validator (one owner with two accounts is added together), plus the page in the axe scans. Full suite: 43 passed (after fixing the spec to pick its past block from a receipt; reading the block number right after the deploy could name a block before it).
+
+## Burn tool, 2026-09-30
+
+- **Burn tokens** (`/tokens/burn`, EVM and Solana): destroy tokens from your own wallet, with what burning does for *this* token stated before anything is signed. Always behind an "I understand they're gone for good" checkbox, plus the usual mainnet confirmation.
+  - **EVM**: the page simulates `burn(1)` from your wallet, which spends nothing. If the token has a working `burn()`, it uses it and total supply goes down. If not (for example our tax token template), it sends to `0x…dEaD` and says so plainly: gone for good, but still counted in total supply.
+  - **Solana**: a real SPL `burnChecked` from your associated account, built and signed in the browser. The mint's supply goes down, and the page shows it afterwards.
+- "Manage a token" no longer claims to burn; burning is its own tool in the tokens area. My stuff links every token to it.
+- Wallet token listing moved to `lib/solanaWalletTokens.ts`, shared by Airdrop and Burn. It now reads only associated accounts, so a mint held in two accounts is listed once, with the balance these tools actually spend from.
+- **Found by the e2e run:** following a link from one token to another while already on the Burn (or Airdrop) page kept the first token, because the page didn't remount. Both pages now start fresh when the query changes.
+
+**Verified**: Vitest 239; Playwright: a real EVM burn on anvil (basic token: supply 1000 → 749.5; tax token: 100 to the dead address, supply unchanged) and a real SPL burn on the local validator (supply 1000 → 600), plus the page in the axe scans. Full suite: 46 passed.

@@ -1,4 +1,4 @@
-import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Connection, LAMPORTS_PER_SOL, PublicKey, type VersionedTransaction } from '@solana/web3.js'
 import { useQuery } from '@tanstack/react-query'
@@ -16,14 +16,8 @@ import {
   type Recipient,
 } from '../../lib/airdrop'
 import { isSolanaMainnet, SOLANA_NETWORKS, type SolanaNetworkId } from '../../lib/candyMachineApi'
+import { walletTokens } from '../../lib/solanaWalletTokens'
 import { AirdropLog, RecipientsField, short, SummaryRow, takeFailed, type BatchResult } from './airdropParts'
-
-interface WalletToken {
-  mint: string
-  decimals: number
-  balance: bigint
-  tokenProgram: PublicKey
-}
 
 interface Estimate {
   newAccounts: number
@@ -39,20 +33,6 @@ const ACCOUNT_SIZE = { classic: 165, token2022: 170 }
 const FEE_PER_TX = 5000
 // Wallets choke on huge signAllTransactions calls; ask in chunks.
 const SIGN_CHUNK = 20
-
-async function walletTokens(connection: Connection, owner: PublicKey): Promise<WalletToken[]> {
-  const lists = await Promise.all(
-    [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID].map(async (programId) => {
-      const { value } = await connection.getParsedTokenAccountsByOwner(owner, { programId })
-      return value.map(({ account }) => {
-        const info = account.data.parsed.info
-        return { mint: info.mint as string, decimals: info.tokenAmount.decimals as number, balance: BigInt(info.tokenAmount.amount), tokenProgram: programId }
-      })
-    }),
-  )
-  // Held tokens only, and not NFTs (a single unit with no decimals).
-  return lists.flat().filter((token) => token.balance > 0n && !(token.decimals === 0 && token.balance === 1n))
-}
 
 // Solana airdrops run entirely in the browser — the wallet signs every
 // transaction, nothing goes through our server. Recipients without a token

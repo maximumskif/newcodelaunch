@@ -72,7 +72,7 @@ test.describe('authenticated app shell', () => {
     await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
   })
 
-  for (const route of ['/dashboard', '/tools', '/tokens', '/nfts', '/contracts', '/drops', '/liquidity', '/research', '/tokens/create', '/tokens/create?chain=solana', '/nfts/generator', '/nfts/deploy-evm', '/contracts/deploy', '/contracts/templates', '/drops/launch', '/research/market', '/research/defi', '/research/check', '/liquidity/airdrop', '/liquidity/snapshot']) {
+  for (const route of ['/dashboard', '/tools', '/tokens', '/nfts', '/contracts', '/drops', '/liquidity', '/research', '/tokens/create', '/tokens/create?chain=solana', '/nfts/generator', '/nfts/deploy-evm', '/contracts/deploy', '/contracts/templates', '/drops/launch', '/research/market', '/research/defi', '/research/check', '/liquidity/airdrop', '/liquidity/snapshot', '/tokens/burn']) {
     test(`${route} has no WCAG 2 A/AA violations`, async ({ page }) => {
       await page.goto(route)
       const { violations } = await auditPage(page)

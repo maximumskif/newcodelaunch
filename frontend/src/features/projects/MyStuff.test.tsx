@@ -59,6 +59,7 @@ describe('MyStuff', () => {
     expect(within(tokens).getByRole('link', { name: 'public page →' })).toHaveAttribute('href', '/token/sepolia/0x5FbDB2315678afecb367f032d93F642f64180aa3')
     expect(within(tokens).getByRole('link', { name: 'airdrop →' })).toHaveAttribute('href', '/liquidity/airdrop?network=sepolia&token=0x5FbDB2315678afecb367f032d93F642f64180aa3')
     expect(within(tokens).getByRole('link', { name: 'holders →' })).toHaveAttribute('href', '/liquidity/snapshot?network=sepolia&address=0x5FbDB2315678afecb367f032d93F642f64180aa3')
+    expect(within(tokens).getByRole('link', { name: 'burn →' })).toHaveAttribute('href', '/tokens/burn?network=sepolia&token=0x5FbDB2315678afecb367f032d93F642f64180aa3')
 
     const nfts = screen.getByRole('region', { name: /nft collections/ })
     expect(within(nfts).getByText('10 items · 10 published')).toBeInTheDocument()

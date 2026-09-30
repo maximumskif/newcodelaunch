@@ -52,10 +52,11 @@ export function AirdropPage() {
         ))}
       </div>
 
+      {/* Keyed on the query: following a link to another token starts fresh. */}
       {chain === 'solana' ? (
-        <SolanaAirdrop initialMint={searchParams.get('mint') ?? ''} initialNetwork={searchParams.get('network')} />
+        <SolanaAirdrop key={searchParams.toString()} initialMint={searchParams.get('mint') ?? ''} initialNetwork={searchParams.get('network')} />
       ) : (
-        <EvmAirdrop initialToken={searchParams.get('token') ?? ''} initialNetwork={searchParams.get('network')} />
+        <EvmAirdrop key={searchParams.toString()} initialToken={searchParams.get('token') ?? ''} initialNetwork={searchParams.get('network')} />
       )}
     </div>
   )
