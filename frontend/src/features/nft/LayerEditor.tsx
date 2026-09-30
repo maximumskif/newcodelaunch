@@ -8,6 +8,7 @@ import { IconPlus } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { nftApi, type NFTCollection, type NFTLayer } from '../../lib/nftApi'
 import { LayerCard } from './LayerCard'
+import { errorMessage } from '../../lib/errors'
 
 interface Props {
   token: string
@@ -33,7 +34,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
       setNewLayerName('')
       onChange()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add layer')
+      setError(errorMessage(err, 'Could not add layer'))
     } finally {
       setIsSubmitting(false)
     }
@@ -45,7 +46,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
       await nftApi.updateLayer(token, layer.id, { name })
       onChange()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not rename layer')
+      setError(errorMessage(err, 'Could not rename layer'))
     }
   }
 
@@ -63,7 +64,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
       )
       onChange()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reorder layers')
+      setError(errorMessage(err, 'Could not reorder layers'))
     }
   }
 
@@ -76,7 +77,7 @@ export function LayerEditor({ token, collection, onChange }: Props) {
       setPendingDeleteLayer(null)
       onChange()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete layer')
+      setError(errorMessage(err, 'Could not delete layer'))
     } finally {
       setIsDeletingLayer(false)
     }

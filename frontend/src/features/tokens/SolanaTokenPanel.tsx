@@ -19,6 +19,7 @@ import { useAuth } from '../auth/AuthContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { SolanaLiquidityPanel } from './SolanaLiquidityPanel'
 import { SolanaTokenManage } from './SolanaTokenManage'
+import { errorMessage } from '../../lib/errors'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
@@ -185,7 +186,7 @@ export function SolanaTokenPanel({ projectId = null }: { projectId?: string | nu
       // Re-read the project so its context bar flips to "Deployed".
       if (projectId) projectsApi.get(accessToken, projectId).then(({ project: fetched }) => setProject(fetched))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Launch failed')
+      setError(errorMessage(err, 'Launch failed'))
       setStep('error')
     }
   }

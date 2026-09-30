@@ -148,7 +148,7 @@ export function HomePage() {
             <Link to="/drops" data-pillar="drops" className="space-y-3 rounded-xl border border-border bg-surface p-6 transition-colors hover:border-accent-500/50">
               <span className="font-mono text-sm font-semibold text-accent-400">04 · drops</span>
               <span className="block font-mono text-xl font-bold text-ink">Sell with a mint page</span>
-              <span className="block text-sm leading-relaxed text-ink-muted">Candy Machine storefronts with allowlist phases, per-wallet limits and live sales.</span>
+              <span className="block text-sm leading-relaxed text-ink-muted">A mint page for your collection on Solana: allowlist and public phases, per-wallet limits, live sales.</span>
               <span className="block space-y-1.5 font-mono text-xs text-ink-faint">
                 312 / 1,000 minted · example
                 <span className="block h-1.5 overflow-hidden rounded-full bg-surface-raised">
@@ -158,9 +158,9 @@ export function HomePage() {
             </Link>
             <Link to="/liquidity" data-pillar="liquidity" className="space-y-3 rounded-xl border border-border bg-surface p-6 transition-colors hover:border-accent-500/50">
               <span className="font-mono text-sm font-semibold text-accent-400">05 · liquidity &amp; distribution</span>
-              <span className="block font-mono text-xl font-bold text-ink">Pools and locks</span>
+              <span className="block font-mono text-xl font-bold text-ink">Pools, locks and airdrops</span>
               <span className="block text-sm leading-relaxed text-ink-muted">
-                Uniswap, PancakeSwap and Raydium pools, and LP locks buyers can verify. Airdrops and snapshots are coming.
+                Uniswap, PancakeSwap and Raydium pools, and LP locks buyers can verify. Then airdrop to a list of wallets, or snapshot every holder.
               </span>
               <span className="block font-mono text-xs text-accent-400">[██████████░░░░░] 62% locked · example</span>
             </Link>

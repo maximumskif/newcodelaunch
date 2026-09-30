@@ -16,6 +16,7 @@ import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, isMainnetNetwork } from '../network/NetworkContext'
 import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from './useDeployTemplate'
 import { useOwnerTransaction } from './useOwnerTransaction'
+import { errorMessage } from '../../lib/errors'
 
 type Action = 'approve' | 'add' | 'register' | 'approveLp' | 'remove' | 'fundLock'
 
@@ -199,7 +200,7 @@ export function LiquidityPanel({ deployment }: { deployment: ContractDeployment 
         contractsApi
           .recordLiquidity(accessToken ?? '', deployment.id, hash)
           .then(() => provisions.refetch())
-          .catch((err: unknown) => setRecordError(err instanceof Error ? err.message : 'Couldn’t record it'))
+          .catch((err: unknown) => setRecordError(errorMessage(err, 'Couldn’t record it')))
       }
     },
   })

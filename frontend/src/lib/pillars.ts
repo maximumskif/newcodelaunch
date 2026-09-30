@@ -148,7 +148,7 @@ export const PILLARS: Pillar[] = [
     steps: [
       { title: 'Open a pool', description: 'Pair your token with ETH, BNB, POL or SOL at your price.' },
       { title: 'Lock the LP', description: 'A time-lock or a permanent lock buyers can verify.' },
-      { title: 'Distribute', description: 'Airdrops and snapshots (coming soon).' },
+      { title: 'Distribute', description: 'Airdrop to a list of wallets, or snapshot every holder first.' },
     ],
     tools: [
       { id: 'liq-evm', name: 'Pool on Uniswap / PancakeSwap', description: 'Create a pool, add or remove liquidity (EVM).', glyph: '≈', path: '/tokens/create#history', status: 'live', keywords: ['uniswap', 'pancakeswap', 'dex', 'add liquidity', 'remove'] },
@@ -195,15 +195,21 @@ export function pillarForPath(pathname: string): Pillar | null {
   return PILLARS.find((pillar) => pathname === pillar.path || pathname.startsWith(`${pillar.path}/`)) ?? null
 }
 
-// The tool whose page this is, when a route is a tool page (its path with
-// query and hash stripped).
-export function toolForPath(pathname: string): Tool | null {
-  for (const pillar of PILLARS) {
-    for (const tool of pillar.tools) {
-      if (tool.path && tool.path.split(/[?#]/)[0] === pathname) return tool
-    }
-  }
-  return null
+// The tool whose page this is. Several tools can share a page (e.g. "NFT
+// owner tools" is /contracts/deploy#history), so the most specific match
+// wins: the full URL (path, query, hash), then a tool whose own path is just
+// this page's path — preferring the current area's tools either way — then
+// any tool on this page.
+export function toolForPath(pathname: string, search = '', hash = ''): Tool | null {
+  const home = pillarForPath(pathname)
+  const ordered = [...(home?.tools ?? []), ...PILLARS.filter((p) => p !== home).flatMap((p) => p.tools)].filter((tool) => tool.path)
+  const full = `${pathname}${search}${hash}`
+  return (
+    ordered.find((tool) => tool.path === full) ??
+    ordered.find((tool) => tool.path === pathname) ??
+    ordered.find((tool) => tool.path!.split(/[?#]/)[0] === pathname) ??
+    null
+  )
 }
 
 export const ALL_TOOLS: (Tool & { pillar: Pillar })[] = PILLARS.flatMap((pillar) => pillar.tools.map((tool) => ({ ...tool, pillar })))

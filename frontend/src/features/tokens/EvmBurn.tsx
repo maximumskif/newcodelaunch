@@ -10,6 +10,7 @@ import { fromBaseUnits, toBaseUnits } from '../../lib/airdrop'
 import { wagmiConfig } from '../../lib/wagmiConfig'
 import { NETWORK_TO_CHAIN_ID } from '../contracts/useDeployTemplate'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
+import { errorMessage } from '../../lib/errors'
 
 const TOKEN_ABI = parseAbi([
   'function symbol() view returns (string)',
@@ -97,7 +98,7 @@ export function EvmBurn({ initialToken, initialNetwork }: { initialToken: string
       setUnderstood(false)
       info.refetch()
     } catch (err) {
-      setError(err instanceof Error ? err.message.split('\n')[0] : 'Burn failed')
+      setError(errorMessage(err, 'Burn failed'))
     } finally {
       setBusy(null)
     }

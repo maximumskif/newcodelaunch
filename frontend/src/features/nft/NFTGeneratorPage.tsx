@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { IconChevronDown } from '../../components/ui/icons'
 import { PageHero } from '../../components/ui/PageHero'
+import { SignInPrompt } from '../../components/ui/SignInPrompt'
 import { Stepper } from '../../components/ui/Stepper'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
@@ -16,6 +17,7 @@ import { CollectionSidebar } from './CollectionSidebar'
 import { GenerateStep } from './GenerateStep'
 import { LayerEditor } from './LayerEditor'
 import { TraitRules } from './TraitRules'
+import { errorMessage } from '../../lib/errors'
 
 export function NFTGeneratorPage() {
   const { accessToken } = useAuth()
@@ -121,7 +123,7 @@ export function NFTGeneratorPage() {
       setSelectedId((current) => (current === pendingDeleteCollection.id ? null : current))
       setPendingDeleteCollection(null)
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Could not delete collection')
+      setDeleteError(errorMessage(err, 'Could not delete collection'))
     } finally {
       setIsDeletingCollection(false)
     }
@@ -131,7 +133,7 @@ export function NFTGeneratorPage() {
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="NFT Generator"
-        title="NFT Collection Generator"
+        title="Collection generator"
         description="Stack trait layers, set how rare each trait is, and generate a unique collection — then publish it to IPFS and sell it on Solana or EVM."
       />
 
@@ -144,9 +146,7 @@ export function NFTGeneratorPage() {
       )}
 
       {!accessToken ? (
-        <Card padding="lg" className="text-center">
-          <p className="text-ink-muted">Connect and sign in with a wallet above to create and manage collections.</p>
-        </Card>
+        <SignInPrompt purpose="create and manage NFT collections" />
       ) : (
         <>
           <button

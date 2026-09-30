@@ -679,6 +679,12 @@ contract {{CONTRACT_NAME}} {
 }
 '''
 
+# Shared help text for the ERC-20 fields both token templates ask for.
+_NAME_HELP = "The full name wallets and explorers show, e.g. Nova Coin"
+_SYMBOL_HELP = "The short ticker, e.g. NOVA — usually 3 to 5 capital letters"
+_DECIMALS_HELP = "How finely one token divides. 18 is the standard; keep it unless you have a reason not to"
+_SUPPLY_HELP = "How many whole tokens to create. All of them go to your wallet"
+
 _TEMPLATES: dict[str, ContractTemplate] = {
     "erc20_basic": ContractTemplate(
         id="erc20_basic",
@@ -687,10 +693,10 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         description="Standard ERC-20 token with mint and burn functionality",
         solidity_code=_ERC20_BASIC_SOURCE,
         deployment_params=[
-            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": "Token name, e.g. My Token"},
-            {"name": "TOKEN_SYMBOL", "type": "string", "required": True, "description": "Token symbol"},
-            {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18, "description": "Token decimals"},
-            {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True, "description": "Initial token supply"},
+            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": _NAME_HELP},
+            {"name": "TOKEN_SYMBOL", "type": "string", "required": True, "description": _SYMBOL_HELP},
+            {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18, "description": _DECIMALS_HELP},
+            {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True, "description": _SUPPLY_HELP},
         ],
         features=["ERC-20 Standard", "Mintable", "Burnable", "Owner Controls"],
         gas_estimate=1_500_000,
@@ -702,18 +708,18 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         description="Advanced ERC-20 with tax system, limits, and anti-whale protection",
         solidity_code=_ERC20_ADVANCED_SOURCE,
         deployment_params=[
-            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": "Token name, e.g. My Token"},
-            {"name": "TOKEN_SYMBOL", "type": "string", "required": True},
-            {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18},
-            {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True},
+            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": _NAME_HELP},
+            {"name": "TOKEN_SYMBOL", "type": "string", "required": True, "description": _SYMBOL_HELP},
+            {"name": "TOKEN_DECIMALS", "type": "uint8", "required": True, "default": 18, "description": _DECIMALS_HELP},
+            {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True, "description": _SUPPLY_HELP},
             {"name": "BUY_TAX", "type": "uint256", "required": True, "default": 300, "max": 1000, "description": "Buy tax in basis points (300 = 3%, max 1000 = 10%)"},
             {"name": "SELL_TAX", "type": "uint256", "required": True, "default": 500, "max": 1000, "description": "Sell tax in basis points (500 = 5%, max 1000 = 10%)"},
             {"name": "MARKETING_FEE", "type": "uint256", "required": True, "default": 60, "max": 100, "description": "Marketing share of the tax, in percent (the rest goes to liquidity)"},
             {"name": "LIQUIDITY_FEE", "type": "uint256", "required": True, "default": 40, "max": 100, "description": "Liquidity share of the tax, in percent (marketing + liquidity must equal 100)"},
-            {"name": "MAX_TX_AMOUNT", "type": "uint256", "required": True, "description": "Maximum transaction amount"},
-            {"name": "MAX_WALLET_AMOUNT", "type": "uint256", "required": True, "description": "Maximum wallet amount"},
-            {"name": "MARKETING_WALLET", "type": "address", "required": True, "description": "Marketing wallet address"},
-            {"name": "LIQUIDITY_WALLET", "type": "address", "required": True, "description": "Liquidity wallet address"},
+            {"name": "MAX_TX_AMOUNT", "type": "uint256", "required": True, "description": "The most one transfer can move, in whole tokens — stops anyone dumping a huge amount at once"},
+            {"name": "MAX_WALLET_AMOUNT", "type": "uint256", "required": True, "description": "The most one wallet can hold, in whole tokens — stops a single buyer cornering the supply"},
+            {"name": "MARKETING_WALLET", "type": "address", "required": True, "description": "Receives the marketing share of every tax"},
+            {"name": "LIQUIDITY_WALLET", "type": "address", "required": True, "description": "Receives the liquidity share of every tax"},
         ],
         features=["Tax System", "Anti-Whale Protection", "Trading Controls", "Fee Distribution", "Owner Controls"],
         gas_estimate=2_500_000,
@@ -725,12 +731,12 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         description="Standard ERC-721 NFT collection with minting functionality",
         solidity_code=_ERC721_BASIC_SOURCE,
         deployment_params=[
-            {"name": "COLLECTION_NAME", "type": "string", "required": True, "description": "NFT collection name, e.g. My Collection"},
-            {"name": "COLLECTION_SYMBOL", "type": "string", "required": True, "description": "NFT collection symbol"},
-            {"name": "MAX_SUPPLY", "type": "uint256", "required": True, "description": "Maximum NFT supply"},
-            {"name": "MINT_PRICE", "type": "uint256", "required": True, "description": "Mint price in wei"},
-            {"name": "BASE_URI", "type": "string", "required": True, "description": "Base URI for metadata"},
-            {"name": "MAX_MINTS_PER_WALLET", "type": "uint256", "required": True, "default": 10, "description": "Maximum mints per wallet"},
+            {"name": "COLLECTION_NAME", "type": "string", "required": True, "description": "The name wallets and marketplaces show, e.g. Night Owls"},
+            {"name": "COLLECTION_SYMBOL", "type": "string", "required": True, "description": "A short ticker, e.g. OWLS"},
+            {"name": "MAX_SUPPLY", "type": "uint256", "required": True, "description": "How many NFTs can ever be minted"},
+            {"name": "MINT_PRICE", "type": "uint256", "required": True, "description": "Price per NFT in wei, the chain's smallest unit (1 ETH = 1,000,000,000,000,000,000 wei). 0 makes it free"},
+            {"name": "BASE_URI", "type": "string", "required": True, "description": "Where the metadata lives, e.g. ipfs://…/ — the collection generator fills this in for you"},
+            {"name": "MAX_MINTS_PER_WALLET", "type": "uint256", "required": True, "default": 10, "description": "How many NFTs one wallet can mint"},
         ],
         features=["ERC-721 Standard", "Public Minting", "Owner Minting", "Metadata Support", "Withdraw Funds"],
         gas_estimate=3_500_000,

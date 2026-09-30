@@ -26,6 +26,7 @@ import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { AllowlistPhaseFields } from './AllowlistPhaseFields'
 import { DropsDashboard } from './DropsDashboard'
 import { useAllowlistPhase } from './useAllowlistPhase'
+import { errorMessage } from '../../lib/errors'
 
 type LaunchStep = 'idle' | 'preparing' | 'signing' | 'recording' | 'done' | 'error'
 
@@ -191,7 +192,7 @@ export function MintLaunchPage() {
       // confirmed — its ephemeral signer and blockhash are fresh as of
       // this moment, not held over from step 1's request.
       setStep('preparing')
-      setProgressLabel('Building the Candy Machine transaction…')
+      setProgressLabel('Building the drop transaction…')
       const candyMachinePrepared = await candyMachineApi.prepareCandyMachine(accessToken, {
         collection_id: collectionId,
         network,
@@ -207,8 +208,8 @@ export function MintLaunchPage() {
       for (let i = 0; i < candyMachinePrepared.transactions.length; i++) {
         const label =
           candyMachinePrepared.transactions.length > 1
-            ? `Candy Machine transaction ${i + 1} of ${candyMachinePrepared.transactions.length}`
-            : 'the Candy Machine transaction'
+            ? `drop transaction ${i + 1} of ${candyMachinePrepared.transactions.length}`
+            : 'the drop transaction'
         signatures.push(
           await signSendAndConfirm(candyMachinePrepared.transactions[i], connection, sendTransaction, label, setProgressLabel),
         )
@@ -231,7 +232,7 @@ export function MintLaunchPage() {
       setPendingDrop(created)
       await finishLaunch(created, connection)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Launch failed')
+      setError(errorMessage(err, 'Launch failed'))
       setStep('error')
     }
   }
@@ -290,7 +291,7 @@ export function MintLaunchPage() {
       const rpcUrl = SOLANA_NETWORKS.find((item) => item.id === pendingDrop.network)!.rpcUrl
       await finishLaunch(pendingDrop, new Connection(rpcUrl, 'confirmed'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Resuming failed')
+      setError(errorMessage(err, 'Resuming failed'))
       setStep('error')
     }
   }
@@ -300,8 +301,8 @@ export function MintLaunchPage() {
       <div className="space-y-5 p-4 sm:p-8">
         <PageHero
           eyebrow="Mint"
-          title="Candy Machine"
-          description="Your Solana drops and how they're selling — each one a real Collection NFT and Candy Machine, created and owned by your own wallet. Launch a new one from a published collection in the NFT Generator."
+          title="Launch a drop"
+          description="Sell a collection on Solana with its own mint page. Each drop is created and owned by your wallet. Launch one from a published collection in the collection generator; your drops and their sales are listed below."
         />
         <DropsDashboard />
       </div>
@@ -312,7 +313,7 @@ export function MintLaunchPage() {
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Mint"
-        title="Candy Machine"
+        title="Launch a drop"
         description="Your connected Solana wallet signs every transaction — this app never holds the keys to your collection or its mint proceeds."
       />
 
@@ -436,7 +437,7 @@ export function MintLaunchPage() {
             {pendingDrop && !isBusy && !result && (
               <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-sm">
                 <p className="text-ink">
-                  Your Candy Machine exists on-chain, but launching it didn't finish. Resume to load its remaining items and
+                  Your drop exists on-chain, but launching it didn't finish. Resume to load its remaining items and
                   record it — it picks up exactly where it stopped, without creating (or paying for) anything twice.
                 </p>
                 <Button variant="primary" size="sm" onClick={() => void handleResume()}>
@@ -447,7 +448,7 @@ export function MintLaunchPage() {
 
             {result ? (
               <div className="rounded-md border border-success/30 bg-success/5 p-3 text-sm">
-                <p className="text-success">Candy Machine created.</p>
+                <p className="text-success">Drop created.</p>
                 <p className="mt-1 break-all font-mono text-xs text-ink-muted">{result.candy_machine}</p>
                 {result.explorer_url && (
                   <a href={result.explorer_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-accent-400 underline">
@@ -472,7 +473,7 @@ export function MintLaunchPage() {
                 isLoading={isBusy}
                 onClick={() => void handleLaunch()}
               >
-                {isBusy ? progressLabel || 'Launching…' : 'Launch Candy Machine'}
+                {isBusy ? progressLabel || 'Launching…' : 'Launch drop'}
               </Button>
             )}
 

@@ -50,12 +50,12 @@ test(`a ${ITEMS}-item Candy Machine drop: items stored compactly and loaded in w
   await page.goto(`/drops/launch?collection=${collection.id}`)
   await expect(page.getByText(`${ITEMS} of ${ITEMS} generated items published to IPFS.`)).toBeVisible()
   await page.getByLabel('Go-live date').fill('2020-01-01T00:00')
-  await page.getByRole('button', { name: 'Launch Candy Machine' }).click()
+  await page.getByRole('button', { name: 'Launch drop' }).click()
 
   // Collection tx -> creation tx (with the first items) -> the rest in a
   // signAllTransactions batch -> recorded, which the backend only allows
   // once the chain says every item is loaded.
-  await expect(page.getByText('Candy Machine created.')).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByText('Drop created.')).toBeVisible({ timeout: 120_000 })
 
   await page.getByRole('link', { name: /\/mint\/buy\// }).click()
   await expect(page.getByText(`${ITEMS} of ${ITEMS} remaining`)).toBeVisible()

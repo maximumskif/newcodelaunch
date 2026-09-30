@@ -11,6 +11,7 @@ import { signSendAndConfirm } from '../../lib/solana'
 import { formatTokenAmount, solanaTokensApi, type LiveTokenState, type SolanaTokenLaunch, type TokenAction } from '../../lib/solanaTokensApi'
 import { useAuth } from '../auth/AuthContext'
 import { SolanaTokenDetails } from './SolanaTokenDetails'
+import { errorMessage } from '../../lib/errors'
 
 const REVOKE_COPY: Record<'revokeMint' | 'revokeFreeze', { title: string; description: string; confirm: string; done: string }> = {
   revokeMint: {
@@ -53,7 +54,7 @@ export function SolanaTokenManage({ launch, onUpdated }: { launch: SolanaTokenLa
         setLive(state)
         onUpdated(state.token)
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Couldn’t read the token on-chain'))
+      .catch((err: unknown) => setError(errorMessage(err, 'Couldn’t read the token on-chain')))
     // Read once when opened; after that, every action refreshes explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, launch.id])
@@ -79,7 +80,7 @@ export function SolanaTokenManage({ launch, onUpdated }: { launch: SolanaTokenLa
       setDone(doneMessage)
       if (action === 'mint') setAmount('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Transaction failed')
+      setError(errorMessage(err, 'Transaction failed'))
     } finally {
       setBusy(null)
       setConfirming(null)

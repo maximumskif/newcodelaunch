@@ -10,6 +10,7 @@ import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckb
 import { fromBaseUnits, toBaseUnits } from '../../lib/airdrop'
 import { isSolanaMainnet, SOLANA_NETWORKS, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { walletTokens } from '../../lib/solanaWalletTokens'
+import { errorMessage } from '../../lib/errors'
 
 const short = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)}`
 
@@ -68,7 +69,7 @@ export function SolanaBurn({ initialMint, initialNetwork }: { initialMint: strin
       tokens.refetch()
       supply.refetch()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Burn failed')
+      setError(errorMessage(err, 'Burn failed'))
     } finally {
       setBusy(null)
     }

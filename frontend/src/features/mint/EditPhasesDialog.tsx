@@ -12,6 +12,7 @@ import { signSendAndConfirm } from '../../lib/solana'
 import { useAuth } from '../auth/AuthContext'
 import { AllowlistPhaseFields } from './AllowlistPhaseFields'
 import { toLocalInput, useAllowlistPhase } from './useAllowlistPhase'
+import { errorMessage } from '../../lib/errors'
 
 const inputClass = 'mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink'
 
@@ -32,7 +33,7 @@ export function EditPhasesDialog({ drop, onClose, onSaved }: { drop: CreatorDrop
     candyMachineApi
       .getAllowlist(accessToken, drop.id)
       .then(({ addresses: fetched }) => setAddresses(fetched))
-      .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : 'Loading the allowlist failed'))
+      .catch((err: unknown) => setLoadError(errorMessage(err, 'Loading the allowlist failed')))
   }, [accessToken, drop.id, drop.allowlist])
 
   return (
@@ -118,7 +119,7 @@ function EditPhasesForm({
       await candyMachineApi.applyUpdate(accessToken, drop.id, { ...edit, transaction_signature: signature })
       onSaved()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Saving the new phases failed')
+      setError(errorMessage(err, 'Saving the new phases failed'))
       setStep('idle')
     }
   }

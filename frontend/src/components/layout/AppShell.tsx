@@ -15,30 +15,30 @@ const COLLAPSE_STORAGE_KEY = 'newcodelaunch.sidebar-collapsed'
 
 function NetworkSelector() {
   const { network, setNetwork } = useNetwork()
+  const selected = EVM_NETWORKS.find((item) => item.id === network)
+  // One compact control: eight networks as pills pushed the wallet buttons
+  // onto a second header row even at desktop width.
   return (
-    // overflow-x-auto + flex-nowrap: at 6 real networks this doesn't fit a
-    // phone-width screen next to the wallet-connect buttons — scrolls
-    // horizontally instead of wrapping each pill's own label mid-row.
-    <div className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-md border border-border p-0.5 text-xs">
-      {EVM_NETWORKS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => setNetwork(item.id)}
-          title={item.isTestnet ? undefined : 'Mainnet — deploys cost real funds'}
-          className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 whitespace-nowrap transition-colors duration-150 ${
-            network === item.id
-              ? item.isTestnet
-                ? 'bg-accent-500/10 text-ink'
-                : 'bg-warning/10 text-ink'
-              : 'text-ink-muted hover:text-ink'
-          }`}
-        >
-          {!item.isTestnet && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden />}
-          {item.label}
-        </button>
-      ))}
-    </div>
+    <label className={`flex h-9 items-center gap-2 rounded-md border px-2 font-mono text-xs ${selected?.isTestnet === false ? 'border-warning/60' : 'border-border'}`}>
+      <span className="text-ink-faint">network</span>
+      <select value={network} onChange={(event) => setNetwork(event.target.value)} className="bg-transparent text-ink focus:outline-none">
+        <optgroup label="Testnets">
+          {EVM_NETWORKS.filter((item) => item.isTestnet).map((item) => (
+            <option key={item.id} value={item.id} className="bg-canvas">
+              {item.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Mainnets — real funds">
+          {EVM_NETWORKS.filter((item) => !item.isTestnet).map((item) => (
+            <option key={item.id} value={item.id} className="bg-canvas">
+              {item.label}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      {selected?.isTestnet === false && <span className="text-warning">mainnet</span>}
+    </label>
   )
 }
 
@@ -97,7 +97,7 @@ export function AppShell() {
   }
 
   const pillar = pillarForPath(location.pathname)
-  const tool = toolForPath(location.pathname)
+  const tool = toolForPath(location.pathname, location.search, location.hash)
   const palette = useCommandPalette()
   const closeMobile = () => setIsMobileOpen(false)
 
@@ -210,7 +210,8 @@ export function AppShell() {
 // are listed once; "soon" tools are shown but not linked.
 function PillarTree({ pillar, expanded, collapsed, onNavigate }: { pillar: Pillar; expanded: boolean; collapsed: boolean; onNavigate: () => void }) {
   const location = useLocation()
-  const here = `${location.pathname}${location.search}`
+  // One highlighted tool: the one this page resolves to.
+  const current = toolForPath(location.pathname, location.search, location.hash)
   const seen = new Set<string>()
   const tools = pillar.tools.filter((tool) => {
     const key = tool.path ?? tool.id
@@ -245,7 +246,7 @@ function PillarTree({ pillar, expanded, collapsed, onNavigate }: { pillar: Pilla
                 </li>
               )
             }
-            const active = tool.path.split('#')[0] === here
+            const active = current?.path === tool.path
             return (
               <li key={tool.id}>
                 <Link

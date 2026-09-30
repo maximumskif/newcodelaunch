@@ -6,6 +6,7 @@ import { IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { nftApi, type NFTCollection } from '../../lib/nftApi'
+import { errorMessage } from '../../lib/errors'
 
 interface Props {
   token: string
@@ -66,7 +67,7 @@ export function CollectionSidebar({
       setName('')
       setDescription('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create collection')
+      setError(errorMessage(err, 'Could not create collection'))
     } finally {
       setIsSubmitting(false)
     }

@@ -1086,3 +1086,17 @@ The user asked for the site to read as an all-in-one Web3 builder, in a unique t
 - **Found by the e2e run:** following a link from one token to another while already on the Burn (or Airdrop) page kept the first token, because the page didn't remount. Both pages now start fresh when the query changes.
 
 **Verified**: Vitest 239; Playwright: a real EVM burn on anvil (basic token: supply 1000 → 749.5; tax token: 100 to the dead address, supply unchanged) and a real SPL burn on the local validator (supply 1000 → 600), plus the page in the axe scans. Full suite: 46 passed.
+
+## Polish pass, part 1, 2026-09-30
+
+Screenshotted every page signed out at 1440 px and 390 px, then fixed what a first-time visitor would trip over:
+
+- **One highlighted tool, and the right page name.** Several tools share a page (e.g. "NFT owner tools" is `/contracts/deploy#history`). `toolForPath` took the first path match, so `/contracts/deploy` was labelled "nft owner tools" in the breadcrumb and header, and the sidebar highlighted two tools at once. It now picks the most specific match (full URL, then the page's own tool, preferring the current area), and the sidebar highlights exactly that tool.
+- **Header fits one row.** The eight network pills are now a single labelled dropdown (testnets and mainnets grouped, "mainnet" shown in amber when selected), and the wallet buttons are the small size. At desktop width the wallet buttons used to wrap onto a second row.
+- **Plain names.** Page titles now match the tool names in the sidebar and command bar: "Launch a drop" (was "Candy Machine"), "Collection generator", "Deploy as ERC-721" (was "Deploy on Ethereum, Polygon or BSC", which left out Base), "Deploy a contract", "Template library", "Market & token lookup", "DeFi scanner". The chain tab reads "EVM" and the description names all four chains. "Candy Machine" is gone from user-facing text ("Drop created.", "Launch drop"). The deploy forms read "1. Choose a template" then "2. Fill in the details".
+- **Helpful field help.** Template parameters had helpers that repeated their labels ("Token symbol" under Token Symbol). They now say what the field does: supply and limits are in whole tokens, all supply goes to your wallet, and the mint price is in wei with the conversion spelled out.
+- **Signed-out pages aren't dead ends.** `SignInPrompt` replaces the one-line "sign in" messages on My stuff, the generator, drops and deploy history. It says what signing in unlocks there and gives the two steps (connect, then sign a free message).
+- **Readable errors.** `lib/errorMessage` replaces the 58 places that showed raw exception text. Wallet rejections, missing gas money, a Solana wallet with no SOL, unreachable networks, expired transactions and wrong-network errors become plain sentences. Everything else shows its first line (viem's short message when there is one), so specific reasons like revert strings still come through.
+- **Housekeeping:** the Multisend template is hidden from template pickers (it's the airdrop's plumbing). The home page and liquidity area no longer say airdrops and snapshots are "coming".
+
+**Verified**: pytest 401 / 2 skipped; Vitest 241 (new: most-specific tool match for shared pages; error mapping, including passing through unknown errors and viem short messages); Playwright 46 passed, all axe scans clean.

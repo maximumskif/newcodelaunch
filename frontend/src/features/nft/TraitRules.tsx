@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { InlineError } from '../../components/ui/InlineError'
 import { nftApi, type NFTCollection, type NFTTraitRule } from '../../lib/nftApi'
+import { errorMessage } from '../../lib/errors'
 
 const selectClass = 'mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-ink'
 
@@ -42,7 +43,7 @@ export function TraitRules({ token, collection, onChange }: { token: string; col
       setOtherTraitId('')
       onChange()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Adding the rule failed')
+      setError(errorMessage(err, 'Adding the rule failed'))
     } finally {
       setIsSaving(false)
     }
@@ -54,7 +55,7 @@ export function TraitRules({ token, collection, onChange }: { token: string; col
       await nftApi.deleteRule(token, ruleId)
       onChange()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Removing the rule failed')
+      setError(errorMessage(err, 'Removing the rule failed'))
     }
   }
 

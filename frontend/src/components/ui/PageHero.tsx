@@ -16,9 +16,9 @@ interface Props {
 // tool come from the URL (lib/pillars.ts), so every tool page gets the right
 // glyph without passing it; `eyebrow` is the fallback label elsewhere.
 export function PageHero({ eyebrow, title, description, children }: Props) {
-  const { pathname } = useLocation()
+  const { pathname, search, hash } = useLocation()
   const pillar = pillarForPath(pathname)
-  const tool = toolForPath(pathname)
+  const tool = toolForPath(pathname, search, hash)
   return (
     <header className="animate-fade-up border-b border-border pb-6">
       <div className="flex items-start gap-4">

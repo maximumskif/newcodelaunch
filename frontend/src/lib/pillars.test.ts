@@ -29,6 +29,12 @@ describe('pillars', () => {
     expect(pillarForPath('/dashboard')).toBeNull()
     expect(toolForPath('/nfts/generator')?.id).toBe('nft-generator')
     expect(toolForPath('/drops')).toBeNull()
+    // Tools sharing a page: the plain path is the page's own tool; query or
+    // hash pick the more specific one.
+    expect(toolForPath('/contracts/deploy')?.id).toBe('contracts-deploy')
+    expect(toolForPath('/contracts/deploy', '?template=token_timelock')?.id).toBe('contracts-timelock')
+    expect(toolForPath('/tokens/create', '', '#history')?.id).toBe('token-manage')
+    expect(toolForPath('/tokens/create', '?chain=solana')?.id).toBe('token-solana')
   })
 
   it('gives every tool a unique id', () => {

@@ -24,3 +24,9 @@ const META: Record<string, TemplateMeta> = {
 export function templateMeta(id: string): TemplateMeta {
   return META[id] ?? { icon: IconCoin, tags: [], identityParams: [] }
 }
+
+// Utility templates (the Multisend) are plumbing other tools deploy for
+// you — not something to pick and configure by hand.
+export function isPickable(template: { type: string }): boolean {
+  return template.type !== 'utility'
+}

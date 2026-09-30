@@ -6,16 +6,18 @@ import { Button } from '../../components/ui/Button'
 import { IconCheck, IconSpinner } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
+import { SignInPrompt } from '../../components/ui/SignInPrompt'
 import { contractsApi, type ContractDeployment, type ContractTemplateSummary, type DeploymentEstimate } from '../../lib/contractsApi'
 import { projectsApi, type Project } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 import { ProjectContextBar } from '../projects/ProjectContextBar'
 import { DeploymentHistory } from './DeploymentHistory'
-import { templateMeta } from './templateMeta'
+import { isPickable, templateMeta } from './templateMeta'
 import { TemplateForm } from './TemplateForm'
 import { VerifySource } from './VerifySource'
 import { useDeployTemplate, type DeployStep } from './useDeployTemplate'
+import { errorMessage } from '../../lib/errors'
 
 const BUSY_STEPS = new Set(['compiling', 'deploying', 'confirming', 'recording'])
 const DRAFT_SAVE_DEBOUNCE_MS = 800
@@ -64,7 +66,8 @@ export function DeployPanel({ title, description, templateType, projectId, prese
   const isMainnet = isMainnetNetwork(network)
 
   useEffect(() => {
-    contractsApi.listTemplates(templateType).then(({ templates: fetched }) => {
+    contractsApi.listTemplates(templateType).then(({ templates: all }) => {
+      const fetched = all.filter(isPickable)
       setTemplates(fetched)
       const preselected = preselectedTemplateId && fetched.some((t) => t.id === preselectedTemplateId) ? preselectedTemplateId : null
       setSelectedId((current) => current ?? preselected ?? fetched[0]?.id ?? null)
@@ -145,7 +148,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
       const result = await contractsApi.estimate(selectedTemplate.id, collectParameters(), network, address)
       setEstimate(result)
     } catch (err) {
-      setEstimateError(err instanceof Error ? err.message : 'Estimate failed')
+      setEstimateError(errorMessage(err, 'Estimate failed'))
     } finally {
       setIsEstimating(false)
     }
@@ -191,8 +194,8 @@ export function DeployPanel({ title, description, templateType, projectId, prese
                 <meta.icon className="h-5 w-5" />
               </span>
               <div>
-                <h3 id="configure-heading" className="font-display text-lg font-semibold text-ink">Configure {selectedTemplate.name}</h3>
-                <p className="text-sm text-ink-faint">Fields marked * are required. Values are compiled into the contract.</p>
+                <h3 id="configure-heading" className="font-display text-lg font-semibold text-ink">2. Fill in the details</h3>
+                <p className="text-sm text-ink-faint">{selectedTemplate.name} · fields marked * are required, and are written into the contract's code.</p>
               </div>
             </div>
             <TemplateForm params={selectedTemplate.deployment_params} values={values} onChange={handleChange} />
@@ -285,7 +288,7 @@ export function DeployPanel({ title, description, templateType, projectId, prese
         {accessToken ? (
           <DeploymentHistory deployments={history} />
         ) : (
-          <p className="rounded-xl border border-dashed border-border p-6 text-center text-ink-faint">Sign in with your wallet to see your deployment history.</p>
+          <SignInPrompt purpose="deploy, and to see and manage what you've deployed" compact />
         )}
       </section>
     </div>

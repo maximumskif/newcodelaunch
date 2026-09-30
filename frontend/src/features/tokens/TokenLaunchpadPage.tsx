@@ -7,7 +7,7 @@ import { SolanaTokenPanel } from './SolanaTokenPanel'
 type Chain = 'evm' | 'solana'
 
 const CHAINS: { id: Chain; label: string }[] = [
-  { id: 'evm', label: 'Ethereum, Polygon & BSC' },
+  { id: 'evm', label: 'EVM' },
   { id: 'solana', label: 'Solana' },
 ]
 
@@ -35,7 +35,7 @@ export function TokenLaunchpadPage() {
         description={
           chain === 'solana'
             ? 'Create an SPL token on Solana, with on-chain metadata and a fixed supply by default.'
-            : 'Deploy an ERC-20 token from a real, compiled Solidity template.'
+            : 'An ERC-20 token on Ethereum, Base, BNB Chain or Polygon, from a real Solidity template you can read and verify.'
         }
       />
 
@@ -59,8 +59,8 @@ export function TokenLaunchpadPage() {
         <SolanaTokenPanel projectId={projectId} />
       ) : (
         <DeployPanel
-          title="Deploy Your Token"
-          description="Pick a template, fill in the parameters, and deploy with your connected wallet — no private key ever leaves your browser."
+          title="1. Choose a template"
+          description="Fill in a few fields and deploy from your own wallet — your keys never leave it."
           templateType="erc20"
           projectId={projectId}
           preselectedTemplateId={templateId}

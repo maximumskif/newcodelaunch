@@ -66,12 +66,12 @@ test('a real allowlist phase: listed wallet mints at the allowlist price, others
   await page.getByLabel('Allowlist start').fill(localInput(new Date(Date.now() - 24 * 3600_000)))
   await page.getByLabel(/Max mints per wallet/).fill('1')
   await expectNoA11yViolations(page, 'launch form with an allowlist phase')
-  await page.getByRole('button', { name: 'Launch Candy Machine' }).click()
+  await page.getByRole('button', { name: 'Launch drop' }).click()
 
   // Recording now reads the guard groups back from the chain and checks
   // them — prices, dates, payment destination, and the merkle root of the
   // list above — so reaching "created" means the on-chain phases are right.
-  await expect(page.getByText('Candy Machine created.')).toBeVisible({ timeout: 45_000 })
+  await expect(page.getByText('Drop created.')).toBeVisible({ timeout: 45_000 })
   const storefrontLink = page.getByRole('link', { name: /\/mint\/buy\// })
   const candyMachine = (await storefrontLink.textContent())!.split('/mint/buy/')[1]
 

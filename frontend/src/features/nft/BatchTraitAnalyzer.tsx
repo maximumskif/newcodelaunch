@@ -8,6 +8,7 @@ import { InlineError } from '../../components/ui/InlineError'
 import { aiTraitsApi, type BatchAnalysisResult } from '../../lib/nftApi'
 import { RarityBadge } from './ui/RarityBadge'
 import { COLOR_HEX } from './ui/colorHex'
+import { errorMessage } from '../../lib/errors'
 
 interface Props {
   token: string
@@ -34,7 +35,7 @@ export function BatchTraitAnalyzer({ token }: Props) {
     try {
       setResult(await aiTraitsApi.analyzeBatch(token, files))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Batch analysis failed')
+      setError(errorMessage(err, 'Batch analysis failed'))
     } finally {
       setIsAnalyzing(false)
     }

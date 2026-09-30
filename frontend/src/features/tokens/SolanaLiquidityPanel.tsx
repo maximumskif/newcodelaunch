@@ -12,6 +12,7 @@ import { isSolanaMainnet, SOLANA_NETWORKS } from '../../lib/candyMachineApi'
 import { signSendAndConfirm } from '../../lib/solana'
 import { formatTokenAmount, solanaTokensApi, type PoolActionInput, type SolanaTokenLaunch, type TokenPoolState } from '../../lib/solanaTokensApi'
 import { useAuth } from '../auth/AuthContext'
+import { errorMessage } from '../../lib/errors'
 
 const SOL_DECIMALS = 9
 // The sidecar allows at most this much more SOL than quoted on a deposit.
@@ -54,7 +55,7 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
       setState(await solanaTokensApi.getPool(accessToken, launch.id, wallet))
       setLoadError(null)
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Couldn’t read the pool')
+      setLoadError(errorMessage(err, 'Couldn’t read the pool'))
     }
   }, [accessToken, launch.id, wallet])
 
@@ -103,7 +104,7 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
       try {
         await solanaTokensApi.recordPoolAction(accessToken, launch.id, signature)
       } catch (err) {
-        setError(`Done on-chain, but not recorded here: ${err instanceof Error ? err.message : 'unknown error'}`)
+        setError(`Done on-chain, but not recorded here: ${errorMessage(err, 'unknown error')}`)
       }
       setDone(doneMessage)
       setTokenInput('')
@@ -112,7 +113,7 @@ export function SolanaLiquidityPanel({ launch }: { launch: SolanaTokenLaunch }) 
       setLockPercent('')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Transaction failed')
+      setError(errorMessage(err, 'Transaction failed'))
     } finally {
       setBusy(null)
       setProgress('')

@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { InlineError } from "../../components/ui/InlineError";
+import { SignInPrompt } from "../../components/ui/SignInPrompt";
 import {
   candyMachineApi,
   SOLANA_NETWORKS,
@@ -16,6 +17,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { EditPhasesDialog } from "./EditPhasesDialog";
 import { LaunchPicker } from "./LaunchPicker";
+import { errorMessage } from "../../lib/errors";
 
 function networkLabel(id: string): string {
   return SOLANA_NETWORKS.find((network) => network.id === id)?.label ?? id;
@@ -51,7 +53,7 @@ export function DropsDashboard() {
       .then(setDashboard)
       .catch((err: unknown) =>
         setError(
-          err instanceof Error ? err.message : "Loading your drops failed",
+          errorMessage(err, "Loading your drops failed"),
         ),
       )
       .finally(() => setIsLoading(false));
@@ -66,9 +68,7 @@ export function DropsDashboard() {
 
   if (!accessToken) {
     return (
-      <p className="text-ink-faint">
-        Sign in with your wallet to see your drops.
-      </p>
+      <SignInPrompt purpose="launch drops and see how they're selling" />
     );
   }
 

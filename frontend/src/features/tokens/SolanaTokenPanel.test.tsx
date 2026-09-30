@@ -131,7 +131,7 @@ describe('SolanaTokenPanel', () => {
     await fillForm(user)
     await user.click(screen.getByRole('button', { name: 'Launch token' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('User rejected the request.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('You cancelled this in your wallet.')
     expect(solanaTokensApi.record).not.toHaveBeenCalled()
   })
 

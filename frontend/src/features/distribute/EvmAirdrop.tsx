@@ -15,6 +15,7 @@ import { useAuth } from '../auth/AuthContext'
 import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from '../contracts/useDeployTemplate'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 import { AirdropLog, RecipientsField, SummaryRow, takeFailed, type BatchResult } from './airdropParts'
+import { errorMessage } from '../../lib/errors'
 
 // Recipients per transaction: a first-time holder costs ~50k gas to pay, so
 // 150 stays far under every chain's block gas limit.
@@ -115,7 +116,7 @@ export function EvmAirdrop({ initialToken, initialNetwork }: { initialToken: str
         try {
           result = { recipients: batch, signature: await wait(hash) }
         } catch (err) {
-          result = { recipients: batch, signature: hash, error: err instanceof Error ? err.message : 'failed' }
+          result = { recipients: batch, signature: hash, error: errorMessage(err, 'failed') }
         }
         batch.forEach((r) => done.add(r))
         setResults((previous) => [...previous, result])
@@ -123,7 +124,7 @@ export function EvmAirdrop({ initialToken, initialNetwork }: { initialToken: str
     } catch (err) {
       const unsent = recipients.filter((r) => !done.has(r))
       if (unsent.length) setResults((previous) => [...previous, { recipients: unsent, error: 'not sent' }])
-      setError(err instanceof Error ? err.message.split('\n')[0] : 'Airdrop stopped')
+      setError(errorMessage(err, 'Airdrop stopped'))
     } finally {
       setBusy(null)
       token.refetch()

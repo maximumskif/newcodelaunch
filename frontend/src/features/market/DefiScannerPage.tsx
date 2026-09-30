@@ -54,7 +54,7 @@ export function DefiScannerPage() {
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Live Data"
-        title="DeFi Protocol Scanner"
+        title="DeFi scanner"
         description="Where the money is in DeFi: total value locked per protocol from DeFiLlama, refreshed every minute."
       />
 

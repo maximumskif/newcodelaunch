@@ -8,6 +8,7 @@ import { InlineError } from '../../components/ui/InlineError'
 import { aiTraitsApi, nftApi, uploadUrl, type ImageAnalysis, type NFTLayer, type NFTTrait } from '../../lib/nftApi'
 import { RarityBadge } from './ui/RarityBadge'
 import { COLOR_HEX } from './ui/colorHex'
+import { errorMessage } from '../../lib/errors'
 
 interface Props {
   token: string
@@ -109,7 +110,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       try {
         await nftApi.addTrait(token, layer.id, nameFromFilename(file.name), DEFAULT_BULK_RARITY_WEIGHT, file)
       } catch (err) {
-        failure = err instanceof Error ? err.message : 'Bulk upload failed'
+        failure = errorMessage(err, 'Bulk upload failed')
         break
       }
       setBulkProgress((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev))
@@ -143,7 +144,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       setEditingTrait(null)
       onTraitAdded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update trait')
+      setError(errorMessage(err, 'Could not update trait'))
     } finally {
       setIsSavingTrait(false)
     }
@@ -159,7 +160,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       setEditingTrait(null)
       onTraitAdded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete trait')
+      setError(errorMessage(err, 'Could not delete trait'))
     } finally {
       setIsDeletingTrait(false)
     }
@@ -174,7 +175,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       setAiResult(result)
       setRarity(SUGGESTED_WEIGHT[result.suggested_rarity] ?? 50)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'AI analysis failed')
+      setError(errorMessage(err, 'AI analysis failed'))
     } finally {
       setIsAnalyzing(false)
     }
@@ -193,7 +194,7 @@ export function LayerCard({ token, layer, onTraitAdded, onRename, onDelete, onMo
       setIsFormOpen(false)
       onTraitAdded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not upload trait')
+      setError(errorMessage(err, 'Could not upload trait'))
     } finally {
       setIsSubmitting(false)
     }

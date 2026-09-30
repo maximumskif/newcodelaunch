@@ -160,7 +160,7 @@ describe('MintLaunchPage project linking', () => {
     const goLiveInput = screen.getByLabelText('Go-live date')
     await user.type(goLiveInput, '2026-09-01T00:00')
 
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
     await waitFor(() =>
       expect(candyMachineApi.create).toHaveBeenCalledWith(
@@ -219,7 +219,7 @@ describe('MintLaunchPage project linking', () => {
     expect(await screen.findByText('Test Collection')).toBeInTheDocument()
     const goLiveInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
     await user.type(goLiveInput, '2026-09-01T00:00')
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
     await waitFor(() => expect(candyMachineApi.create).toHaveBeenCalled())
 
@@ -276,7 +276,7 @@ describe('MintLaunchPage project linking', () => {
 
     const goLiveInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
     await user.type(goLiveInput, '2026-09-01T00:00')
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
     await waitFor(() =>
       expect(candyMachineApi.create).toHaveBeenCalledWith(
@@ -392,7 +392,7 @@ describe('MintLaunchPage allowlist phase', () => {
     await user.type(screen.getByLabelText(/Allowlisted wallets/), `${FAN}\n${OTHER}, ${FAN}`)
     expect(screen.getByText('2 wallets (1 duplicate removed)')).toBeInTheDocument()
     await user.type(screen.getByLabelText('Allowlist start'), '2026-09-01T00:00')
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
     const allowlist = {
       addresses: [FAN, OTHER],
@@ -413,13 +413,13 @@ describe('MintLaunchPage allowlist phase', () => {
     await user.click(screen.getByLabelText(/Add an allowlist phase/))
     await user.type(screen.getByLabelText(/Allowlisted wallets/), '0xNotSolana')
     expect(screen.getByText(/Not a Solana wallet address: 0xNotSolana/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Launch drop' })).toBeDisabled()
 
     await user.clear(screen.getByLabelText(/Allowlisted wallets/))
     await user.type(screen.getByLabelText(/Allowlisted wallets/), FAN)
     await user.type(screen.getByLabelText('Allowlist start'), '2026-09-03T00:00')
     expect(screen.getByText('The allowlist phase must start before the public go-live date')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Launch drop' })).toBeDisabled()
   })
 
   it('sends an optional per-wallet mint limit through every launch step, and blocks an invalid one', async () => {
@@ -430,11 +430,11 @@ describe('MintLaunchPage allowlist phase', () => {
     await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
     await user.type(screen.getByLabelText(/Max mints per wallet/), '0')
     expect(screen.getByText(/whole number from 1 to 65535/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Launch Candy Machine' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Launch drop' })).toBeDisabled()
 
     await user.clear(screen.getByLabelText(/Max mints per wallet/))
     await user.type(screen.getByLabelText(/Max mints per wallet/), '3')
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
     await waitFor(() => expect(candyMachineApi.create).toHaveBeenCalledWith('tok', expect.objectContaining({ mint_limit: 3 })))
     expect(candyMachineApi.prepareCollection).toHaveBeenCalledWith('tok', expect.objectContaining({ mint_limit: 3 }))
@@ -478,9 +478,9 @@ describe('MintLaunchPage big drops', () => {
     renderAt('?collection=col-1')
 
     await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
-    expect(await screen.findByText('Candy Machine created.')).toBeInTheDocument()
+    expect(await screen.findByText('Drop created.')).toBeInTheDocument()
     // One prompt per batch, not one per transaction.
     expect(signAllTransactions).toHaveBeenCalledTimes(2)
     expect(signAllTransactions.mock.calls[0][0]).toHaveLength(3)
@@ -502,14 +502,14 @@ describe('MintLaunchPage big drops', () => {
     renderAt('?collection=col-1')
 
     await user.type(await screen.findByLabelText('Go-live date'), '2026-09-02T00:00')
-    await user.click(screen.getByRole('button', { name: 'Launch Candy Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Launch drop' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('User rejected the request.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('You cancelled this in your wallet.')
     expect(candyMachineApi.create).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Launch Candy Machine' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Launch drop' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Resume launch' }))
-    expect(await screen.findByText('Candy Machine created.')).toBeInTheDocument()
+    expect(await screen.findByText('Drop created.')).toBeInTheDocument()
     // Resumed the existing drop — the Candy Machine was created exactly once.
     expect(candyMachineApi.prepareCandyMachine).toHaveBeenCalledTimes(1)
     expect(candyMachineApi.create).toHaveBeenCalledWith('tok', expect.objectContaining({ candy_machine: 'Candy1' }))

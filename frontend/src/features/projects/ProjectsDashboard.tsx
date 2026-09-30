@@ -9,10 +9,12 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { IconArrowRight, IconCandy, IconCode, IconCoin, IconLayers, IconPlus, IconTrash } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { PageHero } from '../../components/ui/PageHero'
+import { SignInPrompt } from '../../components/ui/SignInPrompt'
 import { PROJECT_TYPES, projectHref } from '../../lib/projectTypes'
 import { projectsApi, type Project, type ProjectStatus } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
 import { MyStuff } from './MyStuff'
+import { errorMessage } from '../../lib/errors'
 
 const STATUS_TONE: Record<ProjectStatus, BadgeTone> = {
   draft: 'neutral',
@@ -51,7 +53,7 @@ export function ProjectsDashboard() {
       const { projects: fetched } = await projectsApi.list(token)
       setProjects(fetched)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load projects')
+      setError(errorMessage(err, 'Could not load projects'))
     } finally {
       setIsLoading(false)
     }
@@ -78,7 +80,7 @@ export function ProjectsDashboard() {
       // request (expired session, network blip, 5xx) was an unhandled
       // promise rejection with zero feedback: no error shown, the button
       // just silently did nothing.
-      setError(err instanceof Error ? err.message : 'Could not update project')
+      setError(errorMessage(err, 'Could not update project'))
     }
   }
 
@@ -90,7 +92,7 @@ export function ProjectsDashboard() {
       setProjects((prev) => prev.filter((p) => p.id !== pendingDelete.id))
       setPendingDelete(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete project')
+      setError(errorMessage(err, 'Could not delete project'))
     } finally {
       setIsDeleting(false)
     }
@@ -107,9 +109,7 @@ export function ProjectsDashboard() {
       <QuickStart />
 
       {!accessToken ? (
-        <Card padding="lg" className="text-center">
-          <p className="text-ink-muted">Connect and sign in with a wallet above to see your projects.</p>
-        </Card>
+        <SignInPrompt purpose="see everything you've made in one place" />
       ) : (
         <>
           <MyStuff token={accessToken} />
@@ -123,7 +123,7 @@ export function ProjectsDashboard() {
             <Link to="/projects/new" className="inline-flex">
               <Button variant="primary" size="sm">
                 <IconPlus className="h-3.5 w-3.5" />
-                New Project
+                New project
               </Button>
             </Link>
           </div>

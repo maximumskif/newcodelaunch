@@ -4,6 +4,7 @@ import { useAccount, useChainId, useDeployContract, useSwitchChain, useWaitForTr
 
 import { contractsApi, type ContractDeployment } from '../../lib/contractsApi'
 import { useAuth } from '../auth/AuthContext'
+import { errorMessage } from '../../lib/errors'
 
 // Verified for real end-to-end against a local chain (see frontend/e2e/) —
 // `step` does progress idle -> compiling -> deploying -> confirming, but
@@ -108,7 +109,7 @@ export function useDeployTemplate() {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to record deployment')
+        setError(errorMessage(err, 'Failed to record deployment'))
         setStep('error')
       })
 
@@ -158,7 +159,7 @@ export function useDeployTemplate() {
         setTxHash(hash)
         setStep('confirming')
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Deployment failed')
+        setError(errorMessage(err, 'Deployment failed'))
         setStep('error')
       }
     },

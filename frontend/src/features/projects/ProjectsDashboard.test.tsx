@@ -96,7 +96,7 @@ describe('ProjectsDashboard', () => {
 
     renderDashboard()
 
-    expect(screen.getByText(/Connect and sign in/)).toBeInTheDocument()
+    expect(screen.getByText("Sign in to see everything you've made in one place")).toBeInTheDocument()
     expect(projectsApi.list).not.toHaveBeenCalled()
   })
 

@@ -16,6 +16,7 @@ import {
   type NFTGenerationJob,
 } from '../../lib/nftApi'
 import { RarityDistribution } from './RarityDistribution'
+import { errorMessage } from '../../lib/errors'
 
 interface Props {
   token: string
@@ -122,7 +123,7 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
       setGenerationJob(job)
       await pollJob(job)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed')
+      setError(errorMessage(err, 'Generation failed'))
       setIsGenerating(false)
     }
   }
@@ -156,7 +157,7 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
       await pollJob(updated)
     } catch (err) {
       if (latestJobIdRef.current !== job.id) return
-      setError(err instanceof Error ? err.message : 'Lost track of the generation job')
+      setError(errorMessage(err, 'Lost track of the generation job'))
       setIsGenerating(false)
     }
   }
@@ -167,7 +168,7 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
       const result = await nftApi.getItemMetadata(token, itemId)
       setPreviews((prev) => ({ ...prev, [itemId]: result }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load metadata preview')
+      setError(errorMessage(err, 'Could not load metadata preview'))
     } finally {
       setPreviewLoadingId(null)
     }
@@ -190,7 +191,7 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
       })
       if (expandedId === itemId) await refreshPreview(itemId)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publish failed')
+      setError(errorMessage(err, 'Publish failed'))
     } finally {
       setPublishingId(null)
     }
@@ -212,7 +213,7 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
       }
       setPreviews({})
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publish failed')
+      setError(errorMessage(err, 'Publish failed'))
     } finally {
       if (pending.length > 0) onItemsChanged?.()
       setBulkProgress(null)
@@ -393,7 +394,7 @@ export function GenerateStep({ token, collection, projectId, onItemsChanged }: P
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-500/40 bg-accent-500/10 p-4">
             <div>
               <p className="font-medium text-ink">Ready to sell this collection?</p>
-              <p className="text-sm text-ink-muted">Launch a Solana mint site with Candy Machine, or deploy it as an ERC-721 on EVM.</p>
+              <p className="text-sm text-ink-muted">Sell it on Solana with a mint page (a drop), or deploy it as an ERC-721 on an EVM chain.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link to={`/drops/launch?collection=${collection.id}${projectId ? `&project=${projectId}` : ''}`}>

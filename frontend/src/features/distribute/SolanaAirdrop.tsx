@@ -18,6 +18,7 @@ import {
 import { isSolanaMainnet, SOLANA_NETWORKS, type SolanaNetworkId } from '../../lib/candyMachineApi'
 import { walletTokens } from '../../lib/solanaWalletTokens'
 import { AirdropLog, RecipientsField, short, SummaryRow, takeFailed, type BatchResult } from './airdropParts'
+import { errorMessage } from '../../lib/errors'
 
 interface Estimate {
   newAccounts: number
@@ -93,7 +94,7 @@ export function SolanaAirdrop({ initialMint, initialNetwork }: { initialMint: st
       const batches = packSolanaBatches(parsed.recipients, await context(latest)).length
       setEstimate({ newAccounts, batches, lamports: newAccounts * rent + batches * FEE_PER_TX, solBalance })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not check the recipients')
+      setError(errorMessage(err, 'Could not check the recipients'))
     } finally {
       setBusy(null)
     }
@@ -129,7 +130,7 @@ export function SolanaAirdrop({ initialMint, initialNetwork }: { initialMint: st
               const { value } = await connection.confirmTransaction({ signature, ...latest }, 'confirmed')
               return value.err ? { recipients: batch, signature, error: JSON.stringify(value.err) } : { recipients: batch, signature }
             } catch (err) {
-              return { recipients: batch, error: err instanceof Error ? err.message : 'not sent' }
+              return { recipients: batch, error: errorMessage(err, 'not sent') }
             }
           }),
         )
@@ -142,7 +143,7 @@ export function SolanaAirdrop({ initialMint, initialNetwork }: { initialMint: st
       const sent = new Set(done.flatMap((result) => result.recipients))
       const unsent = recipients.filter((r) => !sent.has(r))
       if (unsent.length) setResults((previous) => [...previous, { recipients: unsent, error: 'not sent' }])
-      setError(err instanceof Error ? err.message : 'Airdrop stopped')
+      setError(errorMessage(err, 'Airdrop stopped'))
     } finally {
       setBusy(null)
       tokens.refetch()

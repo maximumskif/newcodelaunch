@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { contractsApi, type ContractDeployment } from '../../lib/contractsApi'
 import { useAuth } from '../auth/AuthContext'
+import { errorMessage } from '../../lib/errors'
 
 const POLL_INTERVAL_MS = 3_000
 
@@ -27,7 +28,7 @@ export function VerifySource({ deployment, compact = false }: { deployment: Cont
           setMessage(updated.verification_message)
         })
         .catch((err: unknown) => {
-          setError(err instanceof Error ? err.message : 'Checking verification failed')
+          setError(errorMessage(err, 'Checking verification failed'))
           setStatus('failed')
         })
     }, POLL_INTERVAL_MS)
@@ -43,7 +44,7 @@ export function VerifySource({ deployment, compact = false }: { deployment: Cont
       setStatus(updated.verification_status)
       setMessage(updated.verification_message)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed')
+      setError(errorMessage(err, 'Verification failed'))
     } finally {
       setIsSubmitting(false)
     }

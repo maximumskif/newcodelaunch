@@ -11,6 +11,7 @@ import { IconChevronDown } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { apiClient, type Chain } from '../../lib/apiClient'
 import { useAuth } from './AuthContext'
+import { errorMessage } from '../../lib/errors'
 
 export function WalletConnect() {
   const { user, accessToken, login, updateUser, logout } = useAuth()
@@ -42,7 +43,7 @@ export function WalletConnect() {
       const { access_token, user: authUser } = await apiClient.verify(walletAddress, chain, signature, nonce)
       login(access_token, authUser)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed')
+      setError(errorMessage(err, 'Authentication failed'))
     } finally {
       setIsAuthenticating(false)
     }
@@ -142,7 +143,7 @@ export function WalletConnect() {
           : 'Wallet linked.',
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Linking failed')
+      setError(errorMessage(err, 'Linking failed'))
     } finally {
       setIsLinking(false)
     }
@@ -156,7 +157,7 @@ export function WalletConnect() {
       const { user: updated } = await apiClient.unlinkWallet(accessToken, chain, walletAddress)
       updateUser(updated)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unlinking failed')
+      setError(errorMessage(err, 'Unlinking failed'))
     }
   }
 
@@ -283,20 +284,20 @@ export function WalletConnect() {
     <div className="flex flex-col items-end gap-2 text-sm">
       <div className="flex flex-wrap justify-end gap-2">
         {!isEvmConnected ? (
-          <Button variant="primary" onClick={handleConnectEvm}>
+          <Button variant="primary" size="sm" onClick={handleConnectEvm}>
             Connect EVM Wallet
           </Button>
         ) : (
-          <Button variant="primary" onClick={handleSignEvm} isLoading={isAuthenticating}>
+          <Button variant="primary" size="sm" onClick={handleSignEvm} isLoading={isAuthenticating}>
             Sign in with {address?.slice(0, 6)}…{address?.slice(-4)}
           </Button>
         )}
         {!isSolanaConnected ? (
-          <Button variant="primary" onClick={handleConnectSolana}>
+          <Button variant="primary" size="sm" onClick={handleConnectSolana}>
             Connect Solana Wallet
           </Button>
         ) : (
-          <Button variant="primary" onClick={handleSignSolana} isLoading={isAuthenticating}>
+          <Button variant="primary" size="sm" onClick={handleSignSolana} isLoading={isAuthenticating}>
             Sign in with {publicKey?.toBase58().slice(0, 6)}…
           </Button>
         )}

@@ -11,6 +11,7 @@ import { SOLANA_NETWORKS } from '../../lib/candyMachineApi'
 import { PROJECT_TYPES, projectHref, WIZARD_PROJECT_TYPES } from '../../lib/projectTypes'
 import { projectsApi, type ProjectType } from '../../lib/projectsApi'
 import { useAuth } from '../auth/AuthContext'
+import { errorMessage } from '../../lib/errors'
 
 // Two local steps (pick a type, then name it) that end by creating a real
 // Project draft and handing off into the existing token/nft/contract page —
@@ -51,7 +52,7 @@ export function NewProjectWizard() {
       })
       navigate(projectHref(project))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create project')
+      setError(errorMessage(err, 'Could not create project'))
       setIsSubmitting(false)
     }
   }
@@ -59,7 +60,7 @@ export function NewProjectWizard() {
   if (!accessToken) {
     return (
       <div className="space-y-5 p-4 sm:p-8">
-        <PageHero eyebrow="Projects" title="New Project" description="Connect and sign in with a wallet first." />
+        <PageHero eyebrow="Projects" title="New project" description="Connect and sign in with a wallet first." />
       </div>
     )
   }
@@ -68,7 +69,7 @@ export function NewProjectWizard() {
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Projects"
-        title="New Project"
+        title="New project"
         description="Start something new — your progress is saved as a draft you can resume from the dashboard."
       />
 
@@ -124,7 +125,7 @@ export function NewProjectWizard() {
               <div className="mt-1 flex gap-1.5" role="group" aria-labelledby="wizard-chain-label">
                 {(
                   [
-                    ['evm', 'Ethereum, Polygon & BSC'],
+                    ['evm', 'EVM (Ethereum, Base, BNB, Polygon)'],
                     ['solana', 'Solana'],
                   ] as const
                 ).map(([id, label]) => (

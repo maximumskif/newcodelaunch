@@ -163,9 +163,9 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   // needs is_live to be true immediately, not after some future opening time.
   await goLiveInput.fill('2020-01-01T00:00')
 
-  await page.getByRole('button', { name: 'Launch Candy Machine' }).click()
+  await page.getByRole('button', { name: 'Launch drop' }).click()
 
-  await expect(page.getByText('Candy Machine created.')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Drop created.')).toBeVisible({ timeout: 30_000 })
 
   // Mint from the public storefront this just linked to — a different
   // visitor's flow (no account, no auth), reusing the same wallet here

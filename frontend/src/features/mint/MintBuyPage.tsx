@@ -12,6 +12,7 @@ import { ApiError } from '../../lib/http'
 import { candyMachineApi, isSolanaMainnet, SOLANA_NETWORKS, type PublicCandyMachineStatus } from '../../lib/candyMachineApi'
 import { ipfsImageCandidates } from '../../lib/ipfsGateways'
 import { base64ToBytes } from '../../lib/solana'
+import { errorMessage } from '../../lib/errors'
 
 type MintStep = 'idle' | 'preparing' | 'signing' | 'done' | 'error'
 
@@ -91,7 +92,7 @@ export function MintBuyPage() {
       setStep('done')
       loadStatus()
     } catch (err) {
-      setMintError(err instanceof Error ? err.message : 'Mint failed')
+      setMintError(errorMessage(err, 'Mint failed'))
       setStep('error')
     }
   }

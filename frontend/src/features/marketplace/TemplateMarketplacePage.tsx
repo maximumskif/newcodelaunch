@@ -10,7 +10,8 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
 import { InlineError } from '../../components/ui/InlineError'
 import { contractsApi, type ContractTemplateSummary } from '../../lib/contractsApi'
-import { templateMeta } from '../contracts/templateMeta'
+import { isPickable, templateMeta } from '../contracts/templateMeta'
+import { errorMessage } from '../../lib/errors'
 
 // Browse-only gallery over the templates that actually exist — no fake
 // authors, ratings, or download counts like the legacy Template Marketplace.
@@ -33,8 +34,8 @@ export function TemplateMarketplacePage() {
     // from "no templates exist").
     contractsApi
       .listTemplates()
-      .then(({ templates: fetched }) => setTemplates(fetched))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load templates'))
+      .then(({ templates: fetched }) => setTemplates(fetched.filter(isPickable)))
+      .catch((err) => setError(errorMessage(err, 'Could not load templates')))
       .finally(() => setIsLoading(false))
   }, [])
 
@@ -47,7 +48,7 @@ export function TemplateMarketplacePage() {
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="Marketplace"
-        title="Template Marketplace"
+        title="Template library"
         description="Every deployable template's Solidity source is real and inspectable before you deploy it — browse them here, then deploy from the Token Launchpad or Contracts Hub."
       />
 

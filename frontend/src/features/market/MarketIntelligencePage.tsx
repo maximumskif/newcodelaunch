@@ -250,7 +250,7 @@ export function MarketIntelligencePage() {
     <div className="space-y-8 p-4 sm:p-8">
       <PageHero
         eyebrow="Live Data"
-        title="Market Intelligence"
+        title="Market & token lookup"
         description="Look up any token, see what's moving on DEXes, and track the majors — live data, never a simulated number."
       />
       <TokenLookup />

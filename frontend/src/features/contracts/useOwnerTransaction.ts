@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useChainId, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi'
+import { errorMessage } from '../../lib/errors'
 
 // The mechanics every owner-tools panel shares (ERC-721, ERC-20): switch the
 // wallet to the contract's chain, send one owner transaction at a time,
@@ -47,7 +48,7 @@ export function useOwnerTransaction<Action extends string>({
       if (chainId && currentChainId !== chainId) await switchChainAsync({ chainId })
       setPending({ action, hash: await write() })
     } catch (err) {
-      setError(err instanceof Error ? err.message.split('\n')[0] : 'Transaction failed')
+      setError(errorMessage(err, 'Transaction failed'))
     } finally {
       setBusyAction(null)
     }

@@ -10,6 +10,7 @@ import { SOLANA_NETWORKS } from '../../lib/candyMachineApi'
 import { formatTokenAmount } from '../../lib/solanaTokensApi'
 import { tokenPagesApi, type TokenPage as TokenPageData } from '../../lib/tokenPagesApi'
 import { EVM_NETWORKS } from '../network/NetworkContext'
+import { errorMessage } from '../../lib/errors'
 
 const percentOf = (part: bigint, whole: bigint) => (whole > 0n ? `${((Number(part) / Number(whole)) * 100).toFixed(2)}%` : '0%')
 
@@ -44,7 +45,7 @@ export function TokenPage() {
     tokenPagesApi
       .get(network, address)
       .then((data) => !cancelled && setPage(data))
-      .catch((err: unknown) => !cancelled && setError(err instanceof Error ? err.message : 'Couldn’t load this token'))
+      .catch((err: unknown) => !cancelled && setError(errorMessage(err, 'Couldn’t load this token')))
     return () => {
       cancelled = true
     }

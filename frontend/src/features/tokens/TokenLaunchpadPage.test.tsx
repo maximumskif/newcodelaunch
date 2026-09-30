@@ -26,7 +26,7 @@ describe('TokenLaunchpadPage chain switch', () => {
   it('defaults to EVM, so existing ?project=/?template= links keep working', () => {
     renderAt('/tokens?project=p1')
     expect(screen.getByText('EVM deploy panel')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ethereum, Polygon & BSC' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'EVM' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('switches to Solana and back, keeping the choice in the URL', async () => {
@@ -37,7 +37,7 @@ describe('TokenLaunchpadPage chain switch', () => {
     expect(screen.getByText('Solana token panel')).toBeInTheDocument()
     expect(screen.getByTestId('search')).toHaveTextContent('?project=p1&chain=solana')
 
-    await user.click(screen.getByRole('button', { name: 'Ethereum, Polygon & BSC' }))
+    await user.click(screen.getByRole('button', { name: 'EVM' }))
     expect(screen.getByText('EVM deploy panel')).toBeInTheDocument()
     expect(screen.getByTestId('search')).toHaveTextContent(/^\?project=p1$/)
   })

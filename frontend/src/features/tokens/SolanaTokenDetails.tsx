@@ -11,6 +11,7 @@ import { isSolanaMainnet, SOLANA_NETWORKS } from '../../lib/candyMachineApi'
 import { signSendAndConfirm } from '../../lib/solana'
 import { solanaTokensApi, validateTokenForm, type SolanaTokenLaunch, type TokenMetadata } from '../../lib/solanaTokensApi'
 import { useAuth } from '../auth/AuthContext'
+import { errorMessage } from '../../lib/errors'
 
 const inputClass = 'mt-1 w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-ink'
 
@@ -47,7 +48,7 @@ export function SolanaTokenDetails({ launch, onUpdated }: { launch: SolanaTokenL
     solanaTokensApi
       .getMetadata(accessToken, launch.id)
       .then(load)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Couldn’t read the token’s metadata'))
+      .catch((err: unknown) => setError(errorMessage(err, 'Couldn’t read the token’s metadata')))
   }, [accessToken, launch.id])
 
   if (!current) {
@@ -83,7 +84,7 @@ export function SolanaTokenDetails({ launch, onUpdated }: { launch: SolanaTokenL
       load(await solanaTokensApi.getMetadata(accessToken, launch.id))
       setDone(lock ? 'Metadata locked for good.' : 'Details updated.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed')
+      setError(errorMessage(err, 'Update failed'))
     } finally {
       setBusy(null)
       setConfirmingLock(false)

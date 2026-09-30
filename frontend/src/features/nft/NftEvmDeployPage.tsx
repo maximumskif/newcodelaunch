@@ -17,6 +17,7 @@ import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from '../contracts/useDeployTe
 import { VerifySource } from '../contracts/VerifySource'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
 import { Erc721ManagePanel } from './Erc721ManagePanel'
+import { errorMessage } from '../../lib/errors'
 
 const inputClass = 'mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-ink'
 
@@ -115,7 +116,7 @@ export function NftEvmDeployPage() {
     try {
       pinned = await nftApi.publishEvmMetadata(accessToken, collection.id)
     } catch (err) {
-      setPinError(err instanceof Error ? err.message : 'Pinning the metadata folder failed')
+      setPinError(errorMessage(err, 'Pinning the metadata folder failed'))
       return
     } finally {
       setIsPinning(false)
@@ -151,7 +152,7 @@ export function NftEvmDeployPage() {
       })
       setEnableTxHash(hash)
     } catch (err) {
-      setEnableError(err instanceof Error ? err.message : 'Enabling minting failed')
+      setEnableError(errorMessage(err, 'Enabling minting failed'))
     }
   }
 
@@ -160,7 +161,7 @@ export function NftEvmDeployPage() {
       <div className="space-y-5 p-4 sm:p-8">
         <PageHero
           eyebrow="NFT Generator"
-          title="Deploy on Ethereum, Polygon or BSC"
+          title="Deploy as ERC-721"
           description="Deploy a published NFT collection as an ERC-721 contract, signed by your own wallet."
         />
         <EmptyState
@@ -184,7 +185,7 @@ export function NftEvmDeployPage() {
     <div className="space-y-5 p-4 sm:p-8">
       <PageHero
         eyebrow="NFT Generator"
-        title="Deploy on Ethereum, Polygon or BSC"
+        title="Deploy as ERC-721"
         description="An ERC-721 contract for your collection, deployed and owned by your connected wallet — this app never holds your key."
       />
 
