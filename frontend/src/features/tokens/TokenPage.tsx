@@ -8,7 +8,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
 import { SOLANA_NETWORKS } from '../../lib/candyMachineApi'
 import { formatTokenAmount } from '../../lib/solanaTokensApi'
-import { tokenPagesApi, type TokenPage as TokenPageData } from '../../lib/tokenPagesApi'
+import { tokenPagesApi, type EvmTokenPage, type TokenPage as TokenPageData } from '../../lib/tokenPagesApi'
 import { EVM_NETWORKS } from '../network/NetworkContext'
 import { errorMessage } from '../../lib/errors'
 
@@ -223,9 +223,36 @@ export function TokenPage() {
           )}
         </Card>
       </div>
+      {page.chain === 'evm' && (page.vesting ?? []).length > 0 && <VestingCard page={page} fmt={fmt} />}
       <p className="text-xs text-ink-faint">
         This page reports on-chain facts, not advice. A fixed supply and locked liquidity remove some risks, not all of them.
       </p>
     </div>
+  )
+}
+
+const day = (seconds: number) => new Date(seconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+
+// Supply still in vesting contracts made here: it can only reach its
+// beneficiary, gradually, so it can't be sold all at once.
+function VestingCard({ page, fmt }: { page: EvmTokenPage; fmt: (raw: string) => string }) {
+  const schedules = page.vesting ?? []
+  const vesting = schedules.reduce((sum, s) => sum + BigInt(s.amount), 0n)
+  return (
+    <Card padding="lg" rounded="xl" data-testid="token-page-vesting">
+      <h2 className="mb-4 font-display text-lg font-semibold text-ink">Vesting</h2>
+      <ul className="space-y-2 text-sm">
+        <Check ok>
+          {percentOf(vesting, BigInt(page.total_supply))} of the supply is vesting — it can only be paid out gradually, to the wallets below
+        </Check>
+        {schedules.map((s) => (
+          <li key={s.address} className="pl-6 text-ink-muted">
+            {fmt(s.amount)} {page.symbol} to <span className="break-all font-mono text-xs">{s.beneficiary}</span>
+            {s.cliff_time > page.chain_time ? `, nothing before ${day(s.cliff_time)}` : ''}, all by {day(s.end_time)}{' '}
+            <span className="break-all font-mono text-xs">({s.address})</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }

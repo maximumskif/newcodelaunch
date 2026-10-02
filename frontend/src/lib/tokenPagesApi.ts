@@ -28,6 +28,9 @@ export interface EvmTokenPage {
   explorer_url: string | null
   chain_time: number
   pool: (PoolBase & { burned_lp?: string; locks?: { address: string; amount: string; release_time: number }[] }) | null
+  // Token Vesting contracts for this token that are still paying out;
+  // amount is what each still holds.
+  vesting?: { address: string; beneficiary: string; amount: string; start_time: number; cliff_time: number; end_time: number }[]
 }
 
 export interface SolanaTokenPage {

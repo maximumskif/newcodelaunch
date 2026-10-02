@@ -163,3 +163,27 @@ def test_pool_counts_only_locks_whose_code_is_the_template(app, monkeypatch):
 
         assert pool["locks"] == [{"address": REAL_LOCK, "amount": "300", "release_time": 4102444800}]
         assert pool["burned_lp"] == "0"
+
+
+def test_vesting_lists_only_live_schedules_whose_code_is_the_template(app, monkeypatch):
+    real, fake, finished, empty = (f"0x{n}000000000000000000000000000000000000000" for n in "abcd")
+    with app.app_context():
+        for address, end in ((real, 4102444800), (fake, 4102444800), (finished, 1_700_000_000), (empty, 4102444800)):
+            _db.session.add(
+                ContractDeployment(
+                    user_id="u", template_id="token_vesting", template_name="Token Vesting", contract_type="vesting",
+                    network="sepolia", contract_address=address, transaction_hash=f"0x{address[2]}", deployer_address="0x1",
+                    parameters={"TOKEN": TOKEN.lower(), "BENEFICIARY": "0xB", "START_TIME": "1", "CLIFF_TIME": "2", "END_TIME": str(end)},
+                )
+            )
+        _db.session.commit()
+        monkeypatch.setattr(token_pages, "code_matches_template", lambda w3, row: row.contract_address != fake)
+        balances = {real: 300, fake: 500, finished: 50, empty: 0}
+        token = _Contract({"balanceOf": lambda who: balances[who.lower()]})
+        token.address = TOKEN
+
+        schedules = token_pages._evm_vesting(object(), "sepolia", token, chain_time=1_800_000_000)
+
+        assert schedules == [
+            {"address": real, "beneficiary": "0xB", "amount": "300", "start_time": 1, "cliff_time": 2, "end_time": 4102444800}
+        ]

@@ -10,6 +10,7 @@ import { templateMeta } from './templateMeta'
 import { Erc20ManagePanel } from './Erc20ManagePanel'
 import { LiquidityPanel } from './LiquidityPanel'
 import { TokenLockPanel } from './TokenLockPanel'
+import { VestingPanel } from './VestingPanel'
 import { VerifySource } from './VerifySource'
 
 export function DeploymentHistory({ deployments }: { deployments: ContractDeployment[] }) {
@@ -79,7 +80,7 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
-                    {(deployment.template_id === 'erc20_advanced' || deployment.template_id === 'token_timelock') && (
+                    {['erc20_advanced', 'token_timelock', 'token_vesting'].includes(deployment.template_id) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -120,6 +121,8 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                       <LiquidityPanel deployment={deployment} />
                     ) : deployment.template_id === 'token_timelock' ? (
                       <TokenLockPanel deployment={deployment} />
+                    ) : deployment.template_id === 'token_vesting' ? (
+                      <VestingPanel deployment={deployment} />
                     ) : (
                       <Erc20ManagePanel deployment={deployment} />
                     )}

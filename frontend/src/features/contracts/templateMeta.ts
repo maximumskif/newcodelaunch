@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 
-import { IconBolt, IconCoin, IconImage, IconLock } from '../../components/ui/icons'
+import { IconBolt, IconClock, IconCoin, IconImage, IconLock } from '../../components/ui/icons'
 
 // Presentation only — what a template card shows beyond the backend's name
 // and description. An unknown template id falls back to a generic look, so
@@ -18,6 +18,7 @@ const META: Record<string, TemplateMeta> = {
   erc20_advanced: { icon: IconBolt, tags: ['Buy/sell tax', 'Anti-whale limits', 'Trading switch'], identityParams: ['TOKEN_NAME'] },
   erc721_basic: { icon: IconImage, tags: ['Public mint', 'Mint price', 'Metadata URI'], identityParams: ['COLLECTION_NAME'] },
   token_timelock: { icon: IconLock, tags: ['No owner', 'Release date', 'LP locks'], identityParams: [] },
+  token_vesting: { icon: IconClock, tags: ['No owner', 'Cliff', 'Linear unlock'], identityParams: [] },
   multisend: { icon: IconBolt, tags: ['No owner', 'Airdrops', 'Shared'], identityParams: [] },
 }
 

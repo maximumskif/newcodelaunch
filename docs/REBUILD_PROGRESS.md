@@ -1112,12 +1112,25 @@ Signed in with a fresh test account on the e2e stack, then screenshotted the emp
 
 **Verified**: Vitest 242 (new: My stuff shows only filled areas; a new account gets the one-line state); Playwright: the token deploy spec checks the next-step links; full suite 46 passed after axe caught the new "start one" link told apart by colour alone (inline links in sentences are underlined now).
 
+## Vesting, 2026-10-02
+
+The last "soon" tool in liquidity & distribution. EVM only for now; Solana would need a vesting program, which is not done.
+
+- **The contract** (`token_vesting`, "Token Vesting"): token, beneficiary, start, cliff and end are constants fixed at deploy, the same way as the time-lock. There's no owner and no way to revoke it. Nothing is releasable before the cliff; after that, the amount vests linearly from the start to the end. `release()` can be called by anyone but pays only the beneficiary. The total is what it holds plus what it has paid out, so tokens added later vest on the same schedule. Transfers use a low-level call, so tokens that return nothing (USDT-style) work. The constructor refuses impossible dates and an end that's already past.
+- **The page** (`/liquidity/vesting`): token, beneficiary, amount, start, cliff and length in months. The summary shows what unlocks at the cliff and when everything has vested. Two transactions: create the contract, then send it the tokens from the panel that appears (the amount is carried over). "Your vesting schedules" lists each schedule with a progress bar, what's paid out and ready, a release button and a top-up field. Each schedule's history row has the same panel, and My stuff links every EVM token to it ("vest").
+- **Public token page**: a Vesting card listing live schedules for the token, with the share of supply still vesting. As with LP locks, only contracts whose code matches the template for their recorded terms count, and amounts come from the token's own balances.
+- **Found by the WebAssembly/native compiler test**: the dates are constants, so solc folds `endTime - startTime` at compile time. An end at or before the start isn't a revert but a compile error ("Division by zero"). The backend now checks start < end and start ≤ cliff ≤ end before compiling, with a plain message.
+- The chain check before any UI: on anvil, nothing releasable before the cliff, a quarter at a 25% cliff, a top-up vesting on the same schedule, everything after the end, then "Nothing to release yet".
+
+**Verified**: pytest 411 (template compiles to exactly its interface; parameter and date checks; the token page lists only live, code-matching schedules); Vitest 250 (the vesting math against the contract's, month arithmetic, schedule problems, panel release/fund/over-balance, the token page's vesting card); Playwright `vesting.spec.ts` on anvil: create, fund, cliff, about half released after six months, the rest after the end, nothing left in the contract; the page is in the axe scans. Full suite: 47 of 48, then 48 after fixing a flake in `erc20-advanced-owner.spec.ts`: "Trading is enabled." also matched "…until trading is enabled." for a moment before the panel re-read the chain, so the match is exact now.
+- **Running e2e on this machine**: Chromium needs `libnspr4`, `libnss3` and `libasound2`, which aren't installed and need sudo. They're extracted to `~/.local/chromium-deps` (`apt-get download` + `dpkg-deb -x`); run with `LD_LIBRARY_PATH=~/.local/chromium-deps/root/usr/lib/x86_64-linux-gnu` and `~/.foundry/bin` plus the Solana CLI on `PATH`. Stop the dev servers first, or Playwright reuses them.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:
 
 1. **Hands-on walkthrough by the owner.** Everything since the redesign (six areas, token checker, airdrop, holder snapshot, burn, polish passes 1–2) has been verified by automated tests and screenshots only. Click through it locally and note what feels confusing or generic.
 2. **Private test deploy.** The Oracle Always Free ARM instance (Phoenix, AD-1) has no public IP because it's in a private subnet. Fix that in the Oracle console, then run `deploy/bootstrap.sh`.
-3. **Then features, guided by the walkthrough.** Candidates: vesting (the last "soon" tool in liquidity & distribution; builds on the time-lock template), the bonding-curve launch, and the platform-fee decision.
+3. **Then features, guided by the walkthrough.** Candidates: ~~vesting~~ (done 2026-10-02, EVM), the bonding-curve launch, and the platform-fee decision.
 
 Before anything goes public: rotate the Pinata, Etherscan and Helius keys that were shared in chat. They're only stored in the gitignored `backend/.env`.

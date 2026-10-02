@@ -20,7 +20,7 @@ def _sample_parameters(template) -> dict:
         elif param["type"] == "string":
             params[param["name"]] = "SMP" if "SYMBOL" in param["name"] else "ipfs://bafyX/" if "URI" in param["name"] else "Sample"
         else:
-            params[param["name"]] = "4102444800" if "TIME" in param["name"] else "1000"
+            params[param["name"]] = "4133980800" if param["name"] == "END_TIME" else "4102444800" if "TIME" in param["name"] else "1000"
     return params
 
 

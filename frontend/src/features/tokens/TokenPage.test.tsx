@@ -77,6 +77,22 @@ describe('TokenPage', () => {
     expect(screen.getByText("10.00% of the pool's liquidity is burned")).toBeInTheDocument()
   })
 
+  it('shows how much of the supply is vesting, and only when some is', async () => {
+    const vesting = [
+      { address: '0x6666666666666666666666666666666666666666', beneficiary: '0x2222222222222222222222222222222222222222', amount: '150000000000000000000000', start_time: 1_780_000_000, cliff_time: 1_800_000_000, end_time: 1_850_000_000 },
+    ]
+    vi.mocked(tokenPagesApi.get).mockResolvedValue({ ...evm, vesting })
+    const { unmount } = renderAt(`/token/sepolia/${evm.address}`)
+    expect(await screen.findByText(/15.00% of the supply is vesting/)).toBeInTheDocument()
+    expect(screen.getByTestId('token-page-vesting')).toHaveTextContent(/150,000 ADV to 0x2222.*nothing before/)
+    unmount()
+
+    vi.mocked(tokenPagesApi.get).mockResolvedValue({ ...evm, vesting: [] })
+    renderAt(`/token/sepolia/${evm.address}`)
+    expect(await screen.findByRole('heading', { name: 'Advanced E2E (ADV)' })).toBeInTheDocument()
+    expect(screen.queryByTestId('token-page-vesting')).not.toBeInTheDocument()
+  })
+
   it('shows a Solana token’s authorities and permanent lock', async () => {
     vi.mocked(tokenPagesApi.get).mockResolvedValue(solana)
     renderAt(`/token/solana_devnet/${solana.address}`)

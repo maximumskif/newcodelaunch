@@ -5,7 +5,7 @@ from app.services import contract_templates, solidity
 
 def test_get_all_templates_returns_the_real_templates():
     templates = contract_templates.get_all_templates()
-    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock", "multisend"}
+    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock", "token_vesting", "multisend"}
 
 
 def test_get_all_templates_filters_by_type():
@@ -186,6 +186,38 @@ def test_token_timelock_compiles_with_no_owner_and_fixed_terms():
 def test_token_timelock_parameters_are_checked(overrides, message):
     with pytest.raises(contract_templates.TemplateParameterError, match=message):
         contract_templates.render_contract("token_timelock", {**TIMELOCK_PARAMS, **overrides})
+
+
+VESTING_PARAMS = {
+    "TOKEN": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+    "BENEFICIARY": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    "START_TIME": "4102444800",
+    "CLIFF_TIME": "4110220800",
+    "END_TIME": "4133980800",
+}
+
+
+def test_token_vesting_compiles_with_no_owner_and_fixed_terms():
+    rendered = contract_templates.render_contract("token_vesting", VESTING_PARAMS)
+    assert rendered["contract_name"] == "TokenVesting"
+    assert "0x5FbDB2315678afecb367f032d93F642f64180aa3" in rendered["contract_code"]
+    compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    assert compiled.success, compiled.error_message
+    functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
+    assert functions == {"token", "beneficiary", "startTime", "cliffTime", "endTime", "released", "vestedAmount", "releasable", "release"}
+    assert not any(item.get("stateMutability") == "payable" for item in compiled.abi)
+
+
+@pytest.mark.parametrize(
+    "overrides, message",
+    [({"TOKEN": "0x123"}, "TOKEN"), ({"BENEFICIARY": ""}, "BENEFICIARY"), ({"CLIFF_TIME": "-1"}, "CLIFF_TIME"), ({"END_TIME": "later"}, "END_TIME"),
+     ({"END_TIME": "4102444800"}, "END_TIME must be after START_TIME"),
+     ({"CLIFF_TIME": "4000000000"}, "CLIFF_TIME must be between"),
+     ({"CLIFF_TIME": "4200000000"}, "CLIFF_TIME must be between")],
+)
+def test_token_vesting_parameters_are_checked(overrides, message):
+    with pytest.raises(contract_templates.TemplateParameterError, match=message):
+        contract_templates.render_contract("token_vesting", {**VESTING_PARAMS, **overrides})
 
 
 def test_templates_declare_no_immutables():

@@ -53,7 +53,7 @@ test('an advanced ERC-20: trading gate, pair-based taxes split to the fee wallet
   await expect(panel.getByText('Trading not enabled')).toBeVisible({ timeout: 15_000 })
   await expect(panel.getByText('Buy 3% · Sell 5% · split 60/40')).toBeVisible()
   await panel.getByRole('button', { name: 'Enable trading' }).click()
-  await expect(panel.getByText('Trading is enabled.')).toBeVisible({ timeout: 20_000 })
+  await expect(panel.getByText('Trading is enabled.', { exact: true })).toBeVisible({ timeout: 20_000 })
   await expect.poll(() => read<boolean>('tradingEnabled')).toBe(true)
 
   // A plain wallet-to-wallet transfer is untaxed.

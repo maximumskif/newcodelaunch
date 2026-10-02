@@ -3,9 +3,10 @@ Public token pages: what a buyer should be able to check about a token
 launched with this app, read from the chain rather than from anything the
 creator claims — supply, whether the creator can still mint or freeze (or
 still owns the contract), taxes and trading status for an advanced ERC-20,
-the DEX pool and its price, and how much of the pool's liquidity is locked
-and until when. Only tokens launched here have a page, so this can't be used
-as a general-purpose RPC proxy.
+the DEX pool and its price, how much of the pool's liquidity is locked
+and until when, and how much of the token is still vesting. Only tokens
+launched here have a page, so this can't be used as a general-purpose RPC
+proxy.
 """
 
 from __future__ import annotations
@@ -131,6 +132,36 @@ def _evm_pool(w3: Web3, network: str, token: str, chain_time: int) -> Optional[d
     }
 
 
+def _evm_vesting(w3: Web3, network: str, token: Any, chain_time: int) -> list[dict[str, Any]]:
+    """Token Vesting contracts deployed here (by anyone) for this token that
+    are still paying out. Same rule as LP locks: the code must be the
+    template's for its recorded terms, so the schedule is the recorded one,
+    and the amount is the token's own balance for the contract — what hasn't
+    been released yet."""
+    schedules = []
+    for row in ContractDeployment.query.filter_by(template_id="token_vesting", network=network).all():
+        params = row.parameters or {}
+        if str(params.get("TOKEN", "")).lower() != token.address.lower():
+            continue
+        end_time = int(params.get("END_TIME", 0) or 0)
+        if end_time <= chain_time or not code_matches_template(w3, row):
+            continue
+        amount = token.functions.balanceOf(Web3.to_checksum_address(row.contract_address)).call()
+        if amount:
+            schedules.append(
+                {
+                    "address": row.contract_address,
+                    "beneficiary": params.get("BENEFICIARY"),
+                    "amount": str(amount),
+                    "start_time": int(params.get("START_TIME", 0) or 0),
+                    "cliff_time": int(params.get("CLIFF_TIME", 0) or 0),
+                    "end_time": end_time,
+                }
+            )
+    schedules.sort(key=lambda item: item["end_time"])
+    return schedules
+
+
 def evm_token_page(network: str, address: str) -> dict[str, Any]:
     if network not in blockchain.EVM_NETWORKS:
         raise NotFoundError(f"Unknown EVM network: {network}")
@@ -180,6 +211,7 @@ def evm_token_page(network: str, address: str) -> dict[str, Any]:
             "explorer_url": deployment.explorer_url,
             "chain_time": chain_time,
             "pool": _evm_pool(w3, network, token_address, chain_time),
+            "vesting": _evm_vesting(w3, network, token, chain_time),
         }
     except NotFoundError:
         raise

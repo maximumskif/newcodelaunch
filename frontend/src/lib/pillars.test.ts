@@ -5,7 +5,7 @@ import { ALL_TOOLS, LEGACY_REDIRECTS, PILLARS, pillarForPath, toolForPath } from
 // Every page App.tsx routes to inside the app shell (kept in step with it).
 const APP_ROUTES = new Set([
   '/dashboard', '/tools', '/tokens/create', '/nfts/generator', '/nfts/deploy-evm', '/contracts/deploy',
-  '/contracts/templates', '/drops/launch', '/research/market', '/research/defi', '/research/check', '/liquidity/airdrop', '/liquidity/snapshot', '/tokens/burn', ...PILLARS.map((p) => p.path),
+  '/contracts/templates', '/drops/launch', '/research/market', '/research/defi', '/research/check', '/liquidity/airdrop', '/liquidity/snapshot', '/liquidity/vesting', '/tokens/burn', ...PILLARS.map((p) => p.path),
 ])
 
 describe('pillars', () => {

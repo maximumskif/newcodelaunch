@@ -88,6 +88,7 @@ export function MyStuff({ token }: { token: string }) {
           { label: 'public page', to: tokenPagePath(d.network, d.contract_address) },
           { label: 'airdrop', to: `/liquidity/airdrop?network=${d.network}&token=${d.contract_address}` },
           { label: 'holders', to: `/liquidity/snapshot?network=${d.network}&address=${d.contract_address}` },
+          { label: 'vest', to: `/liquidity/vesting?network=${d.network}&token=${d.contract_address}` },
           { label: 'burn', to: `/tokens/burn?network=${d.network}&token=${d.contract_address}` },
         ],
       })),

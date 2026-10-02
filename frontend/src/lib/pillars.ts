@@ -156,7 +156,7 @@ export const PILLARS: Pillar[] = [
       { id: 'liq-lock', name: 'Lock liquidity', description: 'Time-lock LP (EVM) or lock it permanently (Raydium).', glyph: '▢', path: '/tokens/create#history', status: 'live', keywords: ['lp lock', 'burn'] },
       { id: 'dist-airdrop', name: 'Airdrop', description: 'Send a token to many wallets at once.', glyph: '⇶', path: '/liquidity/airdrop', status: 'new', keywords: ['multisend', 'multisender', 'send'] },
       { id: 'dist-snapshot', name: 'Holder snapshot', description: 'Every holder of a token at a moment.', glyph: '▦', path: '/liquidity/snapshot', status: 'new', keywords: ['holders', 'export', 'csv'] },
-      { id: 'dist-vesting', name: 'Vesting', description: 'Release tokens to people over time.', glyph: '⌛', status: 'soon', keywords: ['cliff', 'schedule'] },
+      { id: 'dist-vesting', name: 'Vesting', description: 'Pay tokens out to a wallet over time, with an optional cliff.', glyph: '⌛', path: '/liquidity/vesting', status: 'new', keywords: ['cliff', 'schedule', 'team tokens', 'unlock'] },
     ],
     next: { pillar: 'research', pitch: 'See your token the way buyers do — check it in Research.' },
   },

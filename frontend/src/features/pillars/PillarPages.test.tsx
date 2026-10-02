@@ -29,8 +29,8 @@ describe('AllToolsPage', () => {
 
   it('shows a coming tool without linking it', () => {
     render(<MemoryRouter><AllToolsPage /></MemoryRouter>)
-    expect(screen.getByLabelText('Vesting — coming soon')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Vesting/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Bonding-curve launch — coming soon')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Bonding-curve/ })).not.toBeInTheDocument()
   })
 })
 

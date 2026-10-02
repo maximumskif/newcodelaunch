@@ -657,6 +657,62 @@ contract {{CONTRACT_NAME}} {
 }
 '''
 
+# Vesting for one ERC-20 balance — e.g. a team or advisor allocation paid
+# out over time. One contract per schedule, deployed by the creator's own
+# wallet and then funded with a plain transfer: token, beneficiary, start,
+# cliff and end are constants fixed at deploy, there's no owner, and it
+# can't be revoked. Nothing is claimable before the cliff; from then on the
+# amount vests linearly from the start until the end, and `release()` (which
+# anyone may call) pays what has vested so far to the beneficiary only. The
+# total is what the contract holds plus what it has paid out, so a top-up
+# vests on the same schedule. Low-level calls tolerate tokens that return
+# nothing from transfer (USDT-style).
+_TOKEN_VESTING_SOURCE = '''// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+}
+
+contract {{CONTRACT_NAME}} {
+    IERC20 public constant token = IERC20({{TOKEN}});
+    address public constant beneficiary = {{BENEFICIARY}};
+    uint256 public constant startTime = {{START_TIME}};
+    uint256 public constant cliffTime = {{CLIFF_TIME}};
+    uint256 public constant endTime = {{END_TIME}};
+    uint256 public released;
+
+    event Released(address indexed beneficiary, uint256 amount);
+
+    constructor() {
+        require(startTime < endTime, "The end must be after the start");
+        require(cliffTime >= startTime && cliffTime <= endTime, "The cliff must be between the start and the end");
+        require(endTime > block.timestamp, "The end must be in the future");
+    }
+
+    function vestedAmount(uint256 timestamp) public view returns (uint256) {
+        uint256 total = token.balanceOf(address(this)) + released;
+        if (timestamp < cliffTime) return 0;
+        if (timestamp >= endTime) return total;
+        return (total * (timestamp - startTime)) / (endTime - startTime);
+    }
+
+    function releasable() public view returns (uint256) {
+        uint256 vested = vestedAmount(block.timestamp);
+        return vested > released ? vested - released : 0;
+    }
+
+    function release() external {
+        uint256 amount = releasable();
+        require(amount > 0, "Nothing to release yet");
+        released += amount;
+        (bool ok, bytes memory data) = address(token).call(abi.encodeWithSelector(0xa9059cbb, beneficiary, amount));
+        require(ok && (data.length == 0 || abi.decode(data, (bool))), "Token transfer failed");
+        emit Released(beneficiary, amount);
+    }
+}
+'''
+
 # Airdrops on EVM: sends one ERC-20 from the caller to many wallets in one
 # transaction, after the caller approves this contract for the total. No
 # owner, no parameters, holds nothing: it can only move the CALLER's tokens
@@ -755,6 +811,22 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         features=["Time-Locked", "No Owner", "Anyone Can Trigger Release", "Pays Only the Beneficiary"],
         gas_estimate=400_000,
     ),
+    "token_vesting": ContractTemplate(
+        id="token_vesting",
+        name="Token Vesting",
+        type="vesting",
+        description="Pays an ERC-20 balance out to one wallet over time, after an optional cliff — no owner, can't be revoked",
+        solidity_code=_TOKEN_VESTING_SOURCE,
+        deployment_params=[
+            {"name": "TOKEN", "type": "address", "required": True, "description": "The ERC-20 to vest"},
+            {"name": "BENEFICIARY", "type": "address", "required": True, "description": "Who receives the tokens as they vest"},
+            {"name": "START_TIME", "type": "uint256", "required": True, "description": "When vesting starts, as a Unix timestamp (seconds)"},
+            {"name": "CLIFF_TIME", "type": "uint256", "required": True, "description": "Nothing can be released before this Unix timestamp; then everything vested since the start is. Same as the start for no cliff"},
+            {"name": "END_TIME", "type": "uint256", "required": True, "description": "When everything has vested, as a Unix timestamp; must be in the future"},
+        ],
+        features=["Linear Vesting", "Optional Cliff", "No Owner", "Can't Be Revoked", "Pays Only the Beneficiary"],
+        gas_estimate=600_000,
+    ),
     "multisend": ContractTemplate(
         id="multisend",
         name="Multisend",
@@ -784,7 +856,7 @@ def get_all_templates(contract_type: Optional[str] = None) -> list[ContractTempl
 _DISPLAY_NAME_PARAM = {"erc20": "TOKEN_NAME", "erc721": "COLLECTION_NAME"}
 
 # Templates without a display name have a fixed contract name.
-_FIXED_CONTRACT_NAMES = {"token_timelock": "TokenTimeLock", "multisend": "MultiSend"}
+_FIXED_CONTRACT_NAMES = {"token_timelock": "TokenTimeLock", "token_vesting": "TokenVesting", "multisend": "MultiSend"}
 
 # Identifiers a derived contract name must not collide with: the interfaces
 # these templates declare themselves, plus Solidity keywords/reserved words
@@ -872,6 +944,20 @@ def _coerce_parameter(param: dict[str, Any], value: Any) -> str:
     raise InvalidParametersError(f"{name} has an unsupported type: {param_type}")
 
 
+def _check_schedule(template_id: str, parameters: dict[str, Any]) -> None:
+    """Token Vesting's dates are constants, so solc folds `endTime -
+    startTime` at compile time: an end at or before the start isn't a
+    constructor revert but a compile error ("Division by zero", or an
+    underflow) — said plainly here instead. Types are already checked."""
+    if template_id != "token_vesting":
+        return
+    start, cliff, end = (int(str(parameters[name]).strip()) for name in ("START_TIME", "CLIFF_TIME", "END_TIME"))
+    if end <= start:
+        raise InvalidParametersError("END_TIME must be after START_TIME")
+    if not start <= cliff <= end:
+        raise InvalidParametersError("CLIFF_TIME must be between START_TIME and END_TIME")
+
+
 def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, Any]:
     """Validate parameters against the template's declared types, fill in
     defaults, and return the ready-to-compile source."""
@@ -910,6 +996,8 @@ def render_contract(template_id: str, parameters: dict[str, Any]) -> dict[str, A
             # replace the whole quoted placeholder with a complete literal.
             contract_code = contract_code.replace(f'"{{{{{param["name"]}}}}}"', rendered)
         contract_code = contract_code.replace(f"{{{{{param['name']}}}}}", rendered)
+
+    _check_schedule(template.id, parameters)
 
     display_param = _DISPLAY_NAME_PARAM.get(template.type)
     contract_name = (

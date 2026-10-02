@@ -33,8 +33,8 @@ describe('CommandPalette', () => {
 
   it('lists tools that are coming, but will not open them', async () => {
     const onClose = renderPalette()
-    await userEvent.type(screen.getByRole('combobox'), 'vesting')
-    const option = screen.getByRole('option', { name: /Vesting/ })
+    await userEvent.type(screen.getByRole('combobox'), 'bonding')
+    const option = screen.getByRole('option', { name: /Bonding-curve launch/ })
     expect(option).toHaveAttribute('aria-disabled', 'true')
     await userEvent.click(option)
     expect(onClose).not.toHaveBeenCalled()
