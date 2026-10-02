@@ -1125,6 +1125,12 @@ The last "soon" tool in liquidity & distribution. EVM only for now; Solana would
 **Verified**: pytest 411 (template compiles to exactly its interface; parameter and date checks; the token page lists only live, code-matching schedules); Vitest 250 (the vesting math against the contract's, month arithmetic, schedule problems, panel release/fund/over-balance, the token page's vesting card); Playwright `vesting.spec.ts` on anvil: create, fund, cliff, about half released after six months, the rest after the end, nothing left in the contract; the page is in the axe scans. Full suite: 47 of 48, then 48 after fixing a flake in `erc20-advanced-owner.spec.ts`: "Trading is enabled." also matched "…until trading is enabled." for a moment before the panel re-read the chain, so the match is exact now.
 - **Running e2e on this machine**: Chromium needs `libnspr4`, `libnss3` and `libasound2`, which aren't installed and need sudo. They're extracted to `~/.local/chromium-deps` (`apt-get download` + `dpkg-deb -x`); run with `LD_LIBRARY_PATH=~/.local/chromium-deps/root/usr/lib/x86_64-linux-gnu` and `~/.foundry/bin` plus the Solana CLI on `PATH`. Stop the dev servers first, or Playwright reuses them.
 
+## Vesting on real Sepolia, 2026-10-02
+
+`e2e/sepolia/smoke.mjs --only vesting` runs just a vesting schedule on the real network (about 0.0013 Sepolia ETH and 5 minutes, so it fits what's left in the smoke wallet; the full smoke needs 0.03). It uses a basic token, then a vesting contract paying 1,200 to a fresh wallet: start now, cliff after 90s, end after 270s.
+
+**12/12 passed** ([vesting contract](https://sepolia.etherscan.io/address/0x2ad15964aa622849db73e130df5fef5e683f5f5d#code)): recorded after the backend's code check; release refused before the cliff; source verified on the real Etherscan; listed on the public token page with the amount read from the token; released at t+108s for exactly 480 (1,200 × 108/270, worked out from that block's timestamp); the rest after the end, leaving the contract empty; a further release refused; and the finished schedule gone from the public page.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:

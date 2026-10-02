@@ -8,6 +8,10 @@
 //
 //   node e2e/sepolia/smoke.mjs --key-file ~/sepolia-smoke.json
 //
+// --only vesting runs just a Token Vesting schedule instead (a basic token,
+// a vesting contract funded, source-verified, on the public page, released
+// at the cliff and after the end) — about 0.002 Sepolia ETH and 5 minutes.
+//
 // --key-file is `cast wallet new --json` output (or {"private_key": "0x…"}).
 // Spends roughly 0.02 Sepolia ETH at ~1 gwei, 0.01 of it into the pool.
 import { readFileSync } from 'node:fs'
@@ -23,6 +27,7 @@ const { values: args } = parseArgs({
     rpc: { type: 'string', default: 'https://ethereum-sepolia-rpc.publicnode.com' },
     api: { type: 'string', default: 'http://127.0.0.1:5100/api' },
     'lock-seconds': { type: 'string', default: '240' },
+    only: { type: 'string' },
   },
 })
 if (!args['key-file']) throw new Error('--key-file <wallet json> is required')
@@ -39,6 +44,7 @@ const etherscan = (kind, id) => `https://sepolia.etherscan.io/${kind}/${id}`
 const TOKEN_ABI = parseAbi([
   'function balanceOf(address) view returns (uint256)',
   'function approve(address spender, uint256 amount) returns (bool)',
+  'function transfer(address to, uint256 amount) returns (bool)',
   'function setMarketPair(address pair, bool isPair)',
   'function enableTrading()',
   'function tradingEnabled() view returns (bool)',
@@ -61,6 +67,7 @@ const NFT_ABI = parseAbi([
   'function balanceOf(address) view returns (uint256)',
   'function tokenURI(uint256) view returns (string)',
 ])
+const VESTING_ABI = parseAbi(['function releasable() view returns (uint256)', 'function released() view returns (uint256)', 'function release()'])
 
 let token = null
 function check(label, condition, detail = '') {
@@ -124,6 +131,80 @@ async function verifySource(deployment, label) {
 }
 
 const deadline = () => BigInt(Math.floor(Date.now() / 1000) + 600)
+
+async function signIn() {
+  const { data: nonce } = await api('POST', '/auth/nonce', { wallet_address: me, chain: 'evm' })
+  const signature = await account.signMessage({ message: nonce.message })
+  token = (await api('POST', '/auth/verify', { wallet_address: me, chain: 'evm', nonce: nonce.nonce, signature })).data.access_token
+}
+
+async function waitForChainTime(target, what) {
+  for (;;) {
+    const now = (await publicClient.getBlock()).timestamp
+    if (now >= target) return
+    console.log(`      .. waiting ${target - now}s for ${what}`)
+    await new Promise((r) => setTimeout(r, Math.min(30, Number(target - now) + 2) * 1000))
+  }
+}
+
+// A Token Vesting schedule on the real chain: 1,200 tokens to a fresh
+// wallet, start now, cliff after 90s, fully vested after 270s.
+async function vestingSmoke() {
+  const start = await publicClient.getBalance({ address: me })
+  console.log(`wallet ${me} on Sepolia (vesting only)`)
+  ok('wallet has at least 0.004 ETH to spend', start >= parseEther('0.004'), `${formatEther(start)} ETH`)
+  await signIn()
+  ok('signed in with the wallet', Boolean(token))
+
+  const tokenRow = await deployTemplate('erc20_basic', { TOKEN_NAME: 'Vesting Smoke', TOKEN_SYMBOL: 'VSMK', TOKEN_DECIMALS: 18, TOKEN_SUPPLY: '1000000' }, 'basic ERC-20')
+  const tokenAddress = tokenRow.contract_address
+  ok('token recorded', Boolean(tokenRow.id), etherscan('address', tokenAddress))
+
+  const beneficiary = privateKeyToAccount(generatePrivateKey()).address
+  const now = (await publicClient.getBlock()).timestamp
+  const schedule = { start: now, cliff: now + 90n, end: now + 270n }
+  const vestingRow = await deployTemplate('token_vesting', {
+    TOKEN: tokenAddress, BENEFICIARY: beneficiary,
+    START_TIME: schedule.start.toString(), CLIFF_TIME: schedule.cliff.toString(), END_TIME: schedule.end.toString(),
+  }, 'vesting contract')
+  const vesting = vestingRow.contract_address
+  ok('vesting contract recorded after the backend checked its code', Boolean(vestingRow.id), etherscan('address', vesting))
+
+  const total = parseUnits('1200', 18)
+  await send('fund the vesting contract', { address: tokenAddress, abi: TOKEN_ABI, functionName: 'transfer', args: [vesting, total] })
+  const balanceOf = (who) => publicClient.readContract({ address: tokenAddress, abi: TOKEN_ABI, functionName: 'balanceOf', args: [who] })
+  ok('vesting contract holds the tokens', (await balanceOf(vesting)) === total)
+  await publicClient.simulateContract({ address: vesting, abi: VESTING_ABI, functionName: 'release', account }).then(
+    () => ok('release refused before the cliff', false),
+    () => ok('release refused before the cliff', true),
+  )
+  await verifySource(vestingRow, 'vesting contract')
+
+  token = null // the public page, as a buyer with no account
+  const { data: page } = await api('GET', `/token-pages/evm/sepolia/${tokenAddress}`)
+  const listed = page.vesting ?? []
+  ok('public page lists the schedule, amount from the token', listed.length === 1 && listed[0].address.toLowerCase() === vesting.toLowerCase() && BigInt(listed[0].amount) === total && listed[0].end_time === Number(schedule.end))
+
+  await waitForChainTime(schedule.cliff, 'the cliff')
+  const first = await send('release at the cliff (sent by the deployer, paid to the beneficiary)', { address: vesting, abi: VESTING_ABI, functionName: 'release' })
+  const at = (await publicClient.getBlock({ blockNumber: first.blockNumber })).timestamp
+  const expected = (total * (at - schedule.start)) / (schedule.end - schedule.start)
+  const paid = await balanceOf(beneficiary)
+  ok('beneficiary got exactly what had vested at that block', paid === expected, `${formatEther(paid)} of 1200 at t+${at - schedule.start}s`)
+
+  await waitForChainTime(schedule.end, 'the end of the schedule')
+  await send('release the rest', { address: vesting, abi: VESTING_ABI, functionName: 'release' })
+  ok('beneficiary has all 1,200, contract is empty', (await balanceOf(beneficiary)) === total && (await balanceOf(vesting)) === 0n)
+  await publicClient.simulateContract({ address: vesting, abi: VESTING_ABI, functionName: 'release', account }).then(
+    () => ok('nothing left to release', false),
+    () => ok('nothing left to release', true),
+  )
+  const { data: after } = await api('GET', `/token-pages/evm/sepolia/${tokenAddress}`)
+  ok('public page drops a finished schedule', (after.vesting ?? []).length === 0)
+
+  const end = await publicClient.getBalance({ address: me })
+  console.log(`\n${passed}/${passed} checks passed — spent ${formatEther(start - end)} ETH`)
+}
 
 async function main() {
   const start = await publicClient.getBalance({ address: me })
@@ -246,7 +327,7 @@ async function main() {
   console.log(`\n${passed}/${passed} checks passed — spent ${formatEther(start - end)} ETH (${formatEther(poolEth)} of it in the pool)`)
 }
 
-main().catch((error) => {
+(args.only === 'vesting' ? vestingSmoke() : main()).catch((error) => {
   console.error(`\nFAILED: ${error.message}`)
   process.exit(1)
 })
