@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { formatUnits } from 'viem'
-import { usePublicClient, useWriteContract } from 'wagmi'
+import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { InlineError } from '../../components/ui/InlineError'
 import type { ContractDeployment } from '../../lib/contractsApi'
+import { TOKEN_LIMITS_ABI, fitsLimits, readTokenLimits } from '../../lib/tokenLimits'
 import { TOKEN_TIMELOCK_ABI } from '../../lib/tokenTimelockAbi'
 import { ERC20_ABI } from '../../lib/uniswapV2Abi'
+import { TokenLimitsNote } from './TokenLimitsNote'
 import { NETWORK_TO_CHAIN_ID } from './useDeployTemplate'
 import { useOwnerTransaction } from './useOwnerTransaction'
 
@@ -16,6 +18,7 @@ import { useOwnerTransaction } from './useOwnerTransaction'
 // Anyone may send the release; the contract only ever pays the beneficiary.
 export function TokenLockPanel({ deployment }: { deployment: ContractDeployment }) {
   const { writeContractAsync } = useWriteContract()
+  const { address: wallet } = useAccount()
   const chainId = NETWORK_TO_CHAIN_ID[deployment.network]
   const lock = deployment.contract_address as `0x${string}`
   const publicClient = usePublicClient({ chainId })
@@ -36,25 +39,30 @@ export function TokenLockPanel({ deployment }: { deployment: ContractDeployment 
         client.readContract({ address: token, abi: ERC20_ABI, functionName: 'symbol' }).catch(() => 'tokens'),
         client.readContract({ address: token, abi: ERC20_ABI, functionName: 'decimals' }).catch(() => 18),
       ])
+      // Transfer limits a release has to fit (our advanced ERC-20), if any.
+      const limits = await readTokenLimits(client, token, lock, beneficiary)
       // "Unlocked yet?" is judged by the chain's own clock — the latest
       // block's timestamp, which is what release() checks — not this
       // device's clock (found in the e2e run: with the chain's time moved
       // forward, a wall-clock check still said "locked").
-      return { token, beneficiary, releaseTime: Number(releaseTime), locked, symbol, decimals: Number(decimals), chainTime: Number(block.timestamp) }
+      return { token, beneficiary, releaseTime: Number(releaseTime), locked, symbol, decimals: Number(decimals), limits, chainTime: Number(block.timestamp) }
     },
   })
 
-  const { send, isBusy, error, done } = useOwnerTransaction<'release'>({
+  const { send, isBusy, error, done } = useOwnerTransaction<'release' | 'exempt'>({
     chainId,
-    doneMessages: { release: 'Released to the beneficiary.' },
+    doneMessages: { release: 'Released to the beneficiary.', exempt: 'This contract is now exempt from the token’s limits.' },
     onSettled: () => void reads.refetch(),
   })
 
   if (reads.isLoading) return <p className="text-sm text-ink-muted">Reading the lock…</p>
   if (reads.isError || !reads.data) return <InlineError>Couldn't read this lock right now.</InlineError>
 
-  const { token, beneficiary, releaseTime, locked, symbol, decimals, chainTime } = reads.data
+  const { token, beneficiary, releaseTime, locked, symbol, decimals, limits, chainTime } = reads.data
   const unlocked = chainTime >= releaseTime
+  // All of it, unless the token's limits cut a release down (releasePart).
+  const now = fitsLimits(locked, limits)
+  const amount = (n: bigint) => `${formatUnits(n, decimals)} ${symbol}`
   const until = new Date(releaseTime * 1000).toLocaleString()
 
   return (
@@ -73,12 +81,30 @@ export function TokenLockPanel({ deployment }: { deployment: ContractDeployment 
       <Button
         variant="secondary"
         size="sm"
-        disabled={!unlocked || locked === 0n || isBusy()}
+        disabled={!unlocked || now === 0n || isBusy()}
         isLoading={isBusy('release')}
-        onClick={() => void send('release', () => writeContractAsync({ address: lock, abi: TOKEN_TIMELOCK_ABI, functionName: 'release', chainId }))}
+        onClick={() =>
+          void send('release', () =>
+            now < locked
+              ? writeContractAsync({ address: lock, abi: TOKEN_TIMELOCK_ABI, functionName: 'releasePart', args: [now], chainId })
+              : writeContractAsync({ address: lock, abi: TOKEN_TIMELOCK_ABI, functionName: 'release', chainId }),
+          )
+        }
       >
-        {unlocked ? 'Release to beneficiary' : `Releasable after ${until}`}
+        {!unlocked ? `Releasable after ${until}` : now > 0n && now < locked ? `Release ${amount(now)} of ${amount(locked)} to beneficiary` : 'Release to beneficiary'}
       </Button>
+      {unlocked && locked > 0n && limits && !limits.exempt && (
+        <TokenLimitsNote
+          limits={limits}
+          amount={amount}
+          canExempt={Boolean(wallet && wallet.toLowerCase() === limits.owner.toLowerCase())}
+          busy={isBusy()}
+          exempting={isBusy('exempt')}
+          onExempt={() =>
+            void send('exempt', () => writeContractAsync({ address: token, abi: TOKEN_LIMITS_ABI, functionName: 'excludeFromFees', args: [lock, true], chainId }))
+          }
+        />
+      )}
       {done && <p className="text-success">{done}</p>}
       {error && <InlineError>{error}</InlineError>}
     </div>

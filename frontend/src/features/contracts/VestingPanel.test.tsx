@@ -25,7 +25,22 @@ const deployment = { id: 'vest-1', network: 'sepolia', contract_address: VESTING
 const writeContractAsync = vi.fn()
 
 // A 400-token schedule from t=1000 to t=2000 with a cliff at 1250, read at `now`.
-function mockVesting({ now, held = parseEther('400'), released = 0n, releasable = 0n, beneficiary = '0x2222222222222222222222222222222222222222' }: { now: number; held?: bigint; released?: bigint; releasable?: bigint; beneficiary?: string }) {
+function mockVesting({
+  now,
+  held = parseEther('400'),
+  released = 0n,
+  releasable = 0n,
+  beneficiary = '0x2222222222222222222222222222222222222222',
+  limits = {},
+}: {
+  now: number
+  held?: bigint
+  released?: bigint
+  releasable?: bigint
+  beneficiary?: string
+  // The advanced ERC-20's functions, when the token has them.
+  limits?: Record<string, unknown>
+}) {
   vi.mocked(useAccount).mockReturnValue({ address: WALLET } as unknown as ReturnType<typeof useAccount>)
   vi.mocked(useChainId).mockReturnValue(11155111)
   vi.mocked(useSwitchChain).mockReturnValue({ switchChainAsync: vi.fn() } as unknown as ReturnType<typeof useSwitchChain>)
@@ -41,11 +56,15 @@ function mockVesting({ now, held = parseEther('400'), released = 0n, releasable 
     releasable,
     symbol: 'TEAM',
     decimals: 18,
+    ...limits,
   }
   vi.mocked(usePublicClient).mockReturnValue({
-    readContract: vi.fn(async ({ functionName, args }: { functionName: string; args?: string[] }) =>
-      functionName === 'balanceOf' ? (args![0] === VESTING ? held : parseEther('1000')) : values[functionName],
-    ),
+    readContract: vi.fn(async ({ functionName, args }: { functionName: string; args?: string[] }) => {
+      if (functionName === 'balanceOf') return args![0] === VESTING ? held : args![0] === WALLET ? parseEther('1000') : 0n
+      // A function the token doesn't have reverts, as on a real chain.
+      if (!(functionName in values)) throw new Error(`no ${functionName}`)
+      return values[functionName]
+    }),
     getBlock: vi.fn(async () => ({ timestamp: BigInt(now) })),
   } as unknown as ReturnType<typeof usePublicClient>)
 }
@@ -98,5 +117,42 @@ describe('VestingPanel', () => {
     render(<VestingPanel deployment={deployment} initialAmount="5000" />)
     expect(await screen.findByText("That's more than this wallet holds.")).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+  })
+
+  it('releases only what fits a capped token', async () => {
+    mockVesting({
+      now: 1500,
+      releasable: parseEther('200'),
+      limits: { owner: WALLET, tradingEnabled: true, maxTransactionAmount: parseEther('50'), maxWalletAmount: parseEther('1000'), isExcludedFromFees: false },
+    })
+    const user = userEvent.setup()
+    render(<VestingPanel deployment={deployment} />)
+    await user.click(await screen.findByRole('button', { name: 'Release 50 TEAM of 200 TEAM to beneficiary' }))
+    expect(writeContractAsync).toHaveBeenCalledWith(expect.objectContaining({ address: VESTING, functionName: 'releasePart', args: [parseEther('50')] }))
+    expect(screen.getByTestId('token-limits')).toHaveTextContent(/caps a transfer at 50 TEAM/)
+  })
+
+  it('lets the token’s owner exempt the contract from its limits', async () => {
+    mockVesting({
+      now: 1500,
+      releasable: parseEther('200'),
+      limits: { owner: WALLET, tradingEnabled: true, maxTransactionAmount: parseEther('50'), maxWalletAmount: parseEther('1000'), isExcludedFromFees: false },
+    })
+    const user = userEvent.setup()
+    render(<VestingPanel deployment={deployment} />)
+    await user.click(await screen.findByRole('button', { name: 'Exempt from the token\'s limits' }))
+    expect(writeContractAsync).toHaveBeenCalledWith(expect.objectContaining({ address: TOKEN, functionName: 'excludeFromFees', args: [VESTING, true] }))
+  })
+
+  it('says nothing can be sent before the token’s trading is enabled', async () => {
+    mockVesting({
+      now: 1500,
+      releasable: parseEther('200'),
+      limits: { owner: '0x3333333333333333333333333333333333333333', tradingEnabled: false, maxTransactionAmount: parseEther('50'), maxWalletAmount: parseEther('1000'), isExcludedFromFees: false },
+    })
+    render(<VestingPanel deployment={deployment} />)
+    expect(await screen.findByRole('button', { name: "200 TEAM due — can't be sent yet" })).toBeDisabled()
+    expect(screen.getByTestId('token-limits')).toHaveTextContent(/isn't enabled yet/)
+    expect(screen.queryByRole('button', { name: /Exempt/ })).not.toBeInTheDocument()
   })
 })

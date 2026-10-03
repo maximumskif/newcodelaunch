@@ -1151,6 +1151,19 @@ A team allocation used to mean filling in the vesting form once per person. "Sev
 
 **Verified**: Vitest 252 (a run stopped by a rejected third deploy resumes with exactly one contract per wallet, then a single approve and send for all three); Playwright: three wallets with a 6-month cliff over 24 months, created and funded in one run (shared Multisend set up on the way), nothing paid early, then each released after the end for exactly its own amount. Full suite 50/50.
 
+## Review: vesting and time-locks could get stuck on a capped token, 2026-10-03
+
+A review of the new money-facing code against this app's own token templates found a way to lock funds for good.
+
+**The bug.** The advanced ERC-20 caps every transfer (max transaction) and every balance (max wallet), and refuses transfers before trading is enabled, for any address not excluded from fees. A Token Vesting contract isn't excluded, and `release()` pays everything due in one transfer. Once what's due passes the cap, every release reverts, and it only gets worse, because what's due keeps growing. If the token's owner had renounced ownership, nobody could exempt the contract or raise the limits, and the tokens were stuck forever. Reproduced on anvil: a 10,000 cap, 5,000 released fine, then 15,000 and finally all 95,000 refused. The Token Time-Lock had the same flaw for a large lock of a capped token (LP tokens, its main use, have no caps).
+
+**The fix.**
+- Both templates gain `releasePart(amount)`: pay part of what's due (vesting) or locked (time-lock), with the same rules. So a release that fits the token's limits is always possible.
+- Both panels read the token's limits (`lib/tokenLimits.ts`; a token without them simply has none) and size the release button to fit: "Release 10,000 of 100,000 to beneficiary". A note says why. When the connected wallet owns the token, a button exempts the contract from its limits (`excludeFromFees`), after which a release pays everything at once. Before trading is enabled, the button says what's due can't be sent yet.
+- Contracts deployed from the old templates (only test deployments exist, including the 2026-10-02 Sepolia smoke vesting contract) no longer match the template, so code checks now report them as not matching. No real deployments were affected.
+
+**Verified**: on anvil for both templates: the capped full release reverts, a part that fits goes through, a part above what's due or locked is refused, and after the owner exempts the contract a full release empties it. pytest 412; Vitest 259 (`fitsLimits`; both panels release a part that fits; the owner's exempt button; nothing sent before trading is enabled); Playwright: a new `vesting.spec.ts` test with a real advanced token (10,000 released of 100,000 due, the owner exempts the contract, the remaining 90,000 in one release). Full suite 51/51. One earlier full run had `dex-liquidity.spec.ts`'s router buy revert once; it passed alone twice and in the next full run, and its trace was overwritten before it could be read, so its cause is unknown.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:

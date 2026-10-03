@@ -176,7 +176,7 @@ def test_token_timelock_compiles_with_no_owner_and_fixed_terms():
     compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
     assert compiled.success, compiled.error_message
     functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
-    assert functions == {"token", "beneficiary", "releaseTime", "lockedAmount", "release"}
+    assert functions == {"token", "beneficiary", "releaseTime", "lockedAmount", "release", "releasePart"}
 
 
 @pytest.mark.parametrize(
@@ -204,7 +204,7 @@ def test_token_vesting_compiles_with_no_owner_and_fixed_terms():
     compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
     assert compiled.success, compiled.error_message
     functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
-    assert functions == {"token", "beneficiary", "startTime", "cliffTime", "endTime", "released", "vestedAmount", "releasable", "release"}
+    assert functions == {"token", "beneficiary", "startTime", "cliffTime", "endTime", "released", "vestedAmount", "releasable", "release", "releasePart"}
     assert not any(item.get("stateMutability") == "payable" for item in compiled.abi)
 
 

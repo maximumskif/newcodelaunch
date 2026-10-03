@@ -622,8 +622,10 @@ contract {{CONTRACT_NAME}} is IERC721, IERC165 {
 # release time are fixed at deploy (constants — nothing to configure later),
 # there's no owner or admin, and `release()` can only ever pay the
 # beneficiary, only once the release time has passed. Anyone may call it —
-# the tokens still go to the beneficiary. Tokens other than TOKEN sent here
-# by mistake can't be recovered.
+# the tokens still go to the beneficiary. `releasePart(amount)` pays some of
+# it, for tokens that cap a transfer (our advanced ERC-20's max transaction
+# / max wallet) — a whole balance over the cap would otherwise never move.
+# Tokens other than TOKEN sent here by mistake can't be recovered.
 _TOKEN_TIMELOCK_SOURCE = '''// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -648,8 +650,16 @@ contract {{CONTRACT_NAME}} {
     }
 
     function release() external {
+        _pay(token.balanceOf(address(this)));
+    }
+
+    function releasePart(uint256 amount) external {
+        require(amount <= token.balanceOf(address(this)), "More than is locked");
+        _pay(amount);
+    }
+
+    function _pay(uint256 amount) private {
         require(block.timestamp >= releaseTime, "Tokens are still locked");
-        uint256 amount = token.balanceOf(address(this));
         require(amount > 0, "Nothing to release");
         require(token.transfer(beneficiary, amount), "Token transfer failed");
         emit Released(beneficiary, amount);
@@ -665,8 +675,11 @@ contract {{CONTRACT_NAME}} {
 # amount vests linearly from the start until the end, and `release()` (which
 # anyone may call) pays what has vested so far to the beneficiary only. The
 # total is what the contract holds plus what it has paid out, so a top-up
-# vests on the same schedule. Low-level calls tolerate tokens that return
-# nothing from transfer (USDT-style).
+# vests on the same schedule. `releasePart(amount)` pays out part of what's
+# due, for tokens that cap transfers or balances (our advanced ERC-20's max
+# transaction / max wallet): `release()` pays everything due at once, which
+# grows past such a cap and would then always revert. Low-level calls
+# tolerate tokens that return nothing from transfer (USDT-style).
 _TOKEN_VESTING_SOURCE = '''// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -705,6 +718,16 @@ contract {{CONTRACT_NAME}} {
     function release() external {
         uint256 amount = releasable();
         require(amount > 0, "Nothing to release yet");
+        _pay(amount);
+    }
+
+    function releasePart(uint256 amount) external {
+        require(amount > 0, "Nothing to release");
+        require(amount <= releasable(), "More than has vested");
+        _pay(amount);
+    }
+
+    function _pay(uint256 amount) private {
         released += amount;
         (bool ok, bytes memory data) = address(token).call(abi.encodeWithSelector(0xa9059cbb, beneficiary, amount));
         require(ok && (data.length == 0 || abi.decode(data, (bool))), "Token transfer failed");

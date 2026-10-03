@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { parseAbi, parseUnits, type Address } from 'viem'
 
-import { freshAddress, installEvmWallet, publicClient, testClient } from './setup/evmToken'
+import { deployAdvancedToken, freshAddress, installEvmWallet, ownerWallet, publicClient, testClient } from './setup/evmToken'
 
 const BALANCE_ABI = parseAbi(['function balanceOf(address) view returns (uint256)'])
 const DAY = 24 * 60 * 60
@@ -166,4 +166,44 @@ test('vesting for several wallets: one contract each, funded together through th
     await expect(panel.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
   }
   for (const [i, who] of team.entries()) expect(await balanceOf(who)).toBe(parseUnits(String((i + 1) * 1000), 18))
+})
+
+test('a capped token: releases in parts that fit, until its owner exempts the vesting contract', async ({ page }) => {
+  test.setTimeout(180_000)
+  // Max 10,000 per transfer, 20,000 per wallet; trading on.
+  const token = await deployAdvancedToken(page, { marketing: freshAddress(), liquidity: freshAddress() })
+  await ownerWallet.writeContract({ address: token, abi: parseAbi(['function enableTrading()']), functionName: 'enableTrading' })
+  const balanceOf = (owner: Address) => publicClient.readContract({ address: token, abi: BALANCE_ABI, functionName: 'balanceOf', args: [owner] })
+
+  await goTo(page, `/liquidity/vesting?token=${token}`)
+  await expect(page.getByTestId('vesting-token')).toBeVisible({ timeout: 15_000 })
+  const beneficiary = freshAddress()
+  await page.getByLabel(/^beneficiary/).fill(beneficiary)
+  await page.getByLabel(/^amount/).fill('100000')
+  await page.getByLabel(/^vesting length/).fill('1')
+  await page.getByRole('complementary', { name: 'Summary' }).getByRole('button', { name: '[ create vesting contract ]' }).click()
+  const created = page.getByRole('region', { name: 'created — now send it the tokens' }).getByTestId('token-vesting')
+  await expect(created.getByText('Not funded yet')).toBeVisible({ timeout: 30_000 })
+  await created.getByRole('button', { name: 'Fund' }).click()
+  await expect(created.getByText('Tokens added — they vest on the same schedule.')).toBeVisible({ timeout: 20_000 })
+
+  await testClient.increaseTime({ seconds: 40 * DAY })
+  await testClient.mine({ blocks: 1 })
+  await goTo(page, '/tokens/create')
+  await goTo(page, '/liquidity/vesting')
+  const panel = page.getByRole('region', { name: 'your vesting schedules' }).getByTestId('token-vesting').filter({ hasText: token })
+  await expect(panel.getByTestId('token-limits')).toContainText('caps a transfer at 10,000 ADV', { timeout: 15_000 })
+
+  // All 100,000 is due, but one transfer can only carry 10,000.
+  await panel.getByRole('button', { name: 'Release 10,000 ADV of 100,000 ADV to beneficiary' }).click()
+  await expect(panel.getByText('Released to the beneficiary.')).toBeVisible({ timeout: 20_000 })
+  expect(await balanceOf(beneficiary)).toBe(parseUnits('10000', 18))
+
+  // The owner (this wallet) exempts it; the rest goes at once.
+  await panel.getByRole('button', { name: "Exempt from the token's limits" }).click()
+  await expect(panel.getByText('This contract is now exempt from the token’s limits.')).toBeVisible({ timeout: 20_000 })
+  await expect(panel.getByTestId('token-limits')).toHaveCount(0)
+  await panel.getByRole('button', { name: 'Release 90,000 ADV to beneficiary' }).click()
+  await expect(panel.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
+  expect(await balanceOf(beneficiary)).toBe(parseUnits('100000', 18))
 })

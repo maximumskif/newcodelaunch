@@ -2,7 +2,8 @@ import { parseAbi } from 'viem'
 
 // contract_templates' token_vesting: one ERC-20 balance paid out linearly
 // from startTime to endTime, nothing before cliffTime; release() (anyone may
-// call it) pays what has vested to the beneficiary only.
+// call it) pays what has vested to the beneficiary only; releasePart(amount)
+// pays some of it, for tokens that cap a transfer.
 export const TOKEN_VESTING_ABI = parseAbi([
   'function token() view returns (address)',
   'function beneficiary() view returns (address)',
@@ -12,6 +13,7 @@ export const TOKEN_VESTING_ABI = parseAbi([
   'function released() view returns (uint256)',
   'function releasable() view returns (uint256)',
   'function release()',
+  'function releasePart(uint256 amount)',
 ])
 
 export interface Schedule {

@@ -3,13 +3,14 @@ import { render as rtlRender, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import userEvent from '@testing-library/user-event'
 import { parseEther } from 'viem'
-import { useChainId, usePublicClient, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ContractDeployment } from '../../lib/contractsApi'
 import { TokenLockPanel } from './TokenLockPanel'
 
 vi.mock('wagmi', () => ({
+  useAccount: vi.fn(),
   useChainId: vi.fn(),
   usePublicClient: vi.fn(),
   useSwitchChain: vi.fn(),
@@ -21,7 +22,8 @@ const LOCK = '0x5555555555555555555555555555555555555555'
 const deployment = { id: 'lock-1', network: 'sepolia', contract_address: LOCK, template_id: 'token_timelock' } as ContractDeployment
 const writeContractAsync = vi.fn()
 
-function mockLock(releaseTime: bigint, locked = parseEther('25')) {
+function mockLock(releaseTime: bigint, locked = parseEther('25'), limits: Record<string, unknown> = {}) {
+  vi.mocked(useAccount).mockReturnValue({ address: undefined } as unknown as ReturnType<typeof useAccount>)
   vi.mocked(useChainId).mockReturnValue(11155111)
   vi.mocked(useSwitchChain).mockReturnValue({ switchChainAsync: vi.fn() } as unknown as ReturnType<typeof useSwitchChain>)
   vi.mocked(useWriteContract).mockReturnValue({ writeContractAsync } as unknown as ReturnType<typeof useWriteContract>)
@@ -33,9 +35,14 @@ function mockLock(releaseTime: bigint, locked = parseEther('25')) {
     lockedAmount: locked,
     symbol: 'UNI-V2',
     decimals: 18,
+    ...limits,
   }
   vi.mocked(usePublicClient).mockReturnValue({
-    readContract: vi.fn(async ({ functionName }: { functionName: string }) => values[functionName]),
+    readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+      // A function the token doesn't have reverts, as on a real chain.
+      if (!(functionName in values)) throw new Error(`no ${functionName}`)
+      return values[functionName]
+    }),
     getBlock: vi.fn(async () => ({ timestamp: BigInt(Math.floor(Date.now() / 1000)) })),
   } as unknown as ReturnType<typeof usePublicClient>)
 }
@@ -69,5 +76,17 @@ describe('TokenLockPanel', () => {
     render(<TokenLockPanel deployment={deployment} />)
     expect(await screen.findByText('Empty')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Release to beneficiary' })).toBeDisabled()
+  })
+
+  it('releases a capped token in parts that fit', async () => {
+    mockLock(1_000n, parseEther('25'), {
+      owner: '0x3333333333333333333333333333333333333333', tradingEnabled: true, maxTransactionAmount: parseEther('10'),
+      maxWalletAmount: parseEther('100'), isExcludedFromFees: false, balanceOf: 0n,
+    })
+    const user = userEvent.setup()
+    render(<TokenLockPanel deployment={deployment} />)
+    await user.click(await screen.findByRole('button', { name: 'Release 10 UNI-V2 of 25 UNI-V2 to beneficiary' }))
+    expect(writeContractAsync).toHaveBeenCalledWith(expect.objectContaining({ address: LOCK, functionName: 'releasePart', args: [parseEther('10')] }))
+    expect(screen.getByTestId('token-limits')).toHaveTextContent(/owner can exempt/)
   })
 })

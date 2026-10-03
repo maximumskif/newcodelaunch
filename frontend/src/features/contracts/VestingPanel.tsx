@@ -8,7 +8,9 @@ import { InlineError } from '../../components/ui/InlineError'
 import { fromBaseUnits, toBaseUnits } from '../../lib/airdrop'
 import type { ContractDeployment } from '../../lib/contractsApi'
 import { ERC20_ABI } from '../../lib/uniswapV2Abi'
+import { TOKEN_LIMITS_ABI, fitsLimits, readTokenLimits } from '../../lib/tokenLimits'
 import { TOKEN_VESTING_ABI, vestedAt } from '../../lib/vesting'
+import { TokenLimitsNote } from './TokenLimitsNote'
 import { NETWORK_TO_CHAIN_ID } from './useDeployTemplate'
 import { useOwnerTransaction } from './useOwnerTransaction'
 
@@ -50,15 +52,21 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
         client.readContract({ address: token, abi: ERC20_ABI, functionName: 'decimals' }).catch(() => 18),
         wallet ? client.readContract({ address: token, abi: ERC20_ABI, functionName: 'balanceOf', args: [wallet] }) : Promise.resolve(0n),
       ])
+      // Transfer limits a release has to fit (our advanced ERC-20), if any.
+      const limits = await readTokenLimits(client, token, vesting, beneficiary as `0x${string}`)
       // The chain's clock, which is what the contract vests by (see TokenLockPanel).
       const schedule = { start: Number(start), cliff: Number(cliff), end: Number(end) }
-      return { token, beneficiary, schedule, released, releasable, held, symbol, decimals: Number(decimals), walletBalance, chainTime: Number(block.timestamp) }
+      return { token, beneficiary, schedule, released, releasable, held, symbol, decimals: Number(decimals), walletBalance, limits, chainTime: Number(block.timestamp) }
     },
   })
 
-  const { send, isBusy, error, done } = useOwnerTransaction<'release' | 'fund'>({
+  const { send, isBusy, error, done } = useOwnerTransaction<'release' | 'fund' | 'exempt'>({
     chainId,
-    doneMessages: { release: 'Released to the beneficiary.', fund: 'Tokens added — they vest on the same schedule.' },
+    doneMessages: {
+      release: 'Released to the beneficiary.',
+      fund: 'Tokens added — they vest on the same schedule.',
+      exempt: 'This contract is now exempt from the token’s limits.',
+    },
     onSettled: ({ action, status }) => {
       if (action === 'fund' && status === 'success') setAmountText('')
       void reads.refetch()
@@ -68,7 +76,7 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
   if (reads.isLoading) return <p className="text-sm text-ink-muted">Reading the vesting contract…</p>
   if (reads.isError || !reads.data) return <InlineError>Couldn't read this vesting contract right now.</InlineError>
 
-  const { token, beneficiary, schedule, released, releasable, held, symbol, decimals, walletBalance, chainTime } = reads.data
+  const { token, beneficiary, schedule, released, releasable, held, symbol, decimals, walletBalance, limits, chainTime } = reads.data
   const total = held + released
   const vested = vestedAt(total, schedule, chainTime)
   const amount = (n: bigint) => `${fromBaseUnits(n, decimals)} ${symbol}`
@@ -77,6 +85,11 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
   const overBalance = toAdd !== null && toAdd > walletBalance
   const ended = chainTime >= schedule.end
   const isMine = Boolean(wallet && wallet.toLowerCase() === beneficiary.toLowerCase())
+  // What one release can pay: all that's due, unless the token's limits cut
+  // it down — then releasePart pays what fits and the rest waits.
+  const now = fitsLimits(releasable, limits)
+  const isTokenOwner = Boolean(limits && wallet && wallet.toLowerCase() === limits.owner.toLowerCase())
+  const to = isMine ? 'you' : 'beneficiary'
 
   const status =
     total === 0n ? { tone: 'warning' as const, label: 'Not funded yet' }
@@ -121,12 +134,37 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
       <Button
         variant="secondary"
         size="sm"
-        disabled={releasable === 0n || isBusy()}
+        disabled={now === 0n || isBusy()}
         isLoading={isBusy('release')}
-        onClick={() => void send('release', () => writeContractAsync({ address: vesting, abi: TOKEN_VESTING_ABI, functionName: 'release', chainId }))}
+        onClick={() =>
+          void send('release', () =>
+            now < releasable
+              ? writeContractAsync({ address: vesting, abi: TOKEN_VESTING_ABI, functionName: 'releasePart', args: [now], chainId })
+              : writeContractAsync({ address: vesting, abi: TOKEN_VESTING_ABI, functionName: 'release', chainId }),
+          )
+        }
       >
-        {releasable === 0n ? 'Nothing to release yet' : `Release ${amount(releasable)} to ${isMine ? 'you' : 'beneficiary'}`}
+        {releasable === 0n
+          ? 'Nothing to release yet'
+          : now === 0n
+            ? `${amount(releasable)} due — can't be sent yet`
+            : now < releasable
+              ? `Release ${amount(now)} of ${amount(releasable)} to ${to}`
+              : `Release ${amount(releasable)} to ${to}`}
       </Button>
+
+      {limits && !limits.exempt && (
+        <TokenLimitsNote
+          limits={limits}
+          amount={amount}
+          canExempt={isTokenOwner}
+          busy={isBusy()}
+          exempting={isBusy('exempt')}
+          onExempt={() =>
+            void send('exempt', () => writeContractAsync({ address: token, abi: TOKEN_LIMITS_ABI, functionName: 'excludeFromFees', args: [vesting, true], chainId }))
+          }
+        />
+      )}
 
       {!ended && wallet && (
         <div className="space-y-1.5 border-t border-border pt-3">
