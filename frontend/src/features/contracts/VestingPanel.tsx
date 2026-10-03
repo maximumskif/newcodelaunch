@@ -76,6 +76,7 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
   const toAdd = toBaseUnits(amountText, decimals)
   const overBalance = toAdd !== null && toAdd > walletBalance
   const ended = chainTime >= schedule.end
+  const isMine = Boolean(wallet && wallet.toLowerCase() === beneficiary.toLowerCase())
 
   const status =
     total === 0n ? { tone: 'warning' as const, label: 'Not funded yet' }
@@ -124,7 +125,7 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
         isLoading={isBusy('release')}
         onClick={() => void send('release', () => writeContractAsync({ address: vesting, abi: TOKEN_VESTING_ABI, functionName: 'release', chainId }))}
       >
-        {releasable > 0n ? `Release ${amount(releasable)} to beneficiary` : 'Nothing to release yet'}
+        {releasable === 0n ? 'Nothing to release yet' : `Release ${amount(releasable)} to ${isMine ? 'you' : 'beneficiary'}`}
       </Button>
 
       {!ended && wallet && (

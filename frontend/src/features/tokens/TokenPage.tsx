@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -253,6 +253,13 @@ function VestingCard({ page, fmt }: { page: EvmTokenPage; fmt: (raw: string) => 
           </li>
         ))}
       </ul>
+      <p className="mt-3 text-xs text-ink-muted">
+        Paid by one of these? Connect that wallet on the{' '}
+        <Link to="/liquidity/vesting" className="text-accent-400 underline">
+          Vesting page
+        </Link>{' '}
+        to release what has vested.
+      </p>
     </Card>
   )
 }

@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
+from eth_utils import is_hex_address
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from ...extensions import limiter
 from ...services import blockchain, contract_templates, contracts, explorer_verification, liquidity, projects
 
 contracts_bp = Blueprint("contracts", __name__)
@@ -112,6 +114,17 @@ def get_multisend(network):
     except Exception:  # noqa: BLE001 — RPC trouble; details stay server-side
         return jsonify(error="Couldn't reach the network right now"), 502
     return jsonify(address=address)
+
+
+@contracts_bp.get("/vesting/beneficiary/<address>")
+@limiter.limit("30/minute")
+def vesting_for_beneficiary(address):
+    """Unauthenticated: who a schedule pays is fixed in its public contract
+    (and shown on the token's public page) — this only finds them."""
+    if not is_hex_address(address):
+        return jsonify(error="Not an EVM address"), 400
+    rows = contracts.vesting_for_beneficiary(address)
+    return jsonify(schedules=[row.to_dict() for row in rows])
 
 
 @contracts_bp.get("/deployments")

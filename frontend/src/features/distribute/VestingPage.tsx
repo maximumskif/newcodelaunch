@@ -54,7 +54,8 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
   const [tokenInput, setTokenInput] = useState(initialToken)
   const [beneficiaryInput, setBeneficiaryInput] = useState('')
   const [amountText, setAmountText] = useState('')
-  const [startText, setStartText] = useState(() => localInputValue(new Date()))
+  // null until edited: the start is then "now" by the chain's clock.
+  const [startEdited, setStartText] = useState<string | null>(null)
   const [cliffText, setCliffText] = useState('0')
   const [lengthText, setLengthText] = useState('12')
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false)
@@ -85,18 +86,39 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
     queryFn: async () => (await contractsApi.listDeployments(accessToken!)).deployments.filter((d) => d.template_id === 'token_vesting'),
     enabled: Boolean(accessToken),
   })
+  // Schedules that pay the connected wallet, whoever made them — no
+  // sign-in needed to find and release your own tokens.
+  const paidToMe = useQuery({
+    queryKey: ['vesting-paid-to', address],
+    queryFn: async () => (await contractsApi.vestingFor(address!)).schedules,
+    enabled: Boolean(address),
+  })
   const created = setup.step === 'done'
   const refetchMine = mine.refetch
+  const refetchPaidToMe = paidToMe.refetch
   useEffect(() => {
-    if (created) void refetchMine()
-  }, [created, refetchMine])
+    if (created) {
+      void refetchMine()
+      void refetchPaidToMe()
+    }
+  }, [created, refetchMine, refetchPaidToMe])
+  // Each schedule shows once: one that pays you is under "paid to you",
+  // and the one just created stays in its own section.
+  const paidToMeList = (paidToMe.data ?? []).filter((d) => d.id !== setup.deployment?.id)
+  const paidIds = new Set(paidToMeList.map((d) => d.id))
+  const mineList = (mine.data ?? []).filter((d) => d.id !== setup.deployment?.id && !paidIds.has(d.id))
 
+  const now = token.data?.chainTime ?? openedAt
+  // Defaults to now by the chain's clock, which is what the contract judges
+  // the schedule by — not this device's (found in the e2e run: with the
+  // chain's time ahead, a device-clock "now" made a short schedule already
+  // over).
+  const startText = startEdited ?? localInputValue(new Date(now * 1000))
   const startDate = startText ? new Date(startText) : null
   const start = startDate && !Number.isNaN(startDate.getTime()) ? Math.floor(startDate.getTime() / 1000) : null
   const cliffMonths = wholeMonths(cliffText)
   const lengthMonths = wholeMonths(lengthText)
   const schedule = start !== null && cliffMonths !== null && lengthMonths !== null ? buildSchedule(start, cliffMonths, lengthMonths) : null
-  const now = token.data?.chainTime ?? openedAt
   const problem = schedule ? scheduleProblem(schedule, now) : null
   const total = token.data ? toBaseUnits(amountText, token.data.decimals) : null
   const overBalance = Boolean(token.data && total !== null && total > token.data.balance)
@@ -245,6 +267,25 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
         </section>
       )}
 
+      {paidToMeList.length > 0 && (
+        <section aria-labelledby="vesting-paid" className="space-y-3">
+          <h2 id="vesting-paid" className="font-mono text-sm font-semibold text-ink-faint">
+            paid to you
+          </h2>
+          <p className="text-sm text-ink-muted">Schedules that pay this wallet. Release what has vested whenever you like — it goes straight to you.</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {paidToMeList.map((d) => (
+              <div key={d.id} className="space-y-1">
+                <p className="font-mono text-xs text-ink-faint">
+                  {EVM_NETWORKS.find((n) => n.id === d.network)?.label ?? d.network} · {short(d.contract_address)}
+                </p>
+                <VestingPanel deployment={d} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {accessToken && (
         <section aria-labelledby="vesting-mine" className="space-y-3">
           <h2 id="vesting-mine" className="font-mono text-sm font-semibold text-ink-faint">
@@ -254,20 +295,18 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
             <p className="text-sm text-ink-muted">Loading…</p>
           ) : mine.error ? (
             <InlineError>Couldn't load your schedules.</InlineError>
-          ) : !mine.data?.length ? (
+          ) : !mineList.length ? (
             <p className="text-sm text-ink-muted">None yet. Each schedule you create shows up here, with what has vested and a button to release it.</p>
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
-              {mine.data
-                .filter((d) => d.id !== setup.deployment?.id)
-                .map((d) => (
-                  <div key={d.id} className="space-y-1">
-                    <p className="font-mono text-xs text-ink-faint">
-                      {EVM_NETWORKS.find((n) => n.id === d.network)?.label ?? d.network} · {short(d.contract_address)}
-                    </p>
-                    <VestingPanel deployment={d} />
-                  </div>
-                ))}
+              {mineList.map((d) => (
+                <div key={d.id} className="space-y-1">
+                  <p className="font-mono text-xs text-ink-faint">
+                    {EVM_NETWORKS.find((n) => n.id === d.network)?.label ?? d.network} · {short(d.contract_address)}
+                  </p>
+                  <VestingPanel deployment={d} />
+                </div>
+              ))}
             </div>
           )}
         </section>

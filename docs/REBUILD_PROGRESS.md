@@ -1131,6 +1131,16 @@ The last "soon" tool in liquidity & distribution. EVM only for now; Solana would
 
 **12/12 passed** ([vesting contract](https://sepolia.etherscan.io/address/0x2ad15964aa622849db73e130df5fef5e683f5f5d#code)): recorded after the backend's code check; release refused before the cliff; source verified on the real Etherscan; listed on the public token page with the amount read from the token; released at t+108s for exactly 480 (1,200 × 108/270, worked out from that block's timestamp); the rest after the end, leaving the contract empty; a further release refused; and the finished schedule gone from the public page.
 
+## Vesting for beneficiaries, 2026-10-02
+
+Until now only the account that created a schedule could see it in the app. The wallet actually being paid had no way in short of calling the contract by hand.
+
+- **Paid to you**: the Vesting page lists every schedule that pays the connected wallet, whoever created it and on any network, each with its release button ("Release N to you"). This works without signing in: `GET /api/contracts/vesting/beneficiary/<address>` is public (rate-limited 30/min), because who a schedule pays is fixed in its public contract and already shown on the token page. A schedule you made that also pays you is listed once.
+- **Public token page**: the Vesting card tells beneficiaries where to release.
+- **Found by the e2e run**: the start date defaulted to the device clock, while the contract judges by the chain's. With the chain's clock ahead (as on anvil after earlier tests, or with a skewed device clock), a short schedule starting "now" was already over and couldn't be created. The start now follows the chain's clock until you edit it.
+
+**Verified**: pytest 412 (the lookup finds a wallet's schedules on every network, in any address case, and nothing else); Vitest 251 ("to you" when the wallet is the beneficiary); Playwright: new `vesting.spec.ts` test where a signed-out wallet finds a schedule paying it and releases it all. Full suite 49/49.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:

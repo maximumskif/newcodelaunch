@@ -35,8 +35,7 @@ test('a real vesting schedule: create, fund, nothing before the cliff, part-way 
   await goTo(page, `/liquidity/vesting?token=${token}`)
   await expect(page.getByTestId('vesting-token')).toHaveText('TEAM · your balance 1,000,000', { timeout: 15_000 })
 
-  // The start defaults to now (the browser's clock, which earlier specs may
-  // have left behind the chain's — a 12-month schedule leaves room).
+  // The start defaults to now by the chain's clock.
   const beneficiary = freshAddress()
   await page.getByLabel(/^beneficiary/).fill(beneficiary)
   await page.getByLabel(/^amount/).fill('1200')
@@ -81,4 +80,45 @@ test('a real vesting schedule: create, fund, nothing before the cliff, part-way 
   await expect(listed.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
   expect(await balanceOf(beneficiary)).toBe(parseUnits('1200', 18))
   expect(await balanceOf(vestingAddress)).toBe(0n)
+})
+
+test('a beneficiary finds and releases their schedule without signing in', async ({ page }) => {
+  test.setTimeout(180_000)
+  await page.goto('/tokens/create')
+  await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
+  await page.getByRole('button', { name: /^Sign in with/ }).click()
+  await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
+  await page.getByLabel(/^Token Name/).fill('Paid To Me')
+  await page.getByLabel(/^Token Symbol/).fill('MINE')
+  await page.getByLabel(/^Token Supply/).fill('1000')
+  await page.getByRole('button', { name: 'Deploy' }).click()
+  const deployedText = page.getByTestId('deploy-result').getByText(/Deployed at/)
+  await expect(deployedText).toBeVisible({ timeout: 30_000 })
+  const token = (await deployedText.textContent())!.match(/0x[a-fA-F0-9]{40}/)![0] as Address
+
+  // A schedule paying this same wallet: no cliff, one month.
+  await goTo(page, `/liquidity/vesting?token=${token}`)
+  await expect(page.getByTestId('vesting-token')).toBeVisible({ timeout: 15_000 })
+  await page.getByLabel(/^beneficiary/).fill('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266')
+  await page.getByLabel(/^amount/).fill('100')
+  await page.getByLabel(/^vesting length/).fill('1')
+  await page.getByRole('complementary', { name: 'Summary' }).getByRole('button', { name: '[ create vesting contract ]' }).click()
+  const created = page.getByRole('region', { name: 'created — now send it the tokens' }).getByTestId('token-vesting')
+  await expect(created.getByText('Not funded yet')).toBeVisible({ timeout: 30_000 })
+  await created.getByRole('button', { name: 'Fund' }).click()
+  await expect(created.getByText('Tokens added — they vest on the same schedule.')).toBeVisible({ timeout: 20_000 })
+
+  // A fresh load: wallet connected, not signed in.
+  await testClient.increaseTime({ seconds: 40 * DAY })
+  await testClient.mine({ blocks: 1 })
+  await page.evaluate(() => localStorage.clear())
+  await page.goto('/liquidity/vesting')
+  await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
+  await expect(page.getByText('Sign in to create vesting schedules')).toBeVisible()
+  const mine = page.getByRole('region', { name: 'paid to you' }).getByTestId('token-vesting').filter({ hasText: token })
+  await expect(mine).toHaveCount(1, { timeout: 15_000 })
+  await mine.getByRole('button', { name: 'Release 100 MINE to you' }).click()
+  await expect(mine.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
+  const balance = await publicClient.readContract({ address: token, abi: BALANCE_ABI, functionName: 'balanceOf', args: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'] })
+  expect(balance).toBe(parseUnits('1000', 18))
 })

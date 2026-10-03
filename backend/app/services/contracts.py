@@ -203,6 +203,20 @@ def get_deployment_by_address(contract_address: str) -> Optional[ContractDeploym
     return ContractDeployment.query.filter_by(contract_address=contract_address).first()
 
 
+def vesting_for_beneficiary(beneficiary: str) -> list[ContractDeployment]:
+    """Token Vesting schedules recorded here (by anyone, on any network)
+    that pay this wallet, newest first — so a beneficiary can find and
+    release theirs without the creator's account. Every row passed the
+    code check when it was recorded; the page reads the rest from the chain."""
+    rows = (
+        ContractDeployment.query.filter_by(template_id="token_vesting")
+        .order_by(ContractDeployment.created_at.desc())
+        .all()
+    )
+    wanted = beneficiary.lower()
+    return [row for row in rows if str((row.parameters or {}).get("BENEFICIARY", "")).lower() == wanted]
+
+
 def shared_multisend(w3: Web3, network: str) -> Optional[str]:
     """The Multisend deployed here on this network (by anyone — it has no
     owner and can only move its caller's tokens), whose on-chain code is

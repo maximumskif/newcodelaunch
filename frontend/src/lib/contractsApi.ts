@@ -142,6 +142,9 @@ export const contractsApi = {
 
   // The shared Multisend the Airdrop tool sends through; null until someone
   // deploys it on this network.
+  // Token Vesting schedules (any creator, any network) that pay this wallet.
+  vestingFor: (beneficiary: string) => request<{ schedules: ContractDeployment[] }>(`/contracts/vesting/beneficiary/${beneficiary}`),
+
   multisend: (network: string) => request<{ address: `0x${string}` | null }>(`/contracts/multisend/${network}`),
 
   getDeployment: (contractAddress: string) =>

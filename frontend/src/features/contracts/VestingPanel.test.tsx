@@ -25,7 +25,7 @@ const deployment = { id: 'vest-1', network: 'sepolia', contract_address: VESTING
 const writeContractAsync = vi.fn()
 
 // A 400-token schedule from t=1000 to t=2000 with a cliff at 1250, read at `now`.
-function mockVesting({ now, held = parseEther('400'), released = 0n, releasable = 0n }: { now: number; held?: bigint; released?: bigint; releasable?: bigint }) {
+function mockVesting({ now, held = parseEther('400'), released = 0n, releasable = 0n, beneficiary = '0x2222222222222222222222222222222222222222' }: { now: number; held?: bigint; released?: bigint; releasable?: bigint; beneficiary?: string }) {
   vi.mocked(useAccount).mockReturnValue({ address: WALLET } as unknown as ReturnType<typeof useAccount>)
   vi.mocked(useChainId).mockReturnValue(11155111)
   vi.mocked(useSwitchChain).mockReturnValue({ switchChainAsync: vi.fn() } as unknown as ReturnType<typeof useSwitchChain>)
@@ -33,7 +33,7 @@ function mockVesting({ now, held = parseEther('400'), released = 0n, releasable 
   vi.mocked(useWaitForTransactionReceipt).mockReturnValue({ data: undefined } as ReturnType<typeof useWaitForTransactionReceipt>)
   const values: Record<string, unknown> = {
     token: TOKEN,
-    beneficiary: '0x2222222222222222222222222222222222222222',
+    beneficiary,
     startTime: 1000n,
     cliffTime: 1250n,
     endTime: 2000n,
@@ -74,6 +74,12 @@ describe('VestingPanel', () => {
     expect(screen.getByText('50% vested · 100 TEAM paid out · 100 TEAM ready to release')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Release 100 TEAM to beneficiary' }))
     expect(writeContractAsync).toHaveBeenCalledWith(expect.objectContaining({ address: VESTING, functionName: 'release' }))
+  })
+
+  it('says “to you” when the connected wallet is the beneficiary', async () => {
+    mockVesting({ now: 1500, releasable: parseEther('200'), beneficiary: WALLET.toLowerCase() })
+    render(<VestingPanel deployment={deployment} />)
+    expect(await screen.findByRole('button', { name: 'Release 200 TEAM to you' })).toBeEnabled()
   })
 
   it('funds an empty schedule with a plain transfer of the prefilled amount', async () => {

@@ -156,3 +156,21 @@ def test_multisend_lookup_returns_the_oldest_deployment_whose_code_matches(app, 
     assert client.get("/api/contracts/multisend/sepolia").get_json() == {"address": "0xReal"}
     assert client.get("/api/contracts/multisend/bsc").get_json() == {"address": None}
     assert client.get("/api/contracts/multisend/solana").status_code == 400
+
+
+def test_vesting_lookup_finds_every_schedule_that_pays_a_wallet(app, client):
+    beneficiary = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    with app.app_context():
+        user = _make_user("0xCreator")
+        for tx, network, pays in (("0xv1", "sepolia", beneficiary), ("0xv2", "base_sepolia", beneficiary.lower()), ("0xv3", "sepolia", "0xSomeoneElse")):
+            row = _make_deployment(user.id, tx)
+            row.template_id, row.contract_type, row.network = "token_vesting", "vesting", network
+            row.parameters = {"TOKEN": "0xT", "BENEFICIARY": pays, "START_TIME": "1", "CLIFF_TIME": "1", "END_TIME": "2"}
+        _make_deployment(user.id, "0xnot-vesting").parameters = {"BENEFICIARY": beneficiary}
+        _db.session.commit()
+
+    # No sign-in needed, and the address's case doesn't matter.
+    body = client.get(f"/api/contracts/vesting/beneficiary/{beneficiary.lower()}").get_json()
+    assert sorted(s["transaction_hash"] for s in body["schedules"]) == ["0xv1", "0xv2"]
+    assert client.get("/api/contracts/vesting/beneficiary/0x00000000000000000000000000000000000000aa").get_json() == {"schedules": []}
+    assert client.get("/api/contracts/vesting/beneficiary/nope").status_code == 400
