@@ -9,7 +9,7 @@ import { InlineError } from '../../components/ui/InlineError'
 import { MainnetConfirmCheckbox } from '../../components/ui/MainnetConfirmCheckbox'
 import { PageHero } from '../../components/ui/PageHero'
 import { SignInPrompt } from '../../components/ui/SignInPrompt'
-import { fromBaseUnits, toBaseUnits } from '../../lib/airdrop'
+import { fromBaseUnits, parseRecipients, toBaseUnits } from '../../lib/airdrop'
 import { contractsApi } from '../../lib/contractsApi'
 import { ERC20_ABI } from '../../lib/uniswapV2Abi'
 import { buildSchedule, scheduleProblem, vestedAt } from '../../lib/vesting'
@@ -17,7 +17,8 @@ import { useAuth } from '../auth/AuthContext'
 import { NETWORK_TO_CHAIN_ID, useDeployTemplate } from '../contracts/useDeployTemplate'
 import { VestingPanel } from '../contracts/VestingPanel'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
-import { SummaryRow, short } from './airdropParts'
+import { RecipientsField, SummaryRow, short } from './airdropParts'
+import { BatchLog, MAX_BATCH, batchTransactions, useVestingBatch } from './VestingBatch'
 
 const isEvmAddress = (address: string) => isAddress(address, { strict: false })
 const wholeMonths = (text: string) => (/^\d{1,3}$/.test(text.trim()) ? Number(text.trim()) : null)
@@ -52,6 +53,9 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
   const setup = useDeployTemplate()
 
   const [tokenInput, setTokenInput] = useState(initialToken)
+  // One wallet, or several on the same schedule (a team allocation).
+  const [many, setMany] = useState(false)
+  const [recipientsText, setRecipientsText] = useState('')
   const [beneficiaryInput, setBeneficiaryInput] = useState('')
   const [amountText, setAmountText] = useState('')
   // null until edited: the start is then "now" by the chain's clock.
@@ -120,16 +124,34 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
   const lengthMonths = wholeMonths(lengthText)
   const schedule = start !== null && cliffMonths !== null && lengthMonths !== null ? buildSchedule(start, cliffMonths, lengthMonths) : null
   const problem = schedule ? scheduleProblem(schedule, now) : null
-  const total = token.data ? toBaseUnits(amountText, token.data.decimals) : null
+  const parsed = many && token.data ? parseRecipients(recipientsText, token.data.decimals, isEvmAddress) : null
+  const batch = useVestingBatch({ network, token: tokenAddress, schedule: schedule && !problem ? schedule : null })
+  const total = many ? (parsed?.recipients.length ? parsed.total : null) : token.data ? toBaseUnits(amountText, token.data.decimals) : null
+  const tooMany = Boolean(parsed && parsed.recipients.length > MAX_BATCH)
   const overBalance = Boolean(token.data && total !== null && total > token.data.balance)
   const isMainnet = isMainnetNetwork(network)
-  const busy = setup.step !== 'idle' && setup.step !== 'done' && setup.step !== 'error'
+  const busy = (setup.step !== 'idle' && setup.step !== 'done' && setup.step !== 'error') || batch.busy !== null
 
   const canCreate = Boolean(
-    accessToken && address && token.data && beneficiary && total && !overBalance && schedule && !problem && !busy && (!isMainnet || mainnetConfirmed),
+    accessToken &&
+      address &&
+      token.data &&
+      (many ? parsed?.recipients.length && !parsed.problems.length && !tooMany : beneficiary) &&
+      total &&
+      !overBalance &&
+      schedule &&
+      !problem &&
+      !busy &&
+      (!isMainnet || mainnetConfirmed),
   )
+  const runBatch = async () => {
+    await batch.run(parsed!.recipients)
+    void refetchMine()
+    void refetchPaidToMe()
+  }
+  const { deploys, sends } = batchTransactions(parsed?.recipients.length ?? 0)
   const create = () =>
-    setup.deploy(
+    many ? void runBatch() : setup.deploy(
       'token_vesting',
       { TOKEN: tokenAddress!, BENEFICIARY: beneficiary!, START_TIME: String(schedule!.start), CLIFF_TIME: String(schedule!.cliff), END_TIME: String(schedule!.end) },
       network,
@@ -148,7 +170,7 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
       <PageHero
         eyebrow="Liquidity & distribution"
         title="Vesting"
-        description="Pay a token out to one wallet over time — a team, advisor or investor allocation. Each schedule is a small contract with no owner: once funded, the tokens can only go to that wallet, on that schedule."
+        description="Pay a token out over time — to one wallet, or a whole team on the same schedule. Each schedule is a small contract with no owner: once funded, the tokens can only go to that wallet, on that schedule."
       />
 
       {!accessToken ? (
@@ -181,18 +203,46 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
               </p>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
-              <label className="flex min-w-0 flex-col gap-1.5 text-sm">
-                <span className="font-mono text-xs text-ink-faint">beneficiary — who receives the tokens</span>
-                <input value={beneficiaryInput} onChange={(event) => setBeneficiaryInput(event.target.value)} placeholder="0x…" spellCheck={false} className={inputClass} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-mono text-xs text-ink-faint">amount{token.data ? ` (${token.data.symbol})` : ''}</span>
-                <input value={amountText} onChange={(event) => setAmountText(event.target.value)} inputMode="decimal" placeholder="0" className={inputClass} />
-              </label>
+            <div className="inline-flex rounded-lg border border-border p-1" role="group" aria-label="Who it pays">
+              {[
+                { value: false, label: 'One wallet' },
+                { value: true, label: 'Several wallets' },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  aria-pressed={many === item.value}
+                  disabled={busy}
+                  onClick={() => setMany(item.value)}
+                  className={`rounded-md px-3 py-1.5 text-sm transition-colors duration-150 ${
+                    many === item.value ? 'bg-accent-500/15 text-ink' : 'text-ink-muted hover:bg-surface-hover'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-            {beneficiaryInput.trim() && !beneficiary && <p className="text-sm text-warning">The beneficiary isn't an EVM address.</p>}
-            {amountText.trim() && token.data && total === null && <p className="text-sm text-warning">Enter an amount like 1000 or 12.5.</p>}
+
+            {many ? (
+              <>
+                <RecipientsField text={recipientsText} onChange={setRecipientsText} parsed={parsed} placeholder={'0x5FbD…0aa3, 50000\n0xe7f1…0512, 25000'} />
+                <p className="text-xs text-ink-faint">Everyone gets their own vesting contract on the schedule below. Up to {MAX_BATCH} wallets at once.</p>
+                {tooMany && <p className="text-sm text-warning">That's more than {MAX_BATCH} wallets — split the list.</p>}
+              </>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                <label className="flex min-w-0 flex-col gap-1.5 text-sm">
+                  <span className="font-mono text-xs text-ink-faint">beneficiary — who receives the tokens</span>
+                  <input value={beneficiaryInput} onChange={(event) => setBeneficiaryInput(event.target.value)} placeholder="0x…" spellCheck={false} className={inputClass} />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-mono text-xs text-ink-faint">amount{token.data ? ` (${token.data.symbol})` : ''}</span>
+                  <input value={amountText} onChange={(event) => setAmountText(event.target.value)} inputMode="decimal" placeholder="0" className={inputClass} />
+                </label>
+              </div>
+            )}
+            {!many && beneficiaryInput.trim() && !beneficiary && <p className="text-sm text-warning">The beneficiary isn't an EVM address.</p>}
+            {!many && amountText.trim() && token.data && total === null && <p className="text-sm text-warning">Enter an amount like 1000 or 12.5.</p>}
             {overBalance && <p className="text-sm text-warning">That's more than this wallet holds.</p>}
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -220,19 +270,23 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
           <aside className="space-y-4 rounded-lg border border-border bg-surface p-5" aria-label="Summary">
             <dl className="space-y-2 font-mono text-sm">
               <SummaryRow label="total">{total ? fmt(total) : '0'}</SummaryRow>
-              <SummaryRow label="to">{beneficiary ? short(beneficiary) : '—'}</SummaryRow>
+              <SummaryRow label="to">{many ? `${parsed?.recipients.length ?? 0} wallets` : beneficiary ? short(beneficiary) : '—'}</SummaryRow>
               {schedule && !problem && (
                 <>
                   <SummaryRow label={schedule.cliff > schedule.start ? 'at the cliff' : 'starts'}>{day(schedule.cliff)}</SummaryRow>
-                  {total !== null && total > 0n && schedule.cliff > schedule.start && (
+                  {!many && total !== null && total > 0n && schedule.cliff > schedule.start && (
                     <SummaryRow label="unlocks then">{fmt(vestedAt(total, schedule, schedule.cliff))}</SummaryRow>
                   )}
                   <SummaryRow label="all vested">{day(schedule.end)}</SummaryRow>
                 </>
               )}
-              <SummaryRow label="transactions">2</SummaryRow>
+              <SummaryRow label="transactions">{many ? (deploys ? deploys + 1 + sends : 0) : 2}</SummaryRow>
             </dl>
-            <p className="text-xs text-ink-faint">One to create the vesting contract, one to send it the tokens. You pay the network's gas for each.</p>
+            <p className="text-xs text-ink-faint">
+              {many
+                ? `One per wallet to create its vesting contract, then they're all funded together: an approval and ${sends || 1} send (plus a one-time setup if nobody has airdropped on this network yet). You pay the network's gas for each.`
+                : "One to create the vesting contract, one to send it the tokens. You pay the network's gas for each."}
+            </p>
             {isMainnet && (
               <MainnetConfirmCheckbox
                 checked={mainnetConfirmed}
@@ -243,17 +297,20 @@ function Vesting({ initialToken, initialNetwork }: { initialToken: string; initi
               />
             )}
             <Button className="w-full" onClick={create} isLoading={busy} disabled={!canCreate}>
-              [ create vesting contract ]
+              {!many ? '[ create vesting contract ]' : parsed?.recipients.length ? `[ create ${parsed.recipients.length} vesting contracts ]` : '[ create vesting contracts ]'}
             </Button>
             {busy && (
               <p role="status" className="text-sm text-ink-muted">
-                {STEP_LABELS[setup.step]}
+                {batch.busy ?? STEP_LABELS[setup.step]}
               </p>
             )}
             {setup.error && <InlineError>{setup.error}</InlineError>}
+            {batch.error && <InlineError>{batch.error}</InlineError>}
           </aside>
         </div>
       )}
+
+      {token.data && <BatchLog rows={batch.rows} decimals={token.data.decimals} symbol={token.data.symbol} onRetry={() => void runBatch()} busy={busy} />}
 
       {setup.deployment && (
         <section aria-labelledby="vesting-fund" className="space-y-3">

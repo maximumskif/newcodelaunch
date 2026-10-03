@@ -122,3 +122,48 @@ test('a beneficiary finds and releases their schedule without signing in', async
   const balance = await publicClient.readContract({ address: token, abi: BALANCE_ABI, functionName: 'balanceOf', args: ['0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'] })
   expect(balance).toBe(parseUnits('1000', 18))
 })
+
+test('vesting for several wallets: one contract each, funded together through the shared Multisend', async ({ page }) => {
+  test.setTimeout(180_000)
+  await page.goto('/tokens/create')
+  await page.getByRole('button', { name: 'Connect EVM Wallet' }).click()
+  await page.getByRole('button', { name: /^Sign in with/ }).click()
+  await expect(page.getByText(/EVM · 0xf39f/i)).toBeVisible({ timeout: 15_000 })
+  await page.getByLabel(/^Token Name/).fill('Team Batch')
+  await page.getByLabel(/^Token Symbol/).fill('CREW')
+  await page.getByLabel(/^Token Supply/).fill('1000000')
+  await page.getByRole('button', { name: 'Deploy' }).click()
+  const deployedText = page.getByTestId('deploy-result').getByText(/Deployed at/)
+  await expect(deployedText).toBeVisible({ timeout: 30_000 })
+  const token = (await deployedText.textContent())!.match(/0x[a-fA-F0-9]{40}/)![0] as Address
+  const balanceOf = (owner: Address) => publicClient.readContract({ address: token, abi: BALANCE_ABI, functionName: 'balanceOf', args: [owner] })
+
+  await goTo(page, `/liquidity/vesting?token=${token}`)
+  await expect(page.getByTestId('vesting-token')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: 'Several wallets' }).click()
+  const team = [freshAddress(), freshAddress(), freshAddress()]
+  await page.getByLabel(/^recipients/).fill(team.map((who, i) => `${who}, ${(i + 1) * 1000}`).join('\n'))
+  await page.getByLabel(/^cliff/).fill('6')
+  await page.getByLabel(/^vesting length/).fill('24')
+  const summary = page.getByRole('complementary', { name: 'Summary' })
+  await expect(summary).toContainText('6,000 CREW')
+  await expect(summary).toContainText('3 wallets')
+  await summary.getByRole('button', { name: '[ create 3 vesting contracts ]' }).click()
+  await expect(page.getByRole('heading', { name: '3 schedules created and funded' })).toBeVisible({ timeout: 90_000 })
+  for (const who of team) expect(await balanceOf(who)).toBe(0n)
+
+  // Past the end: each releases exactly its own amount.
+  await testClient.increaseTime({ seconds: 25 * 31 * DAY })
+  await testClient.mine({ blocks: 1 })
+  await goTo(page, '/tokens/create')
+  await goTo(page, '/liquidity/vesting')
+  const panels = page.getByRole('region', { name: 'your vesting schedules' }).getByTestId('token-vesting').filter({ hasText: token })
+  await expect(panels).toHaveCount(3, { timeout: 15_000 })
+  for (let i = 0; i < 3; i++) {
+    const panel = panels.nth(i)
+    await expect(panel.getByText('Fully vested')).toBeVisible({ timeout: 15_000 })
+    await panel.getByRole('button', { name: /^Release .* CREW to beneficiary$/ }).click()
+    await expect(panel.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
+  }
+  for (const [i, who] of team.entries()) expect(await balanceOf(who)).toBe(parseUnits(String((i + 1) * 1000), 18))
+})

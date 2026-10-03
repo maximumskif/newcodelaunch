@@ -1141,6 +1141,16 @@ Until now only the account that created a schedule could see it in the app. The 
 
 **Verified**: pytest 412 (the lookup finds a wallet's schedules on every network, in any address case, and nothing else); Vitest 251 ("to you" when the wallet is the beneficiary); Playwright: new `vesting.spec.ts` test where a signed-out wallet finds a schedule paying it and releases it all. Full suite 49/49.
 
+## Vesting for several wallets at once, 2026-10-03
+
+A team allocation used to mean filling in the vesting form once per person. "Several wallets" on the Vesting page takes a pasted list ("address, amount" per line, the same parser and problem list as Airdrop, up to 50 wallets) and one shared schedule.
+
+- **Still one contract per person**, deployed one after another from the creator's wallet and recorded like any other deployment. Funding goes through the shared Multisend: one approval and one send per 150, instead of a transfer each. N people take N deploys, an approval and a send, not 2N transactions. If nobody has deployed the Multisend on that network yet, the run does it first, once.
+- **Interruptions**: a rejected prompt stops the run, and the log shows who has a contract and who's funded. "Continue where it stopped" never deploys a second contract for anyone and funds only what isn't funded. The created schedules also appear under "your vesting schedules", each with its own fund field, so nothing is stranded if the page is closed.
+- The batch is its own hook (`VestingBatch.tsx`): compile → deploy → record, awaited in sequence, rather than bending `useDeployTemplate`'s single-deploy state machine.
+
+**Verified**: Vitest 252 (a run stopped by a rejected third deploy resumes with exactly one contract per wallet, then a single approve and send for all three); Playwright: three wallets with a 6-month cliff over 24 months, created and funded in one run (shared Multisend set up on the way), nothing paid early, then each released after the end for exactly its own amount. Full suite 50/50.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:
