@@ -18,7 +18,7 @@ from web3 import Web3
 from ..extensions import db
 from ..models.deployment import ContractDeployment
 from ..models.nft import NFTCollection
-from . import blockchain, contract_templates, solidity
+from . import blockchain, contract_templates, liquidity, solidity
 
 NATIVE_TOKENS = {
     "sepolia": "ETH",
@@ -74,6 +74,20 @@ def code_matches_template(w3: Web3, template_id: str, parameters: dict[str, Any]
     actual = w3.eth.get_code(Web3.to_checksum_address(address)).hex()
     actual = actual if actual.startswith("0x") else "0x" + actual
     return actual.lower() == expected
+
+
+def check_curve_dex(network: str, parameters: dict[str, Any]) -> None:
+    """A Bonding-Curve Token sends everything it raises to whatever pair its
+    FACTORY hands it, so a recorded curve must graduate into this network's
+    real DEX. Its code alone can't show that: a lookalike with a factory of
+    the deployer's own would pass the code check and take the money."""
+    try:
+        dex = liquidity.get_dex(network)
+    except liquidity.DexNotAvailableError as exc:
+        raise ValueError(f"Bonding-curve launches need a supported DEX, and {network} has none") from exc
+    for key, param in (("factory", "FACTORY"), ("wrapped_native", "WRAPPED_NATIVE")):
+        if str(parameters.get(param) or "").lower() != dex[key].lower():
+            raise ValueError(f"{param} must be {dex['name']}'s on {network}: {dex[key]}")
 
 
 def estimate_deployment(
@@ -141,6 +155,9 @@ def record_deployment(
     # different user genuinely can't ever record their own row under the
     # same hash; surface that as a clear error instead of silently handing
     # back someone else's row.
+    if template_id == "curve_token":
+        check_curve_dex(network, parameters)
+
     existing = ContractDeployment.query.filter_by(transaction_hash=transaction_hash).first()
     if existing is not None:
         if existing.user_id != user_id:

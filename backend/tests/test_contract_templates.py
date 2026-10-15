@@ -5,7 +5,7 @@ from app.services import contract_templates, solidity
 
 def test_get_all_templates_returns_the_real_templates():
     templates = contract_templates.get_all_templates()
-    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock", "token_vesting", "multisend"}
+    assert {t.id for t in templates} == {"erc20_basic", "erc20_advanced", "erc721_basic", "token_timelock", "token_vesting", "multisend", "curve_token"}
 
 
 def test_get_all_templates_filters_by_type():
@@ -243,3 +243,47 @@ def test_multisend_compiles_with_one_function_and_nothing_to_own():
     assert compiled.success, compiled.error_message
     assert [item["name"] for item in compiled.abi if item.get("type") == "function"] == ["send"]
     assert not any(item.get("stateMutability") == "payable" for item in compiled.abi)
+
+
+CURVE_PARAMS = {
+    "TOKEN_NAME": "Moon Cat",
+    "TOKEN_SYMBOL": "MCAT",
+    "TOKEN_SUPPLY": "1000000000",
+    "GRADUATION_TARGET": str(4 * 10**18),
+    "FACTORY": "0x7e0987e5b3a30e3f2828572bb659a548460a3003",
+    "WRAPPED_NATIVE": "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
+}
+
+
+def test_curve_token_compiles_with_no_owner_and_fixed_terms():
+    # How it trades is covered by the Foundry suite in tests/forge.
+    rendered = contract_templates.render_contract("curve_token", CURVE_PARAMS)
+    assert rendered["contract_name"] == "MoonCat"
+    assert "0x7E0987E5b3a30e3f2828572Bb659A548460a3003" in rendered["contract_code"]
+    compiled = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    assert compiled.success, compiled.error_message
+    functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
+    assert {"buy", "sell", "quoteBuy", "quoteSell", "pair", "graduated", "ethReserve", "tokensSold", "transfer"} <= functions
+    assert not functions & {"owner", "transferOwnership", "withdraw", "mint", "setPair"}
+    payable = {item.get("name", item["type"]) for item in compiled.abi if item.get("stateMutability") == "payable"}
+    assert payable == {"buy", "constructor"}
+    assert not any(item["type"] in ("receive", "fallback") for item in compiled.abi)
+
+
+def test_curve_token_supply_defaults_to_a_billion():
+    params = {k: v for k, v in CURVE_PARAMS.items() if k != "TOKEN_SUPPLY"}
+    rendered = contract_templates.render_contract("curve_token", params)
+    assert "totalSupply = 1000000000 * 10**18" in rendered["contract_code"]
+
+
+@pytest.mark.parametrize(
+    "overrides, message",
+    [({"TOKEN_SUPPLY": "999"}, "TOKEN_SUPPLY must be at least 1000"),
+     ({"TOKEN_SUPPLY": str(10**15 + 1)}, "TOKEN_SUPPLY can be at most"),
+     ({"GRADUATION_TARGET": str(10**15 - 1)}, "GRADUATION_TARGET must be at least"),
+     ({"GRADUATION_TARGET": str(10**24 + 1)}, "GRADUATION_TARGET can be at most"),
+     ({"FACTORY": "0x123"}, "FACTORY"), ({"WRAPPED_NATIVE": ""}, "WRAPPED_NATIVE")],
+)
+def test_curve_token_parameters_are_checked(overrides, message):
+    with pytest.raises(contract_templates.TemplateParameterError, match=message):
+        contract_templates.render_contract("curve_token", {**CURVE_PARAMS, **overrides})

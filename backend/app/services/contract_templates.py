@@ -47,7 +47,7 @@ class InvalidParametersError(TemplateParameterError):
 class ContractTemplate:
     id: str
     name: str
-    type: str  # 'erc20' | 'erc721' | 'lock' | 'utility'
+    type: str  # 'erc20' | 'erc721' | 'lock' | 'vesting' | 'utility' | 'curve'
     description: str
     solidity_code: str
     deployment_params: list[dict[str, Any]]
@@ -758,6 +758,204 @@ contract {{CONTRACT_NAME}} {
 }
 '''
 
+# A bonding-curve launch: the token is its own market until it graduates to
+# the network's Uniswap V2-style DEX. One contract per launch, deployed by
+# the creator's wallet; no owner, nothing to configure later.
+#
+# The whole supply starts in the contract. 80% is sold along a constant-
+# product curve with virtual reserves (pump.fun's shape): buy() and sell()
+# trade against the ETH the curve has raised, at a price that rises about
+# 16x from the first token to the last. Selling the last curve token
+# graduates it in the same transaction: the raised ETH (wrapped) and the
+# other 20% go straight into the token's V2 pair, and the LP tokens are
+# minted to the dead address, so the liquidity can never be withdrawn. The
+# virtual reserves are chosen so the pool opens at the curve's final price.
+#
+# The pair is created (or found) at deploy, and nothing can send tokens to
+# it before graduation, so nobody can open the pool early at a price of
+# their choosing; WETH sent to it first just joins the pool. Rounding always
+# favours the curve, so it can always pay every seller. The deploying
+# wallet may buy in the same transaction (the "creator buy"), but not the
+# whole curve.
+_CURVE_TOKEN_SOURCE = '''// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+interface IUniswapV2Factory {
+    function getPair(address tokenA, address tokenB) external view returns (address);
+    function createPair(address tokenA, address tokenB) external returns (address);
+}
+
+interface IUniswapV2Pair {
+    function mint(address to) external returns (uint256);
+}
+
+interface IWETH {
+    function deposit() external payable;
+    function transfer(address to, uint256 value) external returns (bool);
+}
+
+contract {{CONTRACT_NAME}} {
+    string public name = "{{TOKEN_NAME}}";
+    string public symbol = "{{TOKEN_SYMBOL}}";
+    uint8 public constant decimals = 18;
+    uint256 public constant totalSupply = {{TOKEN_SUPPLY}} * 10**18;
+
+    uint256 public constant curveSupply = (totalSupply * 4) / 5;
+    uint256 public constant poolSupply = totalSupply - curveSupply;
+    uint256 public constant graduationTarget = {{GRADUATION_TARGET}};
+    uint256 public constant virtualEth = graduationTarget / 3;
+    uint256 public constant virtualTokens = curveSupply + (totalSupply * 4) / 15;
+    uint256 private constant K = virtualEth * virtualTokens;
+
+    address public constant factory = {{FACTORY}};
+    address public constant wrappedNative = {{WRAPPED_NATIVE}};
+    address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    address public pair;
+    uint256 public ethReserve;
+    uint256 public tokensSold;
+    bool public graduated;
+    uint256 private unlocked = 1;
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Buy(address indexed buyer, uint256 eth, uint256 tokens, uint256 ethReserve, uint256 tokensSold);
+    event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 ethReserve, uint256 tokensSold);
+    event Graduated(address indexed pair, uint256 eth, uint256 tokens);
+
+    modifier lock() {
+        require(unlocked == 1, "Busy");
+        unlocked = 2;
+        _;
+        unlocked = 1;
+    }
+
+    constructor() payable {
+        balanceOf[address(this)] = totalSupply;
+        emit Transfer(address(0), address(this), totalSupply);
+        address existing = IUniswapV2Factory(factory).getPair(address(this), wrappedNative);
+        pair = existing != address(0) ? existing : IUniswapV2Factory(factory).createPair(address(this), wrappedNative);
+        if (msg.value > 0) {
+            (uint256 tokens, ) = quoteBuy(msg.value);
+            require(tokens < curveSupply, "The creator buy can't buy the whole curve");
+            _buy(msg.sender, msg.value, 0);
+        }
+    }
+
+    // ERC-20
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        _transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        if (allowed != type(uint256).max) {
+            require(allowed >= amount, "Insufficient allowance");
+            allowance[from][msg.sender] = allowed - amount;
+        }
+        _transfer(from, to, amount);
+        return true;
+    }
+
+    function _transfer(address from, address to, uint256 amount) private {
+        require(to != address(this), "Sell to the curve with sell()");
+        require(graduated || to != pair, "The pool opens when the curve graduates");
+        _move(from, to, amount);
+    }
+
+    function _move(address from, address to, uint256 amount) private {
+        require(to != address(0), "Transfer to the zero address");
+        uint256 balance = balanceOf[from];
+        require(balance >= amount, "Insufficient balance");
+        unchecked {
+            balanceOf[from] = balance - amount;
+        }
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+    }
+
+    // The curve
+
+    function quoteBuy(uint256 eth) public view returns (uint256 tokens, uint256 cost) {
+        if (graduated || eth == 0) return (0, 0);
+        tokens = virtualTokens - tokensSold - _ceilDiv(K, virtualEth + ethReserve + eth);
+        cost = eth;
+        if (tokens >= curveSupply - tokensSold) {
+            tokens = curveSupply - tokensSold;
+            cost = _ceilDiv(K, virtualTokens - curveSupply) - virtualEth - ethReserve;
+        }
+    }
+
+    function quoteSell(uint256 tokens) public view returns (uint256 eth) {
+        if (graduated || tokens == 0 || tokens > tokensSold) return 0;
+        eth = virtualEth + ethReserve - _ceilDiv(K, virtualTokens - tokensSold + tokens);
+    }
+
+    function buy(uint256 minTokens) external payable lock returns (uint256 tokens) {
+        tokens = _buy(msg.sender, msg.value, minTokens);
+    }
+
+    function sell(uint256 tokens, uint256 minEth) external lock returns (uint256 eth) {
+        require(!graduated, "The curve has graduated: trade on the DEX");
+        require(tokens > 0, "Nothing to sell");
+        require(tokens <= tokensSold, "More than the curve has sold");
+        eth = quoteSell(tokens);
+        require(eth > 0, "Too few tokens to get any ETH back");
+        require(eth >= minEth, "Price moved: less ETH than your minimum");
+        tokensSold -= tokens;
+        ethReserve -= eth;
+        _move(msg.sender, address(this), tokens);
+        emit Sell(msg.sender, tokens, eth, ethReserve, tokensSold);
+        (bool ok, ) = msg.sender.call{value: eth}("");
+        require(ok, "ETH transfer failed");
+    }
+
+    function _buy(address buyer, uint256 value, uint256 minTokens) private returns (uint256 tokens) {
+        require(!graduated, "The curve has graduated: trade on the DEX");
+        require(value > 0, "Send some ETH to buy");
+        uint256 cost;
+        (tokens, cost) = quoteBuy(value);
+        require(tokens > 0, "Too little ETH to buy any tokens");
+        require(tokens >= minTokens, "Price moved: fewer tokens than your minimum");
+        ethReserve += cost;
+        tokensSold += tokens;
+        _move(address(this), buyer, tokens);
+        emit Buy(buyer, cost, tokens, ethReserve, tokensSold);
+        if (tokensSold == curveSupply) _graduate();
+        if (value > cost) {
+            (bool ok, ) = buyer.call{value: value - cost}("");
+            require(ok, "Refund failed");
+        }
+    }
+
+    function _graduate() private {
+        graduated = true;
+        uint256 eth = ethReserve;
+        uint256 tokens = balanceOf[address(this)];
+        IWETH(wrappedNative).deposit{value: eth}();
+        require(IWETH(wrappedNative).transfer(pair, eth), "WETH transfer failed");
+        _move(address(this), pair, tokens);
+        IUniswapV2Pair(pair).mint(DEAD);
+        emit Graduated(pair, eth, tokens);
+    }
+
+    function _ceilDiv(uint256 a, uint256 b) private pure returns (uint256) {
+        return (a + b - 1) / b;
+    }
+}
+'''
+
 # Shared help text for the ERC-20 fields both token templates ask for.
 _NAME_HELP = "The full name wallets and explorers show, e.g. Nova Coin"
 _SYMBOL_HELP = "The short ticker, e.g. NOVA — usually 3 to 5 capital letters"
@@ -860,6 +1058,23 @@ _TEMPLATES: dict[str, ContractTemplate] = {
         features=["No Owner", "Holds No Funds", "Moves Only the Caller's Tokens", "Shared Per Network"],
         gas_estimate=350_000,
     ),
+    "curve_token": ContractTemplate(
+        id="curve_token",
+        name="Bonding-Curve Token",
+        type="curve",
+        description="A token that sells along a price curve, then moves into a DEX pool with its liquidity burned — no owner",
+        solidity_code=_CURVE_TOKEN_SOURCE,
+        deployment_params=[
+            {"name": "TOKEN_NAME", "type": "string", "required": True, "description": _NAME_HELP},
+            {"name": "TOKEN_SYMBOL", "type": "string", "required": True, "description": _SYMBOL_HELP},
+            {"name": "TOKEN_SUPPLY", "type": "uint256", "required": True, "default": 1_000_000_000, "min": 1_000, "max": 10**15, "description": "How many whole tokens exist. 80% are sold on the curve and 20% go into the DEX pool"},
+            {"name": "GRADUATION_TARGET", "type": "uint256", "required": True, "min": 10**15, "max": 10**24, "description": "How much the curve raises, in wei, before it moves to the DEX"},
+            {"name": "FACTORY", "type": "address", "required": True, "description": "The network's Uniswap V2-style factory; filled in for you"},
+            {"name": "WRAPPED_NATIVE", "type": "address", "required": True, "description": "The network's wrapped native coin (WETH, WBNB); filled in for you"},
+        ],
+        features=["Bonding Curve", "Graduates to a DEX", "Liquidity Burned", "No Owner"],
+        gas_estimate=3_500_000,
+    ),
 }
 
 
@@ -876,7 +1091,7 @@ def get_all_templates(contract_type: Optional[str] = None) -> list[ContractTempl
 
 # Which display-name parameter each template's {{CONTRACT_NAME}} identifier
 # is derived from.
-_DISPLAY_NAME_PARAM = {"erc20": "TOKEN_NAME", "erc721": "COLLECTION_NAME"}
+_DISPLAY_NAME_PARAM = {"erc20": "TOKEN_NAME", "erc721": "COLLECTION_NAME", "curve": "TOKEN_NAME"}
 
 # Templates without a display name have a fixed contract name.
 _FIXED_CONTRACT_NAMES = {"token_timelock": "TokenTimeLock", "token_vesting": "TokenVesting", "multisend": "MultiSend"}
@@ -955,6 +1170,8 @@ def _coerce_parameter(param: dict[str, Any], value: Any) -> str:
         # prompt rather than surfacing as a reverted deploy.
         if "max" in param and int(text) > param["max"]:
             raise InvalidParametersError(f"{name} can be at most {param['max']}")
+        if "min" in param and int(text) < param["min"]:
+            raise InvalidParametersError(f"{name} must be at least {param['min']}")
         return str(int(text))
 
     if param_type == "address":

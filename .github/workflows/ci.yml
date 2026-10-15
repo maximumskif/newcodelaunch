@@ -147,6 +147,14 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # The Bonding-Curve Token template against Uniswap's own V2 build
+      # (from frontend/node_modules): unit, fuzz and invariant tests. It
+      # holds buyers' money, so it gets more than the e2e happy path.
+      - name: Bonding-curve contract tests (Foundry)
+        run: |
+          backend/.venv/bin/python backend/tests/forge/render.py
+          cd backend/tests/forge && forge test
+
       - name: Install candy-machine sidecar dependencies
         working-directory: services/candy-machine
         run: npm ci

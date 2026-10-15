@@ -246,3 +246,27 @@ def test_record_deployment_refuses_a_contract_whose_code_is_not_the_template(app
 
         deployment = _record(user, contract_address=ADDRESS, parameters=BASIC_PARAMS)
         assert deployment.parameters == BASIC_PARAMS
+
+
+def test_a_curve_is_recorded_only_if_it_graduates_into_the_networks_real_dex(app, monkeypatch, code_matches):
+    # The curve sends everything raised to the pair its FACTORY returns: a
+    # lookalike pointing at a factory of its own would pass the code check.
+    from app.services import liquidity
+
+    with app.app_context():
+        user = _make_user()
+        monkeypatch.setattr(blockchain, "get_transaction_status", _successful_receipt())
+        dex = liquidity.get_dex("sepolia")
+        params = {"FACTORY": dex["factory"], "WRAPPED_NATIVE": dex["wrapped_native"]}
+
+        with pytest.raises(ValueError, match="FACTORY must be Uniswap"):
+            _record(user, template_id="curve_token", parameters={**params, "FACTORY": "0x" + "11" * 20})
+        with pytest.raises(ValueError, match="WRAPPED_NATIVE must be"):
+            _record(user, template_id="curve_token", parameters={**params, "WRAPPED_NATIVE": "0x" + "22" * 20})
+        with pytest.raises(ValueError, match="polygon-amoy has none"):
+            _record(user, template_id="curve_token", network="polygon-amoy", parameters=params)
+        assert ContractDeployment.query.count() == 0
+
+        lowercase = {key: value.lower() for key, value in params.items()}
+        deployment = _record(user, template_id="curve_token", parameters=lowercase)
+        assert deployment.contract_type == "curve"
