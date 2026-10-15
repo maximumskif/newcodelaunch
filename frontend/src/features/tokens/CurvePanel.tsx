@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { formatUnits } from 'viem'
 import { useAccount, useConnect, usePublicClient, useWriteContract } from 'wagmi'
@@ -43,6 +43,7 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
   const { address: wallet } = useAccount()
   const { connectors, connect } = useConnect()
   const { writeContractAsync } = useWriteContract()
+  const queryClient = useQueryClient()
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [amountText, setAmountText] = useState('')
 
@@ -83,6 +84,8 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
     onSettled: ({ status }) => {
       if (status === 'success') setAmountText('')
       void reads.refetch()
+      // The trade list and chart (CurveActivity), if shown alongside.
+      void queryClient.invalidateQueries({ queryKey: ['curve-trades', network, address] })
     },
   })
 

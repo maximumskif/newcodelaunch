@@ -90,6 +90,13 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   expect(gained).toBeLessThanOrEqual(ethBack) // less the gas
   expect(gained).toBeGreaterThan(ethBack - parseEther('0.001'))
   expect(await read<bigint>(token, 'ethReserve')).toBe(parseEther('0.002') + parseEther('0.005') - ethBack)
+
+  // The trades so far (creator buy, buy, sell), charted and listed from the curve's events.
+  const activity = curveCard.getByTestId('curve-activity')
+  await expect(activity.getByRole('table', { name: '3 trades' })).toBeVisible({ timeout: 20_000 })
+  await expect(activity.getByRole('img', { name: /^Price in ETH since launch|^Price since launch/ })).toBeVisible()
+  await expect(activity.getByRole('row')).toHaveCount(4)
+  await expect(activity.getByRole('row').nth(1)).toContainText('▼ sell')
   await expectNoA11yViolations(page, 'public page of a token on its curve')
 
   // Buy it out: the panel says this graduates it, and refunds the rest.
@@ -126,6 +133,16 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   await expect(poolCard.getByText(/of the pool's liquidity is burned/)).toBeVisible({ timeout: 20_000 })
   await expect(page.getByTestId('token-page-curve')).toContainText('Bonding curve (graduated)')
   await expectNoA11yViolations(page, 'public page of a graduated curve token')
+
+  await expect(page.getByTestId('curve-activity').getByRole('table', { name: '4 trades' })).toBeVisible({ timeout: 20_000 })
+
+  // The public feed of launches shows it graduated.
+  await page.goto('/launches')
+  const card = page.getByRole('link', { name: /Curve E2E/ })
+  await expect(card.getByText('Graduated')).toBeVisible({ timeout: 20_000 })
+  await expectNoA11yViolations(page, 'new launches feed')
+  await card.click()
+  await expect(page).toHaveURL(new RegExp(`/token/sepolia/${token}$`, 'i'))
 
   // And the creator's launch page lists it under "your curve launches".
   await creatorPage.goto('/tokens/curve')

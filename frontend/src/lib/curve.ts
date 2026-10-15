@@ -1,5 +1,7 @@
 import { parseAbi } from 'viem'
 
+import type { CurveTrade } from './tokenPagesApi'
+
 // contract_templates' curve_token: a token that is its own market until it
 // graduates. 80% of the supply sells on a constant-product curve with
 // virtual reserves; buying the last of it moves the raised ETH and the other
@@ -118,3 +120,14 @@ export const MIN_SUPPLY = 1_000n
 export const MAX_SUPPLY = 10n ** 15n
 export const MIN_TARGET = 10n ** 15n
 export const MAX_TARGET = 10n ** 24n
+
+// The price after each of a curve's recent trades, oldest first: the
+// curve's own state from the trade's event, through the contract's math.
+// `fromLaunch` adds the launch price first (when these are all its trades).
+export function pricePoints(terms: CurveTerms, trades: CurveTrade[], { fromLaunch = false } = {}): { trade: CurveTrade | null; price: number }[] {
+  const after = [...trades].reverse().map((trade) => ({
+    trade: trade as CurveTrade | null,
+    price: priceAt(terms, { ethReserve: BigInt(trade.eth_reserve), tokensSold: BigInt(trade.tokens_sold) }),
+  }))
+  return fromLaunch ? [{ trade: null, price: priceAt(terms, { ethReserve: 0n, tokensSold: 0n }) }, ...after] : after
+}

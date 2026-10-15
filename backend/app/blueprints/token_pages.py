@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request
 
 from ..extensions import limiter
-from ..services import holder_snapshot, token_checker, token_pages
+from ..services import curve_market, holder_snapshot, token_checker, token_pages
 
 token_pages_bp = Blueprint("token_pages", __name__)
 
@@ -66,4 +66,26 @@ def token_holders(network: str, address: str):
     except holder_snapshot.SnapshotError as exc:
         return jsonify(error=str(exc)), 400
     except holder_snapshot.ChainReadError as exc:
+        return _chain_error(exc)
+
+
+@token_pages_bp.get("/curves")
+@limiter.limit("30/minute")
+def curve_launches():
+    """Public: recent bonding-curve launches and where each stands."""
+    try:
+        return jsonify(curve_market.curve_launches(request.args.get("network") or None))
+    except curve_market.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+
+
+@token_pages_bp.get("/evm/<network>/<address>/trades")
+@limiter.limit("30/minute")
+def curve_trades(network: str, address: str):
+    """Public: a bonding-curve token's recent trades, from its own events."""
+    try:
+        return jsonify(curve_market.curve_trades(network, address))
+    except curve_market.NotFoundError as exc:
+        return jsonify(error=str(exc)), 404
+    except curve_market.ChainReadError as exc:
         return _chain_error(exc)

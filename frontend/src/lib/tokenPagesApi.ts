@@ -109,7 +109,48 @@ export interface HolderSnapshot {
   burn_addresses: string[]
 }
 
+// A bonding-curve token's trades, from its own events (backend
+// services/curve_market.py). Amounts are wei / base units as strings;
+// eth_reserve and tokens_sold are the curve's state right after the trade.
+export interface CurveTrade {
+  kind: 'buy' | 'sell'
+  wallet: string
+  eth: string
+  tokens: string
+  eth_reserve: string
+  tokens_sold: string
+  block: number
+  tx: string
+  time: number
+}
+
+export interface CurveTrades {
+  network: string
+  address: string
+  // All trades ever; `trades` holds the latest 100, newest first.
+  trade_count: number
+  trades: CurveTrade[]
+  graduated: { pair: string; eth: string; tokens: string; block: number; tx: string; time: number } | null
+  explorer_tx: string | null
+}
+
+export interface CurveLaunch {
+  network: string
+  address: string
+  name: string
+  symbol: string
+  graduation_target: string
+  created_at: string | null
+  // null when the chain couldn't be read just now.
+  graduated: boolean | null
+  eth_reserve: string | null
+}
+
 export const tokenPagesApi = {
+  curveTrades: (network: string, address: string) =>
+    request<CurveTrades>(`/token-pages/evm/${encodeURIComponent(network)}/${encodeURIComponent(address)}/trades`),
+  curveLaunches: (network?: string) =>
+    request<{ launches: CurveLaunch[] }>(`/token-pages/curves${network ? `?network=${encodeURIComponent(network)}` : ''}`),
   holders: (network: string, address: string, block?: string) =>
     request<HolderSnapshot>(
       `/token-pages/holders/${encodeURIComponent(network)}/${encodeURIComponent(address.trim())}${block ? `?block=${encodeURIComponent(block)}` : ''}`,

@@ -24,6 +24,7 @@ import { HolderSnapshotPage } from './features/distribute/HolderSnapshotPage'
 import { VestingPage } from './features/distribute/VestingPage'
 import { BurnPage } from './features/tokens/BurnPage'
 import { CurveLaunchPage } from './features/tokens/CurveLaunchPage'
+import { LaunchesPage } from './features/tokens/LaunchesPage'
 import { PillarHubPage } from './features/pillars/PillarHubPage'
 import { LEGACY_REDIRECTS, PILLARS } from './lib/pillars'
 
@@ -91,6 +92,7 @@ export default function App() {
         <Route element={<PublicLayout />}>
           <Route path="/mint/buy/:candyMachineId" element={<MintBuyPage />} />
           <Route path="/token/:network/:address" element={<TokenPage />} />
+          <Route path="/launches" element={<LaunchesPage />} />
         </Route>
       </Routes>
     </>

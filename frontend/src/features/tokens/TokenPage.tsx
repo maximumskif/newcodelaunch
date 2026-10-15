@@ -12,6 +12,7 @@ import { formatAmount } from '../../lib/marketFormat'
 import { formatTokenAmount } from '../../lib/solanaTokensApi'
 import { tokenPagesApi, type EvmTokenPage, type TokenPage as TokenPageData } from '../../lib/tokenPagesApi'
 import { EVM_NETWORKS } from '../network/NetworkContext'
+import { CurveActivity } from './CurveActivity'
 import { CurvePanel } from './CurvePanel'
 import { errorMessage } from '../../lib/errors'
 
@@ -159,6 +160,15 @@ export function TokenPage() {
               : 'The price rises as people buy and falls as they sell. Trade with your own wallet; no account needed.'}
           </p>
           <CurvePanel network={page.network} address={page.address as `0x${string}`} dexName={pool?.dex} />
+          <div className="mt-6 border-t border-border pt-5">
+            <CurveActivity
+              network={page.network}
+              address={page.address}
+              terms={curveTerms(BigInt(page.total_supply) / 10n ** 18n, BigInt(page.curve.graduation_target))}
+              symbol={page.symbol}
+              native={native}
+            />
+          </div>
         </Card>
       )}
       <div className="grid gap-4 md:grid-cols-2">

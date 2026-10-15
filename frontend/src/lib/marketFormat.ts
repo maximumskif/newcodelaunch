@@ -34,3 +34,12 @@ export function formatLarge(value: number | null | undefined): string {
   if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}K`
   return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 }
+
+// "5m ago" for a Unix time in seconds.
+export function timeAgo(seconds: number, now = Date.now() / 1000): string {
+  const delta = Math.max(0, Math.floor(now - seconds))
+  if (delta < 60) return `${delta}s ago`
+  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`
+  if (delta < 86_400) return `${Math.floor(delta / 3600)}h ago`
+  return `${Math.floor(delta / 86_400)}d ago`
+}

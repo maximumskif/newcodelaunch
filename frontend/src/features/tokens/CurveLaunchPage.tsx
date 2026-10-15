@@ -254,6 +254,13 @@ export function CurveLaunchPage() {
           <h2 id="curve-mine" className="font-mono text-sm font-semibold text-ink-faint">
             your curve launches
           </h2>
+          <p className="text-sm text-ink-muted">
+            Everyone's launches are on the public{' '}
+            <Link to="/launches" className="text-accent-400 underline">
+              new launches
+            </Link>{' '}
+            page.
+          </p>
           {mine.isLoading ? (
             <p className="text-sm text-ink-muted">Loading…</p>
           ) : mine.error ? (

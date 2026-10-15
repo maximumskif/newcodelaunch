@@ -49,14 +49,14 @@ class ChainReadError(RuntimeError):
     pass
 
 
-def _cached(key: tuple, build) -> dict[str, Any]:
+def _cached(key: tuple, build, seconds: float = _CACHE_SECONDS) -> dict[str, Any]:
     now = time.monotonic()
     hit = _cache.get(key)
-    if hit and now - hit[0] < _CACHE_SECONDS:
+    if hit and now - hit[0] < seconds:
         return hit[1]
     result = build()
     _cache[key] = (now, result)
-    # Keep the cache small: drop anything expired.
+    # Keep the cache small: drop anything older than the longest lifetime.
     for stale in [k for k, (at, _) in _cache.items() if now - at >= _CACHE_SECONDS]:
         _cache.pop(stale, None)
     return result
@@ -78,6 +78,12 @@ def _summary(balances: dict[str, int], supply: int, decimals: int, **extra: Any)
 
 
 def _transfer_logs(w3: Web3, address: str, start: int, end: int) -> list[Any]:
+    return fetch_logs(w3, address, TRANSFER_TOPIC, start, end)
+
+
+def fetch_logs(w3: Web3, address: str, topic0: str | list[str], start: int, end: int) -> list[Any]:
+    """A contract's logs over a block range, in chunks that shrink when the
+    provider refuses a range as too large. `topic0` may list several events."""
     logs: list[Any] = []
     chunk, block, requests = _FIRST_CHUNK, start, 0
     while block <= end:
@@ -86,7 +92,7 @@ def _transfer_logs(w3: Web3, address: str, start: int, end: int) -> list[Any]:
             raise SnapshotError("This token has too much history to replay here")
         to_block = min(block + chunk - 1, end)
         try:
-            logs.extend(w3.eth.get_logs({"address": address, "topics": [TRANSFER_TOPIC], "fromBlock": block, "toBlock": to_block}))
+            logs.extend(w3.eth.get_logs({"address": address, "topics": [topic0], "fromBlock": block, "toBlock": to_block}))
         except Exception:  # noqa: BLE001 — "range too large" / "too many results" wording varies by provider
             if chunk == 1:
                 raise
