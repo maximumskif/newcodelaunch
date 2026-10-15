@@ -187,3 +187,14 @@ def test_vesting_lists_only_live_schedules_whose_code_is_the_template(app, monke
         assert schedules == [
             {"address": real, "beneficiary": "0xB", "amount": "300", "start_time": 1, "cliff_time": 2, "end_time": 4102444800}
         ]
+
+
+def test_a_curve_reports_where_it_stands():
+    answers = {"graduated": False, "ethReserve": 10**18, "tokensSold": 5, "curveSupply": 8, "poolSupply": 2, "graduationTarget": 4 * 10**18, "pair": PAIR}
+    w3 = type("W3", (), {})()
+    w3.eth = type("Eth", (), {"contract": staticmethod(lambda address, abi: _Contract(answers))})()
+
+    assert token_pages._evm_curve(w3, TOKEN) == {
+        "graduated": False, "eth_reserve": str(10**18), "tokens_sold": "5", "curve_supply": "8", "pool_supply": "2",
+        "graduation_target": str(4 * 10**18), "pair": PAIR,
+    }

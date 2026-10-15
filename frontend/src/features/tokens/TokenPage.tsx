@@ -7,9 +7,12 @@ import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PageHero } from '../../components/ui/PageHero'
 import { SOLANA_NETWORKS } from '../../lib/candyMachineApi'
+import { curveTerms, priceAt } from '../../lib/curve'
+import { formatAmount } from '../../lib/marketFormat'
 import { formatTokenAmount } from '../../lib/solanaTokensApi'
 import { tokenPagesApi, type EvmTokenPage, type TokenPage as TokenPageData } from '../../lib/tokenPagesApi'
 import { EVM_NETWORKS } from '../network/NetworkContext'
+import { CurvePanel } from './CurvePanel'
 import { errorMessage } from '../../lib/errors'
 
 const percentOf = (part: bigint, whole: bigint) => (whole > 0n ? `${((Number(part) / Number(whole)) * 100).toFixed(2)}%` : '0%')
@@ -69,10 +72,17 @@ export function TokenPage() {
   const fmt = (raw: string) => formatTokenAmount(raw, page.decimals)
   const pool = page.pool
   const live = Boolean(pool?.pair && pool.token_reserve && BigInt(pool.token_reserve) > 0n)
+  // Still on its bonding curve: the curve sets the price, and there's no pool yet.
+  const onCurve = page.chain === 'evm' && page.curve && !page.curve.graduated ? page.curve : null
   const price = live
     ? Number(formatTokenAmount(pool!.native_reserve!, page.chain === 'solana' ? 9 : 18).replace(/,/g, '')) /
       Number(fmt(pool!.token_reserve!).replace(/,/g, ''))
-    : null
+    : onCurve
+      ? priceAt(curveTerms(BigInt(page.total_supply) / 10n ** 18n, BigInt(onCurve.graduation_target)), {
+          ethReserve: BigInt(onCurve.eth_reserve),
+          tokensSold: BigInt(onCurve.tokens_sold),
+        })
+      : null
   const lpSupply = BigInt(pool?.lp_supply ?? '0')
 
   const copyLink = async () => {
@@ -90,8 +100,8 @@ export function TokenPage() {
       : (page.pool?.locks ?? []).reduce((sum, lock) => sum + BigInt(lock.amount), 0n) + BigInt(page.pool?.burned_lp ?? '0')
   const stats: [string, string][] = [
     ['Total supply', `${fmt(page.total_supply)}`],
-    ['Price', price !== null ? `${new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4 }).format(price)} ${native}` : '—'],
-    ['Pool', live ? `${formatTokenAmount(pool!.native_reserve!, page.chain === 'solana' ? 9 : 18)} ${native}` : 'No pool'],
+    ['Price', price !== null ? `${formatAmount(price)} ${native}` : '—'],
+    ['Pool', live ? `${formatTokenAmount(pool!.native_reserve!, page.chain === 'solana' ? 9 : 18)} ${native}` : onCurve ? 'Opens at graduation' : 'No pool'],
     ['Liquidity locked', live ? percentOf(lockedLp, lpSupply) : '—'],
   ]
 
@@ -140,6 +150,17 @@ export function TokenPage() {
         </div>
       )}
 
+      {page.chain === 'evm' && page.curve && (
+        <Card padding="lg" rounded="xl" data-testid="token-page-curve">
+          <h2 className="mb-1 font-display text-lg font-semibold text-ink">{page.curve.graduated ? 'Bonding curve (graduated)' : 'Buy or sell on the curve'}</h2>
+          <p className="mb-4 text-sm text-ink-muted">
+            {page.curve.graduated
+              ? 'This token raised its target on its curve and moved to the DEX.'
+              : 'The price rises as people buy and falls as they sell. Trade with your own wallet; no account needed.'}
+          </p>
+          <CurvePanel network={page.network} address={page.address as `0x${string}`} dexName={pool?.dex} />
+        </Card>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <Card padding="lg" rounded="xl">
           <h2 className="mb-1 font-display text-lg font-semibold text-ink">Supply and control</h2>
@@ -155,6 +176,7 @@ export function TokenPage() {
               </>
             ) : (
               <>
+                {page.curve && <Check ok>No owner — nobody can change its rules, mint more or pull its liquidity</Check>}
                 {page.owner !== null && (
                   <Check ok={page.ownership_renounced}>{page.ownership_renounced ? 'Ownership renounced — no one can change its settings' : 'Has an owner who can change its settings'}</Check>
                 )}
@@ -183,7 +205,11 @@ export function TokenPage() {
           {!pool ? (
             <p className="text-sm text-ink-muted">Couldn't read the pool right now.</p>
           ) : !live ? (
-            <p className="text-sm text-ink-muted">No {pool.dex} pool yet.</p>
+            <p className="text-sm text-ink-muted">
+              {onCurve
+                ? `The ${pool.dex} pool opens when the curve graduates: everything raised goes in with the last 20% of the supply, and that liquidity is burned.`
+                : `No ${pool.dex} pool yet.`}
+            </p>
           ) : (
             <div className="space-y-2 text-sm">
               <div className="flex flex-wrap gap-2">

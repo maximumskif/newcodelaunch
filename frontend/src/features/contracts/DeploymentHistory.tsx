@@ -91,7 +91,7 @@ export function DeploymentHistory({ deployments }: { deployments: ContractDeploy
                         {isOpen(deployment.id, 'manage') ? 'Hide' : 'Manage'}
                       </Button>
                     )}
-                    {deployment.contract_type === 'erc20' && (
+                    {(deployment.contract_type === 'erc20' || deployment.contract_type === 'curve') && (
                       <Link
                         to={tokenPagePath(deployment.network, deployment.contract_address)}
                         aria-label={`Public page for ${deployment.contract_address}`}

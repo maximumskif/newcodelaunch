@@ -31,6 +31,16 @@ export interface EvmTokenPage {
   // Token Vesting contracts for this token that are still paying out;
   // amount is what each still holds.
   vesting?: { address: string; beneficiary: string; amount: string; start_time: number; cliff_time: number; end_time: number }[]
+  // A Bonding-Curve Token whose code matches the template: where it stands.
+  curve?: {
+    graduated: boolean
+    eth_reserve: string
+    tokens_sold: string
+    curve_supply: string
+    pool_supply: string
+    graduation_target: string
+    pair: string
+  } | null
 }
 
 export interface SolanaTokenPage {

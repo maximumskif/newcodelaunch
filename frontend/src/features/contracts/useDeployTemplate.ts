@@ -125,6 +125,8 @@ export function useDeployTemplate() {
       network: string,
       projectId?: string,
       nftCollectionId?: string,
+      // Native coin sent with the deployment (a curve's creator buy).
+      value?: bigint,
     ) => {
       if (!address) {
         setError('Connect an EVM wallet first')
@@ -155,6 +157,7 @@ export function useDeployTemplate() {
           abi: compiled.abi as Abi,
           bytecode: compiled.bytecode as `0x${string}`,
           chainId,
+          value,
         })
         setTxHash(hash)
         setStep('confirming')

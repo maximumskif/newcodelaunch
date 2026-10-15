@@ -31,14 +31,14 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/tokens/create')
   })
 
-  it('lists tools that are coming, but will not open them', async () => {
+  it('finds the bonding-curve launch by what people call it', async () => {
     const onClose = renderPalette()
-    await userEvent.type(screen.getByRole('combobox'), 'bonding')
+    await userEvent.type(screen.getByRole('combobox'), 'pump')
     const option = screen.getByRole('option', { name: /Bonding-curve launch/ })
-    expect(option).toHaveAttribute('aria-disabled', 'true')
+    expect(option).not.toHaveAttribute('aria-disabled', 'true')
     await userEvent.click(option)
-    expect(onClose).not.toHaveBeenCalled()
-    expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/)
+    expect(onClose).toHaveBeenCalled()
+    expect(screen.getByTestId('where')).toHaveTextContent('/tokens/curve')
   })
 
   it('moves with the arrow keys and closes on Escape', async () => {

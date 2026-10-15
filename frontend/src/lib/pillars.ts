@@ -67,7 +67,7 @@ export const PILLARS: Pillar[] = [
       { id: 'token-manage', name: 'Manage a token', description: 'Mint, revoke authorities, update details — from your token list.', glyph: '⚙', path: '/tokens/create#history', status: 'live', keywords: ['revoke', 'authority', 'metadata', 'owner'] },
       { id: 'token-burn', name: 'Burn tokens', description: 'Destroy tokens from your wallet, with the effect on supply shown first.', glyph: '∅', path: '/tokens/burn', status: 'new', keywords: ['burn', 'destroy', 'supply', 'dead'] },
       { id: 'token-page', name: 'Public token page', description: 'A page buyers can check, read straight from the chain.', glyph: '✓', path: '/tokens/create#history', status: 'live', keywords: ['share', 'trust'] },
-      { id: 'token-curve', name: 'Bonding-curve launch', description: 'Launch with a price curve that graduates to a DEX.', glyph: '∿', status: 'soon', keywords: ['pump', 'curve', 'fair launch'] },
+      { id: 'token-curve', name: 'Bonding-curve launch', description: 'Launch with a price curve that graduates to a DEX, liquidity burned (EVM).', glyph: '∿', path: '/tokens/curve', status: 'new', keywords: ['pump', 'curve', 'fair launch', 'graduate'] },
     ],
     next: { pillar: 'liquidity', pitch: 'Open a pool and lock the liquidity so people can trade — and trust — your token.' },
   },

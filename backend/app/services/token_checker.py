@@ -27,7 +27,7 @@ from web3 import Web3
 
 from ..models.deployment import ContractDeployment
 from ..models.solana_token import SolanaTokenLaunch
-from . import blockchain, explorer_verification, market_intelligence
+from . import blockchain, contract_templates, explorer_verification, market_intelligence
 from .token_pages import ZERO, _fn, _optional
 
 _ERC20_ABI = [
@@ -188,7 +188,7 @@ def check_evm(network: str, address: str) -> dict[str, Any]:
     checks.append(liquidity_check)
 
     ours = (
-        ContractDeployment.query.filter(func.lower(ContractDeployment.contract_address) == checksum.lower(), ContractDeployment.network == network, ContractDeployment.contract_type == "erc20")
+        ContractDeployment.query.filter(func.lower(ContractDeployment.contract_address) == checksum.lower(), ContractDeployment.network == network, ContractDeployment.contract_type.in_(contract_templates.TOKEN_TYPES))
         .order_by(ContractDeployment.created_at.asc())
         .first()
     )

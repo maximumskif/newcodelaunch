@@ -78,13 +78,13 @@ export function MyStuff({ token }: { token: string }) {
   const all = deployments.data?.deployments ?? []
   const tokenRows: Row[] = [
     ...all
-      .filter((d) => d.contract_type === 'erc20')
+      .filter((d) => d.contract_type === 'erc20' || d.contract_type === 'curve')
       .map((d) => ({
         key: d.id,
         title: String(d.parameters?.TOKEN_SYMBOL ?? d.parameters?.TOKEN_NAME ?? d.template_name),
         detail: `${d.template_name} · ${networkLabel(d.network)} · ${short(d.contract_address)}`,
         actions: [
-          { label: 'manage', to: '/tokens/create#history' },
+          d.contract_type === 'curve' ? { label: 'curve', to: '/tokens/curve' } : { label: 'manage', to: '/tokens/create#history' },
           { label: 'public page', to: tokenPagePath(d.network, d.contract_address) },
           { label: 'airdrop', to: `/liquidity/airdrop?network=${d.network}&token=${d.contract_address}` },
           { label: 'holders', to: `/liquidity/snapshot?network=${d.network}&address=${d.contract_address}` },
@@ -119,7 +119,7 @@ export function MyStuff({ token }: { token: string }) {
     }
   })
   const contractRows: Row[] = all
-    .filter((d) => d.contract_type !== 'erc20')
+    .filter((d) => d.contract_type !== 'erc20' && d.contract_type !== 'curve')
     .map((d) => ({
       key: d.id,
       title: d.template_name,

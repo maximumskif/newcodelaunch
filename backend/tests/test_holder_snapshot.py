@@ -149,3 +149,20 @@ def test_route_validates_input_and_hides_rpc_details(client, launched, monkeypat
     monkeypatch.setattr(blockchain, "get_web3", broken)
     response = client.get(f"/api/token-pages/holders/sepolia/{TOKEN}")
     assert response.status_code == 502 and "secret-rpc" not in response.get_data(as_text=True)
+
+
+def test_a_curve_tokens_unsold_supply_is_not_a_holder(app, launched, monkeypatch):
+    # The whole supply is minted to the curve contract itself; buyers get it from there.
+    chain = _Chain()
+    chain.logs = [_log(100, ZERO, TOKEN, 1000), _log(200, TOKEN, A, 150), _log(300, TOKEN, B, 50)]
+    monkeypatch.setattr(blockchain, "get_web3", lambda network: chain)
+    with app.app_context():
+        row = ContractDeployment.query.one()
+        row.contract_type, row.template_id = "curve", "curve_token"
+        _db.session.commit()
+        result = holder_snapshot.snapshot_evm("sepolia", TOKEN)
+
+    assert result["holders"] == [
+        {"address": A, "balance": "150", "share": 0.15},
+        {"address": B, "balance": "50", "share": 0.05},
+    ]

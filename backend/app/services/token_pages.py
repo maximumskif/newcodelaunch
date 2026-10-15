@@ -18,7 +18,7 @@ from web3 import Web3
 
 from ..models.deployment import ContractDeployment
 from ..models.solana_token import SolanaTokenLaunch
-from . import blockchain, contracts, liquidity
+from . import blockchain, contract_templates, contracts, liquidity
 from .candy_machine import CandyMachineServiceError, _sidecar_network, _sidecar_request
 
 ZERO = "0x0000000000000000000000000000000000000000"
@@ -60,6 +60,15 @@ _TOKEN_ABI = [
     _fn("maxTransactionAmount", ["uint256"]),
     _fn("maxWalletAmount", ["uint256"]),
     _fn("balanceOf", ["uint256"], ["address"]),
+]
+_CURVE_ABI = [
+    _fn("graduated", ["bool"]),
+    _fn("ethReserve", ["uint256"]),
+    _fn("tokensSold", ["uint256"]),
+    _fn("curveSupply", ["uint256"]),
+    _fn("poolSupply", ["uint256"]),
+    _fn("graduationTarget", ["uint256"]),
+    _fn("pair", ["address"]),
 ]
 _FACTORY_ABI = [_fn("getPair", ["address"], ["address", "address"])]
 _PAIR_ABI = [
@@ -162,6 +171,22 @@ def _evm_vesting(w3: Web3, network: str, token: Any, chain_time: int) -> list[di
     return schedules
 
 
+def _evm_curve(w3: Web3, token_address: str) -> dict[str, Any]:
+    """Where a Bonding-Curve Token stands. Only read once its code is known
+    to be the template's, so these answers are the curve's real state."""
+    curve = w3.eth.contract(address=token_address, abi=_CURVE_ABI)
+    read = lambda name: getattr(curve.functions, name)().call()  # noqa: E731
+    return {
+        "graduated": read("graduated"),
+        "eth_reserve": str(read("ethReserve")),
+        "tokens_sold": str(read("tokensSold")),
+        "curve_supply": str(read("curveSupply")),
+        "pool_supply": str(read("poolSupply")),
+        "graduation_target": str(read("graduationTarget")),
+        "pair": read("pair"),
+    }
+
+
 def evm_token_page(network: str, address: str) -> dict[str, Any]:
     if network not in blockchain.EVM_NETWORKS:
         raise NotFoundError(f"Unknown EVM network: {network}")
@@ -169,7 +194,7 @@ def evm_token_page(network: str, address: str) -> dict[str, Any]:
         ContractDeployment.query.filter(
             func.lower(ContractDeployment.contract_address) == address.lower(),
             ContractDeployment.network == network,
-            ContractDeployment.contract_type == "erc20",
+            ContractDeployment.contract_type.in_(contract_templates.TOKEN_TYPES),
         )
         .order_by(ContractDeployment.created_at.asc())
         .first()
@@ -183,6 +208,7 @@ def evm_token_page(network: str, address: str) -> dict[str, Any]:
         token = w3.eth.contract(address=token_address, abi=_TOKEN_ABI)
         chain_time = w3.eth.get_block("latest")["timestamp"]
         owner = _optional(lambda: token.functions.owner().call())
+        matches = code_matches_template(w3, deployment)
         trading_enabled = _optional(lambda: token.functions.tradingEnabled().call())
         page = {
             "chain": "evm",
@@ -207,11 +233,14 @@ def evm_token_page(network: str, address: str) -> dict[str, Any]:
             "source_verified": deployment.verification_status == "verified",
             # False: the contract isn't what it was recorded as — its answers
             # below are its own claims (the page says so).
-            "code_matches_template": code_matches_template(w3, deployment),
+            "code_matches_template": matches,
             "explorer_url": deployment.explorer_url,
             "chain_time": chain_time,
             "pool": _evm_pool(w3, network, token_address, chain_time),
             "vesting": _evm_vesting(w3, network, token, chain_time),
+            # A curve whose code isn't the template's gets no curve section:
+            # its answers would be its own claims, and the page says so.
+            "curve": _evm_curve(w3, token_address) if deployment.contract_type == "curve" and matches else None,
         }
     except NotFoundError:
         raise

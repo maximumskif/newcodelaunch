@@ -11,7 +11,7 @@ export interface DeploymentParam {
 export interface ContractTemplateSummary {
   id: string
   name: string
-  type: 'erc20' | 'erc721' | 'lock'
+  type: 'erc20' | 'erc721' | 'lock' | 'vesting' | 'utility' | 'curve'
   description: string
   deployment_params: DeploymentParam[]
   features: string[]

@@ -27,10 +27,10 @@ describe('AllToolsPage', () => {
     expect(screen.queryByRole('heading', { name: 'tokens' })).not.toBeInTheDocument()
   })
 
-  it('shows a coming tool without linking it', () => {
+  it('links the bonding-curve launch, which used to be "coming soon"', () => {
     render(<MemoryRouter><AllToolsPage /></MemoryRouter>)
-    expect(screen.getByLabelText('Bonding-curve launch — coming soon')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Bonding-curve/ })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/coming soon/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Bonding-curve launch/ })).toHaveAttribute('href', '/tokens/curve')
   })
 })
 

@@ -23,6 +23,7 @@ import { AirdropPage } from './features/distribute/AirdropPage'
 import { HolderSnapshotPage } from './features/distribute/HolderSnapshotPage'
 import { VestingPage } from './features/distribute/VestingPage'
 import { BurnPage } from './features/tokens/BurnPage'
+import { CurveLaunchPage } from './features/tokens/CurveLaunchPage'
 import { PillarHubPage } from './features/pillars/PillarHubPage'
 import { LEGACY_REDIRECTS, PILLARS } from './lib/pillars'
 
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="/research/check" element={<TokenCheckerPage />} />
           <Route path="/liquidity/airdrop" element={<AirdropPage />} />
           <Route path="/tokens/burn" element={<BurnPage />} />
+          <Route path="/tokens/curve" element={<CurveLaunchPage />} />
           <Route path="/liquidity/snapshot" element={<HolderSnapshotPage />} />
           <Route path="/liquidity/vesting" element={<VestingPage />} />
           {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (

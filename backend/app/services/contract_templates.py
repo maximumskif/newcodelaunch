@@ -1078,6 +1078,11 @@ _TEMPLATES: dict[str, ContractTemplate] = {
 }
 
 
+# Template types whose contract is itself an ERC-20 token: they get public
+# token pages, holder snapshots and token-checker links.
+TOKEN_TYPES = ("erc20", "curve")
+
+
 def get_template(template_id: str) -> Optional[ContractTemplate]:
     return _TEMPLATES.get(template_id)
 

@@ -25,7 +25,7 @@ from web3 import Web3
 
 from ..models.deployment import ContractDeployment
 from ..models.solana_token import SolanaTokenLaunch
-from . import blockchain
+from . import blockchain, contract_templates
 from .token_pages import _fn
 
 TRANSFER_TOPIC = "0x" + Web3.keccak(text="Transfer(address,address,uint256)").hex().removeprefix("0x")
@@ -103,7 +103,7 @@ def snapshot_evm(network: str, address: str, at_block: Optional[int] = None) -> 
         raise SnapshotError("That isn't an EVM address (0x followed by 40 hex characters)")
     checksum = Web3.to_checksum_address(address)
     deployment = (
-        ContractDeployment.query.filter(ContractDeployment.contract_address.ilike(checksum), ContractDeployment.network == network, ContractDeployment.contract_type == "erc20")
+        ContractDeployment.query.filter(ContractDeployment.contract_address.ilike(checksum), ContractDeployment.network == network, ContractDeployment.contract_type.in_(contract_templates.TOKEN_TYPES))
         .order_by(ContractDeployment.created_at.asc())
         .first()
     )
@@ -143,6 +143,11 @@ def snapshot_evm(network: str, address: str, at_block: Optional[int] = None) -> 
             balances[recipient] += amount
         # Mints come from the zero address; its "balance" is just negative supply.
         balances.pop(Web3.to_checksum_address(ZERO), None)
+        # A bonding-curve token holds its own unsold supply: that's the curve,
+        # not a holder (and it refuses plain transfers, so an airdrop to this
+        # list would fail on it).
+        if deployment.contract_type == "curve":
+            balances.pop(checksum, None)
         return _summary(
             balances,
             supply,

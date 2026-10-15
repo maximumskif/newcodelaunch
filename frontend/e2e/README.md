@@ -312,6 +312,15 @@ the tests, then tears everything down. No manual multi-terminal setup — see
   and its revoke dialog, the Candy Machine launch form with an allowlist,
   the storefront mid-phase, the creator dashboard, the edit-phases dialog,
   and the renounce-ownership dialog.
+- `curve.spec.ts` — a real bonding-curve launch against the same local
+  Uniswap V2 as `dex-liquidity.spec.ts`: launch with a creator buy, then a
+  buyer in a fresh browser (no session) connects on the public token page,
+  buys and sells at exactly the contract's quotes, and buys out the curve.
+  The chain is then checked directly: the pool holds the last 20% and
+  everything raised, all its LP is at the dead address, and the curve is
+  left with no ETH. Axe scans the launch form and the public page before
+  and after graduation. The contract itself has its own Foundry suite
+  (`backend/tests/forge`: unit, fuzz and invariant tests).
 
 ## What isn't covered yet
 

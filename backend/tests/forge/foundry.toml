@@ -6,7 +6,9 @@ out = "out"
 libs = []
 solc_version = "0.8.19"
 evm_version = "paris"
-optimizer = false
+# Same compiler settings as the backend (services/solidity.py).
+optimizer = true
+optimizer_runs = 200
 fs_permissions = [{ access = "read", path = "../../../frontend/node_modules/@uniswap" }]
 
 [fuzz]
