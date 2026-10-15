@@ -384,4 +384,5 @@ node e2e/sepolia/smoke.mjs --key-file ~/sepolia-wallet.json   # `cast wallet new
 
 A run spends about 0.02 Sepolia ETH at ~1 gwei (0.01 of it into the pool)
 and takes about 10 minutes, most of it the lock's 4-minute release time
-(`--lock-seconds`) and Etherscan indexing new contracts.
+(`--lock-seconds`) and Etherscan indexing new contracts. `--only vesting`
+and `--only curve` run just those flows (each under 0.002 Sepolia ETH).

@@ -1181,12 +1181,16 @@ The last "soon" tool. Decisions with the owner first: EVM only for now (Ethereum
 
 **Not done**: Solana curves (would need our own program); a trade history or price chart (needs log indexing that public RPCs limit); fees.
 
+## Bonding curve on real Sepolia, 2026-10-15
+
+`e2e/sepolia/smoke.mjs --only curve`: **17/17 passed**, about 0.00104 Sepolia ETH, 0.001 of it now in the burned pool ([curve](https://sepolia.etherscan.io/address/0x9a6c24d63b2dac059e36e16e9735a140ba52645b#code), source verified on the real Etherscan). A 0.001 ETH target with a 0.0001 creator buy in the launch transaction; the backend recorded it after its code and DEX checks; the pair existed from launch and refused tokens; the public page showed the curve. A second wallet bought (exactly the quote), sold half (reserve = paid in less paid out), then [bought out the curve](https://sepolia.etherscan.io/tx/0xa9a3b4a5dbe7066a69617a2118c18041a136641f2d327ea9fbcf4e5b07349b4f): it graduated into the real Uniswap V2 pair with the last 20% and exactly 0.001 ETH, the curve kept no ETH, all LP at the dead address, the overshoot refunded. A swap through the real router afterwards worked, and the public page showed the live pool with its liquidity burned.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:
 
 1. **Hands-on walkthrough by the owner.** Everything since the redesign (six areas, token checker, airdrop, holder snapshot, burn, polish passes 1–2) has been verified by automated tests and screenshots only. Click through it locally and note what feels confusing or generic.
 2. **Private test deploy.** The Oracle Always Free ARM instance (Phoenix, AD-1) has no public IP because it's in a private subnet. Fix that in the Oracle console, then run `deploy/bootstrap.sh`.
-3. **Then features, guided by the walkthrough.** Candidates: ~~vesting~~ (done 2026-10-02, EVM), ~~the bonding-curve launch~~ (done 2026-10-15, EVM; a real-testnet run is next), and the platform-fee decision (curves would get a fee in a new template version).
+3. **Then features, guided by the walkthrough.** Candidates: ~~vesting~~ (done 2026-10-02, EVM), ~~the bonding-curve launch~~ (done 2026-10-15, EVM; Sepolia smoke 17/17), and the platform-fee decision (curves would get a fee in a new template version).
 
 Before anything goes public: rotate the Pinata, Etherscan and Helius keys that were shared in chat. They're only stored in the gitignored `backend/.env`.
