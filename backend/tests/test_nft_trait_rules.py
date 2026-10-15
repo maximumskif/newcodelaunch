@@ -144,3 +144,18 @@ def test_rule_routes_are_owner_only(app, client, tmp_path):
     assert [rule["id"] for rule in listed["rules"]] == [rule_id]
     assert client.delete(f"/api/nft/rules/{rule_id}", headers=auth(stranger)).status_code == 404
     assert client.delete(f"/api/nft/rules/{rule_id}", headers=auth(owner)).status_code == 204
+
+
+def test_every_possible_combination_can_be_generated(app, tmp_path):
+    # Regression: the last few unused combinations were left to chance (50
+    # random tries each), so asking for all 64 of a 4x4x4 collection failed
+    # 9 runs in 10. Repeated here so a lucky run can't hide it.
+    layers = tuple((f"L{i}", [f"T{i}{j}" for j in range(4)]) for i in range(3))
+    _, collection, _ = _collection(str(tmp_path), layers=layers)
+    for _ in range(5):
+        items = nft_generation.generate_collection(collection, 64, str(tmp_path))
+        assert len(_combos(items)) == 64
+        for item in items:
+            _db.session.delete(item)
+        _db.session.commit()
+        _db.session.refresh(collection)

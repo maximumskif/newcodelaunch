@@ -13,6 +13,7 @@ port of anything.
 
 from __future__ import annotations
 
+import math
 import os
 import random
 from typing import Any, Callable, Optional
@@ -124,6 +125,24 @@ def max_possible_combinations(collection: NFTCollection) -> int:
     return count(0, set())
 
 
+def _valid_combinations(collection: NFTCollection, rules: _Rules) -> list[list[NFTTrait]]:
+    """Every combination that satisfies the rules (only called when the
+    space is small enough to count, see max_possible_combinations)."""
+    found: list[list[NFTTrait]] = []
+
+    def walk(position: int, chosen: list[NFTTrait]) -> None:
+        if position == len(collection.layers):
+            found.append(list(chosen))
+            return
+        for trait in rules.allowed(collection.layers[position], position, {t.id for t in chosen}):
+            chosen.append(trait)
+            walk(position + 1, chosen)
+            chosen.pop()
+
+    walk(0, [])
+    return found
+
+
 def generate_collection(
     collection: NFTCollection,
     count: int,
@@ -165,6 +184,14 @@ def generate_collection(
     items: list[NFTGeneratedItem] = []
 
     rules = _Rules(collection)
+    signature_of = lambda combo: tuple((layer.name, trait.name) for layer, trait in zip(collection.layers, combo))  # noqa: E731
+    # Valid combinations not used yet, listed the first time random sampling
+    # keeps hitting used ones. Without it, asking for most of the possible
+    # combinations failed: finding the last few unused ones by chance takes
+    # far more than MAX_UNIQUE_ATTEMPTS_PER_ITEM tries (all 64 of a 4x4x4
+    # collection failed 9 runs in 10).
+    unused: Optional[dict[tuple, list[NFTTrait]]] = None
+    enumerable = max_combinations <= MAX_ENUMERATED_COMBINATIONS
     for offset in range(1, count + 1):
         token_index = start_index + offset
         selection = None
@@ -172,11 +199,26 @@ def generate_collection(
             candidate = _sample(collection, rules)
             if candidate is None:
                 continue
-            signature = tuple((layer.name, trait.name) for layer, trait in zip(collection.layers, candidate))
+            signature = signature_of(candidate)
             if signature not in used_combinations:
                 selection = candidate
-                used_combinations.add(signature)
                 break
+        if selection is None and enumerable:
+            if unused is None:
+                unused = {
+                    signature: combo
+                    for combo in _valid_combinations(collection, rules)
+                    if (signature := signature_of(combo)) not in used_combinations
+                }
+            if unused:
+                # Weighted by rarity, like a sampled pick.
+                choices = list(unused.values())
+                weights = [math.prod(trait.rarity_weight for trait in combo) for combo in choices]
+                selection = random.choices(choices, weights=weights if sum(weights) > 0 else None, k=1)[0]
+        if selection is not None:
+            used_combinations.add(signature_of(selection))
+            if unused is not None:
+                unused.pop(signature_of(selection), None)
 
         if selection is None:
             raise GenerationError(
