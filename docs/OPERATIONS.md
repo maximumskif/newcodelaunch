@@ -69,6 +69,11 @@ Optional (default in brackets):
 | `ETHERSCAN_API_URL` | [Etherscan V2] Exists for the e2e stub. |
 | `PLATFORM_FEE_RECIPIENT` | [unset → bonding-curve launches are refused, at compile and when recorded] The EVM wallet every curve pays the platform's share of its trading fee to (0.7% of each trade; the creator gets 0.3%), fixed in each curve's code when it launches. Changing it only affects later launches. `flask curve-fees` lists what's waiting in each curve. |
 | `PLATFORM_SOLANA_FEE_RECIPIENT` | [unset → NFT drops are refused, from their first step] The Solana wallet every drop's 0.01 SOL fee per mint goes to. The drop's own guard pays it on each mint, so there's nothing to collect. Fixed in each drop when it launches or its phases are edited. |
+| `TELEGRAM_BOT_TOKEN` | [unset → the launch bot is off; its webhook answers 404] The bot's token from @BotFather. See "The Telegram launch bot" below. |
+| `TELEGRAM_WEBHOOK_SECRET` | [unset → the webhook answers 404] Any long random string. Telegram sends it back with every update, and the webhook refuses updates without it. `bootstrap.sh` generates one. |
+| `PUBLIC_APP_URL` | [`http://localhost:5173`] The site's address, which the bot's launch links point at. Telegram only shows a button for an https link; otherwise the link is in the text. |
+| `PUBLIC_API_URL` | [unset] Where Telegram reaches this API (https), for `flask telegram-set-webhook`. The same as `PUBLIC_APP_URL` behind the Compose Caddy. |
+| `TELEGRAM_LAUNCH_NETWORK` | [`base`] The network a `/launch` opens on when the message doesn't name one. It needs a curve DEX. |
 | `DEX_OVERRIDES` | [unset — the built-in, verified Uniswap/PancakeSwap V2 addresses] JSON replacing a network's DEX for adding liquidity, e.g. `{"sepolia": {"name": "…", "router": "0x…", "factory": "0x…", "wrapped_native": "0x…"}}`. For local chains (the e2e suite); leave unset in production. |
 | `MAINTENANCE_INTERVAL_SECONDS` | [300] Read only by the scheduler script, not the app. |
 | `MORALIS_API_KEY`, `SOLSCAN_API_KEY` | Read into config but not used by any code yet. |
@@ -134,6 +139,18 @@ Both are idempotent, so running them twice at once is harmless. `backend/scripts
 ## Collecting the curve fees
 
 Each bonding curve charges 1% per trade and holds the fees in two shares: the platform's 0.7% until someone calls its `withdrawFees()`, which always pays the curve's fixed fee wallet, whoever sends it, and the creator's 0.3% until `claimCreatorFees()`, which only ever pays the wallet that launched it (creators claim from the curve's panel). Fees keep building up after graduation. A wallet that refuses ETH blocks only its own share, never the other share or trading. `flask curve-fees` lists every curve holding fees, with a total per network. To collect, send `withdrawFees()` to each curve from any funded wallet, for example `cast send <curve> "withdrawFees()" --rpc-url <rpc> --private-key <key>`. Nothing in the app does this on a schedule yet.
+
+## The Telegram launch bot
+
+People launch a coin by messaging the bot `/launch Moon Cat MCAT` (or `... on base sepolia`), in a private chat or a group it's in. It replies with a link to the bonding-curve launch page with the name, ticker and network filled in. They open it, connect their wallet and sign, so the launch is the same as one from the site: their wallet pays the gas and gets the 0.3% creator share. The bot holds no keys and spends nothing. `/help` (and `/start`) explain it and list the networks.
+
+Setting it up:
+
+1. In Telegram, message @BotFather, send `/newbot`, and pick a name and a username ending in `bot`. It answers with the token.
+2. Put the token in `TELEGRAM_BOT_TOKEN`, with `TELEGRAM_WEBHOOK_SECRET`, `PUBLIC_APP_URL` and `PUBLIC_API_URL` (see the table above), and restart the backend.
+3. Run `flask telegram-set-webhook` once (under Compose: `docker compose exec backend flask telegram-set-webhook`). It points Telegram at `/api/telegram/webhook` and sets the bot's command menu. The webhook answers each update in its response body, so it makes no outgoing requests.
+
+Locally, where Telegram can't reach the webhook, run `flask telegram-poll` instead, which asks Telegram for messages. It doesn't work while a webhook is set: `flask telegram-set-webhook --delete` removes it. Use a separate test bot for this, so the live bot's webhook stays in place.
 
 ## Rate limiting with more than one worker
 

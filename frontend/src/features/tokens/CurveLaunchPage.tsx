@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
 import { Button } from '../../components/ui/Button'
@@ -46,11 +46,15 @@ export function CurveLaunchPage() {
   const fee = useQuery({ queryKey: ['curve-fee'], queryFn: () => contractsApi.getCurveFee(), staleTime: Infinity })
   const networks = EVM_NETWORKS.filter((n) => dexes.data?.dexes[n.id])
 
-  const [network, setNetwork] = useState(sharedNetwork)
+  // The Telegram bot's /launch links fill these in (backend services/telegram_bot.py).
+  const [params] = useSearchParams()
+  const linkedNetwork = params.get('network')
+  const fromTelegram = params.get('ref') === 'telegram'
+  const [network, setNetwork] = useState(EVM_NETWORKS.some((n) => n.id === linkedNetwork) ? linkedNetwork! : sharedNetwork)
   const dex = dexes.data?.dexes[network]
   const native = EVM_NETWORKS.find((n) => n.id === network)?.nativeToken ?? 'ETH'
-  const [name, setName] = useState('')
-  const [symbol, setSymbol] = useState('')
+  const [name, setName] = useState(() => (params.get('name') ?? '').slice(0, 64))
+  const [symbol, setSymbol] = useState(() => (params.get('symbol') ?? '').slice(0, 16))
   const [supplyText, setSupplyText] = useState('1,000,000,000')
   // null until edited: follows the network's suggestion.
   const [targetEdited, setTargetText] = useState<string | null>(null)
@@ -125,6 +129,15 @@ export function CurveLaunchPage() {
         title="Bonding-curve launch"
         description="Launch a token people can buy right away, with no pool to fund. The price rises as people buy. When the curve has raised its target, everything raised and the rest of the supply go into a DEX pool by themselves, and that liquidity is burned so nobody can pull it."
       />
+
+      {fromTelegram && (
+        <p className="rounded-lg border border-accent-500/40 bg-surface p-4 text-sm text-ink-muted" data-testid="curve-from-telegram">
+          From Telegram: <span className="font-mono text-ink">{name.trim() || 'your coin'}</span>
+          {symbol.trim() && <span className="font-mono text-ink"> (${symbol.trim()})</span>} on{' '}
+          {EVM_NETWORKS.find((n) => n.id === network)?.label ?? network}.{' '}
+          {accessToken ? 'Check the details below, then launch and sign with your wallet.' : 'Sign in below and the launch form opens with it filled in.'}
+        </p>
+      )}
 
       {!accessToken ? (
         <SignInPrompt purpose="launch a token on a bonding curve" />

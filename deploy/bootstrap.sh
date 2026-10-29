@@ -9,6 +9,10 @@
 # 0.01 SOL fee per mint to, are required for a first run: without them the
 # backend refuses curve launches and drops.
 #
+# TELEGRAM_BOT_TOKEN (from @BotFather) is optional and turns on the launch
+# bot; then run `docker compose exec backend flask telegram-set-webhook`
+# once (see docs/OPERATIONS.md).
+#
 # Installs Docker and a firewall (SSH, HTTP, HTTPS only), clones the repo to
 # /opt/newcodelaunch, writes the three env files with freshly generated
 # secrets (never overwriting existing ones), and starts the stack. With no
@@ -83,6 +87,10 @@ ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-}
 PINATA_JWT=${PINATA_JWT:-}
 PLATFORM_FEE_RECIPIENT=$FEE_RECIPIENT
 PLATFORM_SOLANA_FEE_RECIPIENT=$SOLANA_FEE_RECIPIENT
+PUBLIC_APP_URL=https://$DOMAIN
+PUBLIC_API_URL=https://$DOMAIN
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+TELEGRAM_WEBHOOK_SECRET=$(secret)
 SOLANA_RPC_URL=$MAINNET_RPC
 SOLANA_DEVNET_RPC_URL=$DEVNET_RPC
 EOF

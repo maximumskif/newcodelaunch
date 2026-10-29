@@ -1236,6 +1236,17 @@ Every NFT drop launched here charges buyers **0.01 SOL per mint** (the owner's d
 
 **Verified**: pytest 437 (a drop without the fee, with another amount or another wallet isn't recorded; nor one with the fee in a phase; launch and edit send it; refused at step one without a wallet; a recorded drop's mints pass the fee wallet, and a drop from before doesn't). Vitest 285. Playwright: `candy-machine.spec.ts` shows the fee on both pages, and a real mint through the real Core Candy Guard program (cloned from devnet onto the local validator) pays the fee wallet exactly 10,000,000 lamports. The phases spec launches, edits and mints with the fee. The devnet smoke isn't updated to check the fee and wasn't run; it needs `PLATFORM_SOLANA_FEE_RECIPIENT` for `run-stack.sh`.
 
+## Telegram launch bot, 2026-10-29
+
+The first step to distribution: people launch a coin from Telegram (the owner chose Telegram first, since its bot API is free, and the signing-link model, so the platform holds no keys and pays no gas).
+
+- **How it works**: `/launch Moon Cat MCAT` (or `... on base sepolia`) replies with a link to `/tokens/curve?name=…&symbol=…&network=…&ref=telegram`. The launch page fills itself in from the link and says it came from Telegram. The person signs with their own wallet, so it's the site's launch exactly: same contract, same checks, and the 0.3% creator share goes to whoever signs. The ticker is the last word, upper-cased, with a `$` allowed. `on <network>` only counts when a curve network follows it, so "Hold On HODL" stays a name. Without one it opens on `TELEGRAM_LAUNCH_NETWORK` (default Base). `/help` and `/start` explain it, with the 1% split.
+- **Running it**: the webhook `POST /api/telegram/webhook` checks Telegram's secret header and replies in its response body. A broken update is still answered 200, so Telegram doesn't resend it forever. `flask telegram-set-webhook` registers the webhook and the command menu. `flask telegram-poll` runs the bot locally, without a public URL. Off (404) with no token. `bootstrap.sh` writes the public URLs and a webhook secret, plus the token if it's given.
+
+**Verified**: pytest 465 (28 new: parsing, networks and aliases, escaping, refusals, the secret, off without a token, polling offsets, the webhook registration). Vitest 287 (a Telegram link fills in and launches; an unknown network is ignored). Not yet tried against the real Telegram: that needs a bot token from @BotFather.
+
+**Next**: auto-post each launch to a Telegram channel (the bot can do it once it's an admin there), then X.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:

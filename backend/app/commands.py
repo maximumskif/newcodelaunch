@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta, timezone
 
 import click
+import requests
 from flask import current_app
 from flask.cli import with_appcontext
 
@@ -94,7 +96,53 @@ def curve_fees_command() -> None:
         click.echo(f"total on {network}: {Web3.from_wei(total, 'ether')}")
 
 
+@click.command("telegram-poll")
+@with_appcontext
+def telegram_poll_command() -> None:
+    """Runs the Telegram launch bot by polling, for local use where Telegram
+    can't reach the webhook. Stops on Ctrl+C. Telegram won't hand out
+    updates while a webhook is set: `flask telegram-set-webhook --delete`."""
+    from .services import telegram_bot
+
+    me = telegram_bot.call("getMe")
+    click.echo(f"@{me['username']} is listening. Ctrl+C stops it.")
+    offset = None
+    while True:
+        try:
+            offset = telegram_bot.poll_once(offset)
+        except requests.RequestException as exc:
+            click.echo(f"Telegram didn't answer ({exc}); retrying.", err=True)
+            time.sleep(5)
+
+
+@click.command("telegram-set-webhook")
+@click.option("--delete", is_flag=True, help="Remove the webhook, e.g. to poll locally instead.")
+@with_appcontext
+def telegram_set_webhook_command(delete: bool) -> None:
+    """Points the Telegram launch bot at this deployment's webhook,
+    PUBLIC_API_URL/api/telegram/webhook, with TELEGRAM_WEBHOOK_SECRET as the
+    header Telegram sends back."""
+    from .services import telegram_bot
+
+    if delete:
+        telegram_bot.call("deleteWebhook")
+        click.echo("Webhook removed.")
+        return
+    base = current_app.config.get("PUBLIC_API_URL")
+    secret = current_app.config.get("TELEGRAM_WEBHOOK_SECRET")
+    if not base or not base.startswith("https://") or not secret:
+        raise click.ClickException("Set PUBLIC_API_URL (https) and TELEGRAM_WEBHOOK_SECRET first.")
+    url = f"{base}/api/telegram/webhook"
+    telegram_bot.call("setWebhook", {"url": url, "secret_token": secret, "allowed_updates": ["message"]})
+    telegram_bot.call(
+        "setMyCommands",
+        {"commands": [{"command": "launch", "description": "Launch a coin: /launch Name TICKER"}, {"command": "help", "description": "How it works"}]},
+    )
+    click.echo(f"Telegram now sends updates to {url}")
+
 def register_cli(app) -> None:
     app.cli.add_command(prune_nonces_command)
     app.cli.add_command(reap_stale_generation_jobs_command)
     app.cli.add_command(curve_fees_command)
+    app.cli.add_command(telegram_poll_command)
+    app.cli.add_command(telegram_set_webhook_command)

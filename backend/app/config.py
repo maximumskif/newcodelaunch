@@ -174,6 +174,20 @@ class Config:
     # are refused.
     PLATFORM_SOLANA_FEE_RECIPIENT = os.environ.get("PLATFORM_SOLANA_FEE_RECIPIENT", "").strip()
 
+    # The Telegram launch bot (services/telegram_bot.py). Its token comes
+    # from @BotFather; unset, the bot is off and its webhook answers 404.
+    # The webhook secret is what Telegram sends back in every update's
+    # X-Telegram-Bot-Api-Secret-Token header (set with `flask
+    # telegram-set-webhook`), so nobody else can post updates to it.
+    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
+    # The site's public address: the bot's launch links point here.
+    PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "http://localhost:5173").strip().rstrip("/")
+    # Where Telegram reaches this API (https, no path), for the webhook.
+    PUBLIC_API_URL = os.environ.get("PUBLIC_API_URL", "").strip().rstrip("/")
+    # The network a /launch link opens on when the message doesn't name one.
+    TELEGRAM_LAUNCH_NETWORK = os.environ.get("TELEGRAM_LAUNCH_NETWORK", "").strip() or "base"
+
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
     # too, just at CoinGecko's lower public rate limit. MORALIS/SOLSCAN aren't used yet.

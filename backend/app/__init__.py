@@ -84,6 +84,10 @@ def create_app(config_object=Config):
 
     app.register_blueprint(token_pages_bp, url_prefix="/api/token-pages")
 
+    from .blueprints.telegram import telegram_bp
+
+    app.register_blueprint(telegram_bp, url_prefix="/api/telegram")
+
     from .commands import register_cli
 
     register_cli(app)
