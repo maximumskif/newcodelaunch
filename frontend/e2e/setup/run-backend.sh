@@ -76,6 +76,9 @@ export DEX_OVERRIDES='{"sepolia": {"name": "Uniswap V2 (local)", "router": "0x49
 # Where curve launches send their 1% trading fee: an address with no code
 # and no other use on anvil, so curve.spec.ts can check its balance exactly.
 export PLATFORM_FEE_RECIPIENT="0x000000000000000000000000000000000000FEE0"
+# And where NFT drops send their 0.01 SOL fee per mint: a fixed address with
+# no other use, so the Candy Machine specs can check its balance exactly.
+export PLATFORM_SOLANA_FEE_RECIPIENT="GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB"
 
 .venv/bin/flask db upgrade
 exec .venv/bin/flask run

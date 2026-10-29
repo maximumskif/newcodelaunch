@@ -36,6 +36,8 @@ def chain_guards(monkeypatch):
                 "start_date": "2026-09-01T00:00:00.000Z",
                 "end_date": None,
                 "merkle_root": None,
+                "platform_fee_lamports": "10000000",
+                "platform_fee_destination": "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB",
             },
             "groups": [],
         },

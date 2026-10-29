@@ -42,6 +42,7 @@ const baseStatus: PublicCandyMachineStatus = {
   allowlist: null,
   allowlisted: null,
   mint_price_sol: 0.5,
+  platform_fee_sol: 0.01,
   mint_limit: null,
   wallet_minted: null,
   limit_reached: false,
@@ -85,6 +86,24 @@ describe('MintBuyPage', () => {
 
     expect(await screen.findByText("Minting hasn't opened yet")).toBeInTheDocument()
     expect(screen.queryByText(/Mint for/)).not.toBeInTheDocument()
+  })
+
+  it('says what the platform fee adds to each mint, and nothing on a drop from before it', async () => {
+    vi.mocked(useWallet).mockReturnValue({
+      publicKey: { toBase58: () => 'BuyerPublicKey111111111111111111111111111' },
+      sendTransaction: vi.fn(),
+    } as unknown as ReturnType<typeof useWallet>)
+    const open: PublicCandyMachineStatus = { ...baseStatus, items_redeemed: 0, items_remaining: 10 }
+    vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue(open)
+    const { unmount } = renderAt(baseStatus.candy_machine)
+    await screen.findByRole('button', { name: /Mint for/ })
+    expect(screen.getByTestId('mint-platform-fee')).toHaveTextContent('Plus a 0.01 SOL platform fee per mint')
+    unmount()
+
+    vi.mocked(candyMachineApi.getPublicStatus).mockResolvedValue({ ...open, platform_fee_sol: null })
+    renderAt(baseStatus.candy_machine)
+    await screen.findByRole('button', { name: /Mint for/ })
+    expect(screen.queryByTestId('mint-platform-fee')).not.toBeInTheDocument()
   })
 
   it('keeps showing the "Minted!" confirmation after minting the last item, instead of flipping to "Sold out"', async () => {

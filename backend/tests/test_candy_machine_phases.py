@@ -21,6 +21,9 @@ PUBLIC_START = (NOW + timedelta(days=1)).replace(microsecond=0)
 ALLOWLIST = {"addresses": [CREATOR, FAN], "price_sol": 0.05, "start_date": WL_START.isoformat()}
 
 
+# The platform's fee guard as the chain reports it (TestConfig's fee wallet).
+PLATFORM_FEE = {"platform_fee_lamports": "10000000", "platform_fee_destination": "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB"}
+
 def _iso_z(value: datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
@@ -44,7 +47,7 @@ def _phased_guards(**overrides):
     }
     wl.update(overrides.get("wl", {}))
     pub.update(overrides.get("pub", {}))
-    empty = {"price_lamports": None, "payment_destination": None, "start_date": None, "end_date": None, "merkle_root": None}
+    empty = {"price_lamports": None, "payment_destination": None, "start_date": None, "end_date": None, "merkle_root": None, **PLATFORM_FEE}
     return {"default": empty, "groups": [wl, pub]}
 
 
@@ -189,7 +192,7 @@ def test_record_rejects_phases_that_exist_on_one_side_only(app, sidecar):
     with pytest.raises(candy_machine.ValidationError, match="has phases, but"):
         _record(collection, allowlist=None)
 
-    sidecar["guards"] = {"default": _phased_guards()["groups"][1], "groups": []}
+    sidecar["guards"] = {"default": {**_phased_guards()["groups"][1], **PLATFORM_FEE}, "groups": []}
     with pytest.raises(candy_machine.ValidationError, match="expected allowlist and public phases"):
         _record(collection)
 
@@ -323,6 +326,7 @@ def _single_phase_guards(price_lamports: str, start: datetime):
             "start_date": _iso_z(start),
             "end_date": None,
             "merkle_root": None,
+            **PLATFORM_FEE,
         },
         "groups": [],
     }
@@ -599,3 +603,68 @@ def test_config_lines_route_is_owner_only(app, client, monkeypatch, sidecar):
     assert client.post("/api/mint/prepare-config-lines", headers=headers(stranger), json=body).status_code == 404
     assert client.post("/api/mint/prepare-config-lines", headers=headers(user), json=body).status_code == 200
     assert client.post("/api/mint/prepare-config-lines", headers=headers(user), json={}).status_code == 400
+
+
+# --- the platform's fee per mint -----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "fee, message",
+    [
+        ({"platform_fee_lamports": None, "platform_fee_destination": None}, "platform fee doesn't match"),
+        ({"platform_fee_lamports": "1"}, "platform fee doesn't match"),
+        ({"platform_fee_destination": FAN}, "platform fee doesn't match"),
+    ],
+)
+def test_a_drop_without_the_platform_fee_is_not_recorded(app, sidecar, fee, message):
+    # A drop launched here must charge the fee, to the platform's wallet: one
+    # that didn't would still be listed and sold through this app.
+    _, collection = _collection()
+    guards = _phased_guards()
+    guards["default"].update(fee)
+    sidecar["guards"] = guards
+    with pytest.raises(candy_machine.ValidationError, match=message):
+        _record(collection)
+    assert CandyMachineDeployment.query.count() == 0
+
+
+def test_the_platform_fee_must_be_in_the_default_guards(app, sidecar):
+    _, collection = _collection()
+    guards = _phased_guards(wl=PLATFORM_FEE)
+    sidecar["guards"] = guards
+    with pytest.raises(candy_machine.ValidationError, match="default guards, not a phase"):
+        _record(collection)
+
+
+def test_a_recorded_drop_keeps_its_fee_and_mints_pay_it(app, sidecar):
+    _, collection = _collection()
+    deployment = _record(collection)
+    assert deployment.platform_fee_lamports == 10_000_000
+    assert deployment.platform_fee_destination == PLATFORM_FEE["platform_fee_destination"]
+    assert deployment.to_dict()["platform_fee_sol"] == 0.01
+    candy_machine.prepare_mint(CANDY, FAN)
+    assert sidecar["calls"][-1]["json"]["platformFeeDestination"] == PLATFORM_FEE["platform_fee_destination"]
+
+
+def test_a_drop_from_before_the_fee_mints_without_it(app, sidecar):
+    _deployment()  # no fee recorded
+    candy_machine.prepare_mint(CANDY, FAN)
+    assert "platformFeeDestination" not in sidecar["calls"][-1]["json"]
+
+
+def test_launch_and_edit_send_the_fee_and_refuse_without_a_fee_wallet(app, sidecar):
+    _, collection = _collection()
+    candy_machine.prepare_candy_machine_step(
+        collection=collection, network="solana_devnet", creator_wallet=CREATOR, collection_mint=CREATOR,
+        price_sol=0.2, go_live_date=PUBLIC_START.isoformat(),
+    )
+    launch = next(call["json"] for call in sidecar["calls"] if call["path"].endswith("prepare-candy-machine"))
+    assert launch["platformFee"] == {"destination": PLATFORM_FEE["platform_fee_destination"], "lamports": 10_000_000}
+
+    app.config["PLATFORM_SOLANA_FEE_RECIPIENT"] = ""
+    # Refused before the creator pays for anything, at the first step.
+    with pytest.raises(candy_machine.ValidationError, match="Solana fee wallet isn't set up"):
+        candy_machine.prepare_collection(
+            collection=collection, network="solana_devnet", creator_wallet=CREATOR,
+            price_sol=0.2, go_live_date=PUBLIC_START.isoformat(),
+        )

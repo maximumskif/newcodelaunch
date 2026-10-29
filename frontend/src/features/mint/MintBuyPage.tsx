@@ -238,6 +238,11 @@ export function MintBuyPage() {
                   >
                     {isBusy ? 'Minting…' : `Mint for ${status.mint_price_sol ?? status.price_sol} SOL`}
                   </Button>
+                  {status.platform_fee_sol !== null && (
+                    <p className="text-xs text-ink-faint" data-testid="mint-platform-fee">
+                      Plus a {status.platform_fee_sol} SOL platform fee per mint, and the network's transaction fee.
+                    </p>
+                  )}
                 </>
               )}
             </div>

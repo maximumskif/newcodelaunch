@@ -1226,6 +1226,16 @@ From a production audit (confirmed defects first).
 
 - **Found by the e2e run: vesting and time-lock panels never refreshed.** The several-wallets vesting test failed twice in full runs. The kept trace showed two panels with the same dates disagreeing: one "Fully vested", one still "Cliff until". So the chain was fine; one panel was showing a read that started just before the test's time jump and answered after it, and the panel never read again. Real users had the same problem in a slower form: a panel left open didn't update as tokens vested or unlocked. Both panels now refresh every 15 seconds, as the curve panel does. (A first guess, anvil answering from the previous block after a mine, was tested with a wait-for-the-new-block helper; it still failed, so that helper was dropped.) The Sepolia smoke is updated for the split but not run.
 
+## Platform fee on NFT mints, 2026-10-29
+
+Every NFT drop launched here charges buyers **0.01 SOL per mint** (the owner's decision: "keep fees reasonable"), paid to the platform's Solana wallet (`PLATFORM_SOLANA_FEE_RECIPIENT`), on top of the creator's price.
+
+- **How**: Metaplex's `solFixedFee` guard, in the drop's default guards next to the creator's `solPayment`, so every phase (allowlist and public) pays it. The program pays it on each mint, so there's nothing to withdraw. Phase edits rebuild every guard, so they carry the fee too, and add it to a drop launched before it.
+- **Checked like everything else**: recording a launch or a phase edit reads the guards back from the chain and refuses a drop whose default guards don't charge exactly the fee to the platform's wallet, or that puts a fee in a phase. Without the wallet set, drops are refused from their first step, before the creator pays for the collection. The drop records the fee (new columns `platform_fee_lamports` and `platform_fee_destination`, migration `737ef529e077`, round-tripped), so a mint passes the fee wallet the guard needs with no extra chain read, and drops from before the fee keep minting without it.
+- **Shown**: the launch summary ("Platform fee: 0.01 SOL per mint, paid by the buyer") and the public mint page ("Plus a 0.01 SOL platform fee per mint, and the network's transaction fee"). The public status adds `platform_fee_sol`.
+
+**Verified**: pytest 437 (a drop without the fee, with another amount or another wallet isn't recorded; nor one with the fee in a phase; launch and edit send it; refused at step one without a wallet; a recorded drop's mints pass the fee wallet, and a drop from before doesn't). Vitest 285. Playwright: `candy-machine.spec.ts` shows the fee on both pages, and a real mint through the real Core Candy Guard program (cloned from devnet onto the local validator) pays the fee wallet exactly 10,000,000 lamports. The phases spec launches, edits and mints with the fee. The devnet smoke isn't updated to check the fee and wasn't run; it needs `PLATFORM_SOLANA_FEE_RECIPIENT` for `run-stack.sh`.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:

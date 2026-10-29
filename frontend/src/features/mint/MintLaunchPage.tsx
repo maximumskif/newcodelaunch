@@ -12,6 +12,7 @@ import { PageHero } from '../../components/ui/PageHero'
 import {
   candyMachineApi,
   isSolanaMainnet,
+  PLATFORM_MINT_FEE_SOL,
   SOLANA_NETWORKS,
   type AllowlistPhaseInput,
   type CandyMachineDeployment,
@@ -413,6 +414,7 @@ export function MintLaunchPage() {
                 {isMainnet && <Badge tone="warning" className="ml-2">Mainnet</Badge>}
               </SummaryRow>
               <SummaryRow label="Public price">{priceSol ? `${priceSol} SOL` : '—'}</SummaryRow>
+              <SummaryRow label="Platform fee">{PLATFORM_MINT_FEE_SOL} SOL per mint, paid by the buyer</SummaryRow>
               <SummaryRow label="Opens">{goLiveDate ? new Date(goLiveDate).toLocaleString() : 'Not set'}</SummaryRow>
               <SummaryRow label="Per-wallet limit">{mintLimitText.trim() ? mintLimitText.trim() : 'None'}</SummaryRow>
               <SummaryRow label="Royalty">{sellerFeeBps ? `${Number(sellerFeeBps) / 100}%` : '—'}</SummaryRow>

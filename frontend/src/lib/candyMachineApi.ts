@@ -24,6 +24,11 @@ export interface SolanaNetworkInfo {
 // got its override). The devnet one doubles as the hook e2e tests use to
 // point confirmation/status reads at a local solana-test-validator (see
 // frontend/e2e/README.md).
+// The platform's fee per mint on drops launched here (the backend's
+// candy_machine.PLATFORM_MINT_FEE_LAMPORTS): paid by the buyer, on top of
+// the creator's price.
+export const PLATFORM_MINT_FEE_SOL = 0.01
+
 export const SOLANA_NETWORKS: SolanaNetworkInfo[] = [
   { id: 'solana_devnet', label: 'Solana Devnet', rpcUrl: SOLANA_DEVNET_RPC_URL, isTestnet: true },
   { id: 'solana', label: 'Solana Mainnet', rpcUrl: SOLANA_MAINNET_RPC_URL, isTestnet: false },
@@ -120,6 +125,9 @@ export interface PublicCandyMachineStatus {
   allowlisted: boolean | null
   // What that wallet would pay right now; null if it can't mint now.
   mint_price_sol: number | null
+  // The platform's fee, paid on top of the price by every mint; null on
+  // drops from before there was one.
+  platform_fee_sol: number | null
   mint_limit: number | null
   // Only with a wallet on a limited drop: its on-chain mint count.
   wallet_minted: number | null

@@ -169,6 +169,10 @@ class Config:
     # fee (the creator gets 0.3%), fixed in each curve's code. Unset: curve launches are refused rather than launched
     # with a fee going nowhere.
     PLATFORM_FEE_RECIPIENT = os.environ.get("PLATFORM_FEE_RECIPIENT", "").strip()
+    # The platform's Solana wallet: every NFT drop launched here charges a
+    # 0.01 SOL fee per mint, paid to it by the drop's own guard. Unset: drops
+    # are refused.
+    PLATFORM_SOLANA_FEE_RECIPIENT = os.environ.get("PLATFORM_SOLANA_FEE_RECIPIENT", "").strip()
 
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
@@ -219,6 +223,8 @@ class TestConfig(Config):
     # isn't) need a non-empty value or every such call 500s before the mock
     # is ever reached.
     CANDY_MACHINE_SHARED_SECRET = "test-shared-secret"
+    # Drops refuse to launch without it (candy_machine.platform_mint_fee).
+    PLATFORM_SOLANA_FEE_RECIPIENT = "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB"
     # Quiets the per-request JSON log line (see logging_config.py) across
     # 130+ tests' worth of requests — tests that specifically want to
     # assert on logging behavior use caplog.set_level(..., logger="app")

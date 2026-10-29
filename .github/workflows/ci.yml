@@ -216,7 +216,7 @@ jobs:
           secret() { openssl rand -hex 32; }
           shared=$(secret)
           printf 'DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\n' "$(secret)" > deploy/.env
-          printf 'SECRET_KEY=%s\nJWT_SECRET_KEY=%s\nCANDY_MACHINE_SHARED_SECRET=%s\nPLATFORM_FEE_RECIPIENT=0x000000000000000000000000000000000000FEE0\n' "$(secret)" "$(secret)" "$shared" > backend/.env
+          printf 'SECRET_KEY=%s\nJWT_SECRET_KEY=%s\nCANDY_MACHINE_SHARED_SECRET=%s\nPLATFORM_FEE_RECIPIENT=0x000000000000000000000000000000000000FEE0\nPLATFORM_SOLANA_FEE_RECIPIENT=GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB\n' "$(secret)" "$(secret)" "$shared" > backend/.env
           printf 'PORT=4000\nCANDY_MACHINE_SHARED_SECRET=%s\n' "$shared" > services/candy-machine/.env
 
       - name: Build and start

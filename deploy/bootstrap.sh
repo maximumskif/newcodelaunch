@@ -2,10 +2,12 @@
 # One-time setup of a fresh Ubuntu 24.04 server, run as root:
 #
 #   curl -fsSL https://raw.githubusercontent.com/maximumskif/newcodelaunch/main/deploy/bootstrap.sh -o bootstrap.sh
-#   PLATFORM_FEE_RECIPIENT=0x... ETHERSCAN_API_KEY=... HELIUS_API_KEY=... PINATA_JWT=... bash bootstrap.sh [domain]
+#   PLATFORM_FEE_RECIPIENT=0x... PLATFORM_SOLANA_FEE_RECIPIENT=... ETHERSCAN_API_KEY=... HELIUS_API_KEY=... PINATA_JWT=... bash bootstrap.sh [domain]
 #
 # PLATFORM_FEE_RECIPIENT, the EVM wallet bonding curves pay the platform's 0.7% (of a 1% fee) to,
-# is required for a first run: without it the backend refuses curve launches.
+# and PLATFORM_SOLANA_FEE_RECIPIENT, the Solana wallet NFT drops pay their
+# 0.01 SOL fee per mint to, are required for a first run: without them the
+# backend refuses curve launches and drops.
 #
 # Installs Docker and a firewall (SSH, HTTP, HTTPS only), clones the repo to
 # /opt/newcodelaunch, writes the three env files with freshly generated
@@ -20,6 +22,7 @@ set -euo pipefail
 REPO_URL="${REPO_URL:-https://github.com/maximumskif/newcodelaunch.git}"
 APP_DIR="${APP_DIR:-/opt/newcodelaunch}"
 FEE_RECIPIENT="${PLATFORM_FEE_RECIPIENT:-}"
+SOLANA_FEE_RECIPIENT="${PLATFORM_SOLANA_FEE_RECIPIENT:-}"
 
 # Checked before installing anything. A re-run keeps the existing backend/.env.
 if [ ! -f "$APP_DIR/backend/.env" ] && [ -z "$FEE_RECIPIENT" ]; then
@@ -28,6 +31,15 @@ if [ ! -f "$APP_DIR/backend/.env" ] && [ -z "$FEE_RECIPIENT" ]; then
 fi
 if [ -n "$FEE_RECIPIENT" ] && ! [[ "$FEE_RECIPIENT" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
   echo "PLATFORM_FEE_RECIPIENT isn't an EVM address: $FEE_RECIPIENT" >&2
+  exit 1
+fi
+if [ ! -f "$APP_DIR/backend/.env" ] && [ -z "$SOLANA_FEE_RECIPIENT" ]; then
+  echo "Set PLATFORM_SOLANA_FEE_RECIPIENT to the platform's Solana fee wallet." >&2
+  exit 1
+fi
+# Base58, 32 to 44 characters; the backend checks it fully when a drop launches.
+if [ -n "$SOLANA_FEE_RECIPIENT" ] && ! [[ "$SOLANA_FEE_RECIPIENT" =~ ^[1-9A-HJ-NP-Za-km-z]{32,44}$ ]]; then
+  echo "PLATFORM_SOLANA_FEE_RECIPIENT isn't a Solana address: $SOLANA_FEE_RECIPIENT" >&2
   exit 1
 fi
 
@@ -70,6 +82,7 @@ CANDY_MACHINE_SHARED_SECRET=$SHARED_SECRET
 ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-}
 PINATA_JWT=${PINATA_JWT:-}
 PLATFORM_FEE_RECIPIENT=$FEE_RECIPIENT
+PLATFORM_SOLANA_FEE_RECIPIENT=$SOLANA_FEE_RECIPIENT
 SOLANA_RPC_URL=$MAINNET_RPC
 SOLANA_DEVNET_RPC_URL=$DEVNET_RPC
 EOF

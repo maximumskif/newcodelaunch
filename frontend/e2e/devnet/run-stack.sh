@@ -40,6 +40,8 @@ bash "$SCRIPT_DIR/../setup/run-pinata-stub.sh" > "$WORK/pinata.log" 2>&1 &
   export OPENAI_API_KEY="" ETHERSCAN_API_KEY="${ETHERSCAN_API_KEY:-}"
   # The curve smoke launches with this as its fee wallet; unset, curve launches are refused.
   export PLATFORM_FEE_RECIPIENT="${PLATFORM_FEE_RECIPIENT:-}"
+  # The devnet smoke's drop pays its mint fee here; unset, drops are refused.
+  export PLATFORM_SOLANA_FEE_RECIPIENT="${PLATFORM_SOLANA_FEE_RECIPIENT:-}"
   .venv/bin/flask db upgrade
   exec .venv/bin/flask run --port 5100
 ) > "$WORK/backend.log" 2>&1 &

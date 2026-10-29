@@ -68,6 +68,7 @@ Optional (default in brackets):
 | `OPENAI_BASE_URL` (`app/services/ai_traits.py`) | ["" → the SDK's default] Exists for the e2e stub. |
 | `ETHERSCAN_API_URL` | [Etherscan V2] Exists for the e2e stub. |
 | `PLATFORM_FEE_RECIPIENT` | [unset → bonding-curve launches are refused, at compile and when recorded] The EVM wallet every curve pays the platform's share of its trading fee to (0.7% of each trade; the creator gets 0.3%), fixed in each curve's code when it launches. Changing it only affects later launches. `flask curve-fees` lists what's waiting in each curve. |
+| `PLATFORM_SOLANA_FEE_RECIPIENT` | [unset → NFT drops are refused, from their first step] The Solana wallet every drop's 0.01 SOL fee per mint goes to. The drop's own guard pays it on each mint, so there's nothing to collect. Fixed in each drop when it launches or its phases are edited. |
 | `DEX_OVERRIDES` | [unset — the built-in, verified Uniswap/PancakeSwap V2 addresses] JSON replacing a network's DEX for adding liquidity, e.g. `{"sepolia": {"name": "…", "router": "0x…", "factory": "0x…", "wrapped_native": "0x…"}}`. For local chains (the e2e suite); leave unset in production. |
 | `MAINTENANCE_INTERVAL_SECONDS` | [300] Read only by the scheduler script, not the app. |
 | `MORALIS_API_KEY`, `SOLSCAN_API_KEY` | Read into config but not used by any code yet. |

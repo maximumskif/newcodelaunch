@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateSigner, none, publicKey, sol, some, type PublicKey, type TransactionBuilder } from "@metaplex-foundation/umi";
+import { generateSigner, lamports, none, publicKey, sol, some, type PublicKey, type TransactionBuilder } from "@metaplex-foundation/umi";
 import { setComputeUnitLimit } from "@metaplex-foundation/mpl-toolbox";
 import { createCollection, ruleSet } from "@metaplex-foundation/mpl-core";
 import {
@@ -160,26 +160,50 @@ function allowlistProblem(allowlist: AllowlistPhase, publicStart: string): strin
 // but the optional mint limit in the default set, so every mint must name
 // a group. Without: price, start date (and mint limit) in the default set,
 // no groups.
+// The platform's fee per mint, as the backend sends it.
+interface PlatformFee {
+  destination: string;
+  lamports: number;
+}
+
+function platformFeeProblem(fee: unknown): string | null {
+  const value = fee as Partial<PlatformFee> | undefined;
+  if (!value || typeof value.destination !== "string" || !Number.isSafeInteger(value.lamports) || value.lamports! <= 0) {
+    return "platformFee must be { destination, lamports } with a positive whole number of lamports";
+  }
+  try {
+    publicKey(value.destination);
+  } catch {
+    return "platformFee.destination must be a Solana address";
+  }
+  return null;
+}
+
+// The platform fee is a default guard (solFixedFee, next to the creator's
+// solPayment), so every phase pays it.
 function buildGuardConfig(
   creator: PublicKey,
   priceSol: number,
   goLiveDate: string,
+  platformFee: PlatformFee,
   allowlist?: AllowlistPhase,
   mintLimit?: number | null,
 ) {
   const limit = mintLimit ? { mintLimit: { id: MINT_LIMIT_ID, limit: mintLimit } } : {};
+  const fee = { solFixedFee: { lamports: lamports(platformFee.lamports), destination: publicKey(platformFee.destination) } };
   if (!allowlist) {
     return {
       guards: {
         solPayment: { lamports: sol(priceSol), destination: creator },
         startDate: { date: goLiveDate },
+        ...fee,
         ...limit,
       },
       groups: [],
     };
   }
   return {
-    guards: { ...limit },
+    guards: { ...fee, ...limit },
     groups: [
       {
         label: ALLOWLIST_GROUP,
@@ -228,6 +252,7 @@ interface PrepareCandyMachineBody {
   goLiveDate?: string;
   allowlist?: AllowlistPhase;
   mintLimit?: number | null;
+  platformFee?: PlatformFee;
 }
 
 function utf8Length(value: string): number {
@@ -383,6 +408,11 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
     res.status(400).json({ error: limitProblem });
     return;
   }
+  const feeProblem = platformFeeProblem(body.platformFee);
+  if (feeProblem) {
+    res.status(400).json({ error: feeProblem });
+    return;
+  }
 
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
@@ -401,7 +431,7 @@ candyMachineRouter.post("/prepare-candy-machine", async (req, res) => {
         uriLength,
         isSequential: false,
       },
-      ...buildGuardConfig(creator.publicKey, body.priceSol, body.goLiveDate, body.allowlist, body.mintLimit),
+      ...buildGuardConfig(creator.publicKey, body.priceSol, body.goLiveDate, body.platformFee!, body.allowlist, body.mintLimit),
     });
 
     // The creation transaction carries as many items as still fit; the
@@ -471,6 +501,7 @@ interface PrepareUpdateBody {
   goLiveDate?: string;
   allowlist?: AllowlistPhase;
   mintLimit?: number | null;
+  platformFee?: PlatformFee;
 }
 
 // Edit a live drop's phases: replaces its whole guard configuration (public
@@ -511,13 +542,18 @@ candyMachineRouter.post("/:candyMachineId/prepare-update", async (req, res) => {
     res.status(400).json({ error: limitProblem });
     return;
   }
+  const feeProblem = platformFeeProblem(body.platformFee);
+  if (feeProblem) {
+    res.status(400).json({ error: feeProblem });
+    return;
+  }
 
   try {
     const umi = createUmiForCreator(body.network, body.creatorPublicKey);
     const candyMachine = await fetchCandyMachine(umi, publicKey(req.params.candyMachineId), { commitment: READ_COMMITMENT });
     const builder = updateCandyGuard(umi, {
       candyGuard: candyMachine.mintAuthority,
-      ...buildGuardConfig(umi.identity.publicKey, body.priceSol, body.goLiveDate, body.allowlist, body.mintLimit),
+      ...buildGuardConfig(umi.identity.publicKey, body.priceSol, body.goLiveDate, body.platformFee!, body.allowlist, body.mintLimit),
     });
     const transaction = await serializeSigned(umi, builder);
     res.json({ transaction });
@@ -613,8 +649,11 @@ candyMachineRouter.get("/:candyMachineId/guards", async (req, res) => {
       const endDate = unwrap(guards.endDate);
       const allowList = unwrap(guards.allowList);
       const mintLimit = unwrap(guards.mintLimit);
+      const fixedFee = unwrap(guards.solFixedFee);
       return {
         mint_limit: mintLimit ? mintLimit.limit : null,
+        platform_fee_lamports: fixedFee ? fixedFee.lamports.basisPoints.toString() : null,
+        platform_fee_destination: fixedFee ? fixedFee.destination : null,
         price_lamports: solPayment ? solPayment.lamports.basisPoints.toString() : null,
         payment_destination: solPayment ? solPayment.destination : null,
         start_date: startDate ? new Date(Number(startDate.date) * 1000).toISOString() : null,
@@ -655,6 +694,9 @@ interface MintBody {
   // Set when the drop has a per-wallet mint limit: the guard needs its
   // counter id at mint time to find (and bump) this wallet's count.
   mintLimit?: boolean;
+  // Where the drop's platform-fee guard pays; unset for drops from before
+  // the fee.
+  platformFeeDestination?: string;
 }
 
 // Builds a buyer's mint transaction — the distinct "buy" flow deferred when
@@ -710,6 +752,7 @@ candyMachineRouter.post("/:candyMachineId/mint", async (req, res) => {
       group,
       mintArgs: {
         solPayment,
+        ...(body.platformFeeDestination ? { solFixedFee: { destination: publicKey(body.platformFeeDestination) } } : {}),
         ...(body.group === ALLOWLIST_GROUP ? { allowList: { merkleRoot: getMerkleRoot(body.allowlist!) } } : {}),
         ...(body.mintLimit ? { mintLimit: { id: MINT_LIMIT_ID } } : {}),
       },

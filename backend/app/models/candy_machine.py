@@ -47,6 +47,11 @@ class CandyMachineDeployment(db.Model):
     # Optional per-wallet mint limit across all phases (the mintLimit guard,
     # in the default guard set). Checked against the chain like the rest.
     mint_limit = db.Column(db.Integer, nullable=True)
+    # The platform's fee per mint (the solFixedFee guard, in the default set,
+    # so every phase pays it), as checked on-chain when recorded. Null on
+    # drops launched before there was one.
+    platform_fee_lamports = db.Column(db.BigInteger, nullable=True)
+    platform_fee_destination = db.Column(db.String(64), nullable=True)
 
     creator_wallet = db.Column(db.String(64), nullable=False)
     transaction_signatures = db.Column(db.JSON, nullable=False, default=list)
@@ -74,6 +79,7 @@ class CandyMachineDeployment(db.Model):
                 else None
             ),
             "mint_limit": self.mint_limit,
+            "platform_fee_sol": self.platform_fee_lamports / 1_000_000_000 if self.platform_fee_lamports else None,
             "creator_wallet": self.creator_wallet,
             "transaction_signatures": self.transaction_signatures,
             "explorer_url": self.explorer_url,

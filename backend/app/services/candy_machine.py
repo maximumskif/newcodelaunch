@@ -29,6 +29,9 @@ from ..models.nft import NFTCollection
 from . import blockchain, ipfs, nft_collections
 
 SOLANA_NETWORKS = ("solana_devnet", "solana")
+# The platform's fee per mint, charged by every drop launched here on top of
+# the creator's price (the solFixedFee guard): 0.01 SOL.
+PLATFORM_MINT_FEE_LAMPORTS = 10_000_000
 
 
 class ValidationError(ValueError):
@@ -150,6 +153,17 @@ def _sidecar_network(network: str) -> str:
         raise CandyMachineServiceError(f"No sidecar network mapping for '{network}'") from None
 
 
+def platform_mint_fee() -> dict[str, Any]:
+    """The platform's fee per mint and the wallet it goes to. Unset, drops
+    are refused rather than launched without it."""
+    destination = (current_app.config.get("PLATFORM_SOLANA_FEE_RECIPIENT") or "").strip()
+    try:
+        Pubkey.from_string(destination)
+    except ValueError as exc:
+        raise ValidationError("Drops aren't available: the platform's Solana fee wallet isn't set up") from exc
+    return {"destination": destination, "lamports": PLATFORM_MINT_FEE_LAMPORTS}
+
+
 def _validate_launch_inputs(collection: NFTCollection, network: str, price_sol: float) -> list:
     """Shared validation for both launch steps below. Both steps re-run this
     even though only prepare_candy_machine_step's transaction actually needs
@@ -161,6 +175,7 @@ def _validate_launch_inputs(collection: NFTCollection, network: str, price_sol: 
         raise ValidationError(f"network must be one of: {', '.join(SOLANA_NETWORKS)}")
     if price_sol <= 0:
         raise ValidationError("price_sol must be a positive number")
+    platform_mint_fee()
 
     published_items = [item for item in collection.items if item.ipfs_metadata_hash]
     if not published_items:
@@ -320,6 +335,7 @@ def prepare_candy_machine_step(
         "uriPrefix": folder["base_uri"],
         "priceSol": price_sol,
         "goLiveDate": go_live_date,
+        "platformFee": platform_mint_fee(),
     }
     if phase:
         payload["allowlist"] = {
@@ -387,6 +403,15 @@ def _verify_guards_on_chain(
                 raise mismatch("end date")
         elif on_chain_end is None or int(_parse_iso(on_chain_end, "end_date").timestamp()) != int(end.timestamp()):
             raise mismatch("end date")
+
+    # The platform fee lives in the default set too, so every phase pays it:
+    # a drop without it (or paying it elsewhere) would still be listed here.
+    fee = platform_mint_fee()
+    default_fee = guards.get("default", {})
+    if default_fee.get("platform_fee_lamports") != str(fee["lamports"]) or default_fee.get("platform_fee_destination") != fee["destination"]:
+        raise ValidationError("On-chain platform fee doesn't match: every drop here charges it, paid to the platform's wallet")
+    if any(group.get("platform_fee_lamports") is not None for group in guards.get("groups", [])):
+        raise ValidationError("On-chain platform fee must be in the default guards, not a phase's")
 
     # The per-wallet limit lives in the default set (applies to every
     # phase); no group should carry its own.
@@ -513,6 +538,8 @@ def record_candy_machine(
         allowlist=phase,
         prices_seen=_prices(price_sol, phase),
         mint_limit=limit,
+        platform_fee_lamports=PLATFORM_MINT_FEE_LAMPORTS,
+        platform_fee_destination=platform_mint_fee()["destination"],
         creator_wallet=creator_wallet,
         transaction_signatures=transaction_signatures,
         explorer_url=_explorer_url(network, candy_machine),
@@ -569,6 +596,9 @@ def prepare_phase_update(
         "creatorPublicKey": deployment.creator_wallet,
         "priceSol": price,
         "goLiveDate": go_live.isoformat(),
+        # An edit rebuilds every guard, so it carries the fee too (and adds it
+        # to a drop from before there was one).
+        "platformFee": platform_mint_fee(),
     }
     if phase:
         payload["allowlist"] = {"addresses": phase["addresses"], "priceSol": phase["price_sol"], "startDate": phase["start_date"]}
@@ -607,6 +637,8 @@ def apply_phase_update(
     deployment.go_live_date = go_live
     deployment.allowlist = phase
     deployment.mint_limit = limit
+    deployment.platform_fee_lamports = PLATFORM_MINT_FEE_LAMPORTS
+    deployment.platform_fee_destination = platform_mint_fee()["destination"]
     deployment.prices_seen = sorted({*previous, *_prices(price, phase)})
     # New list objects, not in-place appends: SQLAlchemy's plain JSON type
     # doesn't track mutation inside a list.
@@ -746,6 +778,8 @@ def get_public_candy_machine_status(candy_machine_address: str, wallet: str | No
         "collection_description": collection.description if collection else None,
         "preview_image": preview_image,
         "price_sol": deployment.price_sol,
+        # Paid on top of the price by every mint; null on drops from before.
+        "platform_fee_sol": deployment.platform_fee_lamports / LAMPORTS_PER_SOL if deployment.platform_fee_lamports else None,
         "go_live_date": go_live_date.isoformat(),
         "is_live": datetime.now(timezone.utc) >= go_live_date,
         **_phase_view(deployment, wallet),
@@ -817,6 +851,10 @@ def prepare_mint(candy_machine_address: str, minter_wallet: str) -> dict[str, An
         "collectionMint": deployment.collection_mint,
         "creatorPublicKey": deployment.creator_wallet,
     }
+    # Where this drop's fee guard pays (as recorded from the chain); none on
+    # drops from before the fee.
+    if deployment.platform_fee_destination:
+        payload["platformFeeDestination"] = deployment.platform_fee_destination
 
     # Refuse up front what the on-chain guards would reject anyway, with a
     # message a visitor can act on instead of a failed wallet simulation.

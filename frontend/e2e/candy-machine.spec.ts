@@ -2,7 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { expect, test } from '@playwright/test'
-import { Connection } from '@solana/web3.js'
+import { Connection, PublicKey } from '@solana/web3.js'
 
 import {
   CORE_CANDY_GUARD_PROGRAM_ID,
@@ -17,6 +17,8 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 const API_BASE_URL = 'http://localhost:5000/api'
+// run-backend.sh's PLATFORM_SOLANA_FEE_RECIPIENT: each mint pays it 0.01 SOL.
+const FEE_WALLET = new PublicKey('GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB')
 
 const AUTH_STORAGE_KEY = 'nocode-launchpad.auth'
 
@@ -162,6 +164,7 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   // A go-live date already in the past — the public storefront step below
   // needs is_live to be true immediately, not after some future opening time.
   await goLiveInput.fill('2020-01-01T00:00')
+  await expect(page.getByText('0.01 SOL per mint, paid by the buyer')).toBeVisible()
 
   await page.getByRole('button', { name: 'Launch drop' }).click()
 
@@ -182,9 +185,14 @@ test('a real Candy Machine launch and public mint — against a real local Solan
   // services/candy-machine/src/routes/candyMachine.ts), so the status is
   // readable as soon as the launch is confirmed.
   await expect(page.getByText('Live now')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByTestId('mint-platform-fee')).toContainText('0.01 SOL platform fee per mint')
+  const connection = new Connection(VALIDATOR_RPC_URL, 'confirmed')
+  const feeBefore = await connection.getBalance(FEE_WALLET)
   await page.getByRole('button', { name: /^Mint for/ }).click()
 
   await expect(page.getByText('Minted!')).toBeVisible({ timeout: 30_000 })
+  // The drop's own guard paid the platform exactly its fee, on chain.
+  expect((await connection.getBalance(FEE_WALLET)) - feeBefore).toBe(10_000_000)
 
   // The creator's dashboard (/mint with no collection) reads that sale back
   // live from the chain: 1 of 1 minted, sold out, revenue = 1 x the 0.1 SOL
