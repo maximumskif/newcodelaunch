@@ -87,6 +87,9 @@ const CURVE_ABI = parseAbi([
   'function feeRecipient() view returns (address)',
   'function feesOwed() view returns (uint256)',
   'function withdrawFees() returns (uint256)',
+  'function creator() view returns (address)',
+  'function creatorFeesOwed() view returns (uint256)',
+  'function claimCreatorFees() returns (uint256)',
 ])
 const SWAP_ABI = parseAbi(['function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable returns (uint256[])'])
 const VESTING_ABI = parseAbi(['function releasable() view returns (uint256)', 'function released() view returns (uint256)', 'function release()'])
@@ -251,7 +254,8 @@ async function curveSmoke() {
   ok('curve recorded after the backend checked its code and DEX', Boolean(row.id), etherscan('address', curve))
   const read = (functionName, args = []) => publicClient.readContract({ address: curve, abi: CURVE_ABI, functionName, args })
   const creatorRaised = await read('ethReserve')
-  ok('creator buy raised what was sent less the 1% fee', creatorRaised + (await read('feesOwed')) === creatorBuy && creatorRaised === (creatorBuy * 100n) / 101n)
+  ok('creator buy raised what was sent less the 1% fee', creatorRaised + (await read('feesOwed')) + (await read('creatorFeesOwed')) === creatorBuy && creatorRaised === (creatorBuy * 100n) / 101n)
+  ok('the launching wallet is the creator', (await read('creator')).toLowerCase() === me.toLowerCase())
   ok("the fee goes to the platform's wallet", (await read('feeRecipient')).toLowerCase() === fee.recipient.toLowerCase(), fee.recipient)
   ok('creator holds what the curve sold', (await read('balanceOf', [me])) === (await read('tokensSold')))
   const pair = await read('pair')
@@ -287,10 +291,13 @@ async function curveSmoke() {
   const raised = await read('ethReserve')
   ok('pool holds the last 20% and everything raised', (tokenIs0 ? r0 : r1) === (await read('poolSupply')) && (tokenIs0 ? r1 : r0) === raised, `${formatEther(raised)} ETH`)
   const owed = await read('feesOwed')
-  ok('curve kept only the fees', (await publicClient.getBalance({ address: curve })) === owed && owed * 100n >= raised, `${formatEther(owed)} ETH`)
+  const creatorOwed = await read('creatorFeesOwed')
+  ok('curve kept only the fees, split 0.7 : 0.3', (await publicClient.getBalance({ address: curve })) === owed + creatorOwed && (owed + creatorOwed) * 100n >= raised && creatorOwed * 2n < owed, `${formatEther(owed)} + ${formatEther(creatorOwed)} ETH`)
   const feeWalletBefore = await publicClient.getBalance({ address: fee.recipient })
   await send("anyone sends the fees on: the buyer does", { address: curve, abi: CURVE_ABI, functionName: 'withdrawFees' }, buyer)
-  ok("the platform's wallet got the fees, the curve kept nothing", (await publicClient.getBalance({ address: fee.recipient })) - feeWalletBefore === owed && (await publicClient.getBalance({ address: curve })) === 0n)
+  ok("the platform's wallet got its share", (await publicClient.getBalance({ address: fee.recipient })) - feeWalletBefore === owed)
+  await send('the creator claims its share', { address: curve, abi: CURVE_ABI, functionName: 'claimCreatorFees' })
+  ok('the curve kept nothing', (await read('creatorFeesOwed')) === 0n && (await publicClient.getBalance({ address: curve })) === 0n)
   const lpSupply = await publicClient.readContract({ address: pair, abi: parseAbi(['function totalSupply() view returns (uint256)']), functionName: 'totalSupply' })
   ok('all LP burned', (await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: ['0x000000000000000000000000000000000000dEaD'] })) === lpSupply - 1000n)
 

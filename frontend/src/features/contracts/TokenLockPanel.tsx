@@ -26,6 +26,8 @@ export function TokenLockPanel({ deployment }: { deployment: ContractDeployment 
   const reads = useQuery({
     queryKey: ['token-lock', chainId, lock],
     enabled: Boolean(publicClient),
+    // It unlocks by the chain's clock: keep up with it (see VestingPanel).
+    refetchInterval: 15_000,
     queryFn: async () => {
       const client = publicClient!
       const [token, beneficiary, releaseTime, locked, block] = await Promise.all([

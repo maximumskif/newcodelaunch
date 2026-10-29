@@ -211,13 +211,13 @@ def list_dexes():
 
 @contracts_bp.get("/curve-fee")
 def curve_fee():
-    """What a bonding-curve launch pays the platform, and where it goes:
-    the launch form fills FEE_RECIPIENT from this."""
+    """What a bonding-curve launch's trades pay, and where the platform's
+    share goes: the launch form fills FEE_RECIPIENT from this."""
     try:
         recipient = contracts.curve_fee_recipient()
     except contracts.CurveFeeNotConfiguredError as exc:
         return jsonify(error=str(exc)), 503
-    return jsonify(fee_bps=contracts.CURVE_FEE_BPS, recipient=recipient)
+    return jsonify(fee_bps=contracts.CURVE_FEE_BPS, creator_fee_bps=contracts.CURVE_CREATOR_FEE_BPS, recipient=recipient)
 
 
 @contracts_bp.get("/deployments/<deployment_id>/liquidity")

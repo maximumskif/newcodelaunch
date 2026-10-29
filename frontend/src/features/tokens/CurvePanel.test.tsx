@@ -21,13 +21,14 @@ vi.mock('wagmi', () => ({
 
 const CURVE = '0x7777777777777777777777777777777777777777'
 const WALLET = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+const CREATOR = '0x9999999999999999999999999999999999999999'
 const writeContractAsync = vi.fn()
 const connect = vi.fn()
 // A billion tokens, a 4 ETH target, 1 ETH raised so far (1.01 ETH paid, fee included).
 const terms = curveTerms(1_000_000_000n, parseEther('4'))
 const state = { ethReserve: parseEther('1'), tokensSold: quoteBuy(terms, { ethReserve: 0n, tokensSold: 0n }, parseEther('1.01')).tokens }
 
-function mockCurve({ wallet = WALLET as string | null, graduated = false, held = parseEther('1000000') } = {}) {
+function mockCurve({ wallet = WALLET as string | null, graduated = false, held = parseEther('1000000'), creator = CREATOR as string, creatorFees = parseEther('0.012') } = {}) {
   vi.mocked(useAccount).mockReturnValue({ address: wallet ?? undefined } as unknown as ReturnType<typeof useAccount>)
   vi.mocked(useChainId).mockReturnValue(11155111)
   vi.mocked(useConnect).mockReturnValue({ connectors: [{ id: 'injected' }], connect } as unknown as ReturnType<typeof useConnect>)
@@ -47,6 +48,8 @@ function mockCurve({ wallet = WALLET as string | null, graduated = false, held =
     graduated,
     pair: '0x8888888888888888888888888888888888888888',
     balanceOf: held,
+    creator,
+    creatorFeesOwed: creatorFees,
   }
   vi.mocked(usePublicClient).mockReturnValue({
     readContract: vi.fn(async ({ functionName }: { functionName: string }) => values[functionName]),
@@ -68,7 +71,9 @@ describe('CurvePanel', () => {
     expect(await screen.findByTestId('curve-progress')).toHaveTextContent('25% · 1 ETH of 4 ETH raised')
     expect(screen.getByRole('progressbar', { name: 'Raised toward graduation' })).toHaveAttribute('aria-valuenow', '25')
     expect(screen.getByText('On the bonding curve')).toBeInTheDocument()
-    expect(screen.getByText('Every buy and sell on the curve pays a 1% fee to the platform.')).toBeInTheDocument()
+    expect(screen.getByText('Every buy and sell on the curve pays a 1% fee: 0.3% to its creator and 0.7% to the platform.')).toBeInTheDocument()
+    // Not the creator: no earnings to claim.
+    expect(screen.queryByTestId('curve-creator-fees')).not.toBeInTheDocument()
   })
 
   it('buys with the quote less 1% as the minimum, sending what was typed', async () => {
@@ -124,5 +129,21 @@ describe('CurvePanel', () => {
     expect(screen.getByText(/nobody can withdraw that liquidity/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Buy' })).not.toBeInTheDocument()
     expect(screen.queryByText(/pays a 1% fee/)).not.toBeInTheDocument()
+  })
+
+  it("shows the creator their share and claims it, after graduation too", async () => {
+    mockCurve({ creator: WALLET.toLowerCase(), graduated: true })
+    render(<CurvePanel network="sepolia" address={CURVE} dexName="Uniswap V2" />)
+    const earnings = await screen.findByTestId('curve-creator-fees')
+    expect(earnings).toHaveTextContent('Your 0.3% of every trade: 0.012 ETH to claim.')
+    await userEvent.click(screen.getByRole('button', { name: 'Claim' }))
+    expect(writeContractAsync).toHaveBeenCalledWith(expect.objectContaining({ address: CURVE, functionName: 'claimCreatorFees', chainId: 11155111 }))
+  })
+
+  it("has nothing to claim until a trade pays the creator", async () => {
+    mockCurve({ creator: WALLET, creatorFees: 0n })
+    render(<CurvePanel network="sepolia" address={CURVE} />)
+    await screen.findByTestId('curve-creator-fees')
+    expect(screen.getByRole('button', { name: 'Claim' })).toBeDisabled()
   })
 })

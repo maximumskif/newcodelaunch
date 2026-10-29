@@ -811,11 +811,15 @@ contract {{CONTRACT_NAME}} {
     address public constant wrappedNative = {{WRAPPED_NATIVE}};
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
-    // The platform fee: 1% of the curve side of every buy and sell, in ETH,
-    // on top of a buy and out of a sale. It never joins the reserve or the
-    // pool; it waits here for withdrawFees(), which pays only feeRecipient.
+    // The trading fee: 1% of the curve side of every buy and sell, in ETH,
+    // on top of a buy and out of a sale. 0.3% of the trade goes to the
+    // creator (whoever launched it), the rest (0.7%, and any rounding) to
+    // the platform. It never joins the reserve or the pool: each share
+    // waits here to be sent to its owner, and only there.
     uint256 public constant FEE_BPS = 100;
+    uint256 public constant CREATOR_FEE_BPS = 30;
     address public constant feeRecipient = {{FEE_RECIPIENT}};
+    address public creator;
 
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -824,7 +828,8 @@ contract {{CONTRACT_NAME}} {
     uint256 public ethReserve;
     uint256 public tokensSold;
     bool public graduated;
-    uint256 public feesOwed;
+    uint256 public feesOwed; // the platform's
+    uint256 public creatorFeesOwed;
     uint256 private unlocked = 1;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
@@ -833,6 +838,7 @@ contract {{CONTRACT_NAME}} {
     event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 fee, uint256 ethReserve, uint256 tokensSold);
     event Graduated(address indexed pair, uint256 eth, uint256 tokens);
     event FeesWithdrawn(address indexed to, uint256 amount);
+    event CreatorFeesClaimed(address indexed to, uint256 amount);
 
     modifier lock() {
         require(unlocked == 1, "Busy");
@@ -842,6 +848,7 @@ contract {{CONTRACT_NAME}} {
     }
 
     constructor() payable {
+        creator = msg.sender;
         balanceOf[address(this)] = totalSupply;
         emit Transfer(address(0), address(this), totalSupply);
         address existing = IUniswapV2Factory(factory).getPair(address(this), wrappedNative);
@@ -933,7 +940,7 @@ contract {{CONTRACT_NAME}} {
         require(eth >= minEth, "Price moved: less ETH than your minimum");
         tokensSold -= tokens;
         ethReserve -= eth + fee;
-        feesOwed += fee;
+        _chargeFee(fee);
         _move(msg.sender, address(this), tokens);
         emit Sell(msg.sender, tokens, eth, fee, ethReserve, tokensSold);
         (bool ok, ) = msg.sender.call{value: eth}("");
@@ -950,7 +957,7 @@ contract {{CONTRACT_NAME}} {
         require(tokens >= minTokens, "Price moved: fewer tokens than your minimum");
         ethReserve += cost;
         tokensSold += tokens;
-        feesOwed += fee;
+        _chargeFee(fee);
         _move(address(this), buyer, tokens);
         emit Buy(buyer, cost, fee, tokens, ethReserve, tokensSold);
         if (tokensSold == curveSupply) _graduate();
@@ -971,7 +978,14 @@ contract {{CONTRACT_NAME}} {
         emit Graduated(pair, eth, tokens);
     }
 
-    // Anyone can send the fees on; they only ever go to feeRecipient.
+    function _chargeFee(uint256 fee) private {
+        uint256 creatorShare = (fee * CREATOR_FEE_BPS) / FEE_BPS;
+        creatorFeesOwed += creatorShare;
+        feesOwed += fee - creatorShare;
+    }
+
+    // Anyone can send either share on; each only ever goes to its owner, and
+    // one that can't be paid never holds up the other.
     function withdrawFees() external lock returns (uint256 amount) {
         amount = feesOwed;
         require(amount > 0, "No fees to withdraw");
@@ -979,6 +993,15 @@ contract {{CONTRACT_NAME}} {
         emit FeesWithdrawn(feeRecipient, amount);
         (bool ok, ) = feeRecipient.call{value: amount}("");
         require(ok, "Fee transfer failed");
+    }
+
+    function claimCreatorFees() external lock returns (uint256 amount) {
+        amount = creatorFeesOwed;
+        require(amount > 0, "No creator fees to claim");
+        creatorFeesOwed = 0;
+        emit CreatorFeesClaimed(creator, amount);
+        (bool ok, ) = creator.call{value: amount}("");
+        require(ok, "Creator fee transfer failed");
     }
 
     function _ceilDiv(uint256 a, uint256 b) private pure returns (uint256) {
@@ -1102,9 +1125,9 @@ _TEMPLATES: dict[str, ContractTemplate] = {
             {"name": "GRADUATION_TARGET", "type": "uint256", "required": True, "min": 10**15, "max": 10**24, "description": "How much the curve raises, in wei, before it moves to the DEX"},
             {"name": "FACTORY", "type": "address", "required": True, "description": "The network's Uniswap V2-style factory; filled in for you"},
             {"name": "WRAPPED_NATIVE", "type": "address", "required": True, "description": "The network's wrapped native coin (WETH, WBNB); filled in for you"},
-            {"name": "FEE_RECIPIENT", "type": "address", "required": True, "description": "Where the 1% trading fee goes: the platform's fee wallet; filled in for you"},
+            {"name": "FEE_RECIPIENT", "type": "address", "required": True, "description": "Where the platform's 0.7% of the trading fee goes (the creator gets 0.3%): the platform's fee wallet; filled in for you"},
         ],
-        features=["Bonding Curve", "Graduates to a DEX", "Liquidity Burned", "No Owner", "1% Trading Fee"],
+        features=["Bonding Curve", "Graduates to a DEX", "Liquidity Burned", "No Owner", "1% Trading Fee", "0.3% to the Creator"],
         gas_estimate=3_500_000,
     ),
 }

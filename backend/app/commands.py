@@ -72,8 +72,9 @@ def reap_stale_generation_jobs_command() -> None:
 def curve_fees_command() -> None:
     """List the platform fees waiting in bonding curves launched here.
 
-    Each curve keeps its 1% trading fees until someone calls its
-    withdrawFees(), which pays them to the curve's fixed feeRecipient (the
+    Each curve keeps the platform's share of its trading fees (0.7% of each
+    trade; the creator's 0.3% is separate) until someone calls its
+    withdrawFees(), which pays it to the curve's fixed feeRecipient (the
     PLATFORM_FEE_RECIPIENT it was launched with) whoever sends it, e.g.
     `cast send <curve> "withdrawFees()" --rpc-url ... --private-key ...`.
     """

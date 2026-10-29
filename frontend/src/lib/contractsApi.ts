@@ -130,8 +130,9 @@ export const contractsApi = {
 
   listDexes: () => request<{ dexes: Record<string, Dex> }>('/contracts/dexes'),
 
-  // The platform fee every bonding curve launched here pays, and its wallet.
-  getCurveFee: () => request<{ fee_bps: number; recipient: `0x${string}` }>('/contracts/curve-fee'),
+  // The fee every bonding curve launched here charges, the creator's share
+  // of it, and the platform's wallet.
+  getCurveFee: () => request<{ fee_bps: number; creator_fee_bps: number; recipient: `0x${string}` }>('/contracts/curve-fee'),
 
   listLiquidity: (token: string, deploymentId: string) =>
     request<{ provisions: LiquidityProvision[] }>(`/contracts/deployments/${deploymentId}/liquidity`, {}, token),

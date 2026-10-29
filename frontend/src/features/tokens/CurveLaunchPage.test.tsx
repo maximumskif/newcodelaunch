@@ -64,12 +64,12 @@ describe('CurveLaunchPage', () => {
   })
 
   it("launches with the platform's fee wallet and says what the fee is", async () => {
-    vi.mocked(contractsApi.getCurveFee).mockResolvedValue({ fee_bps: 100, recipient: FEE_WALLET })
+    vi.mocked(contractsApi.getCurveFee).mockResolvedValue({ fee_bps: 100, creator_fee_bps: 30, recipient: FEE_WALLET })
     show()
     await userEvent.type(screen.getByPlaceholderText('Nova Coin'), 'Moon Cat')
     await userEvent.type(screen.getByPlaceholderText('NOVA'), 'MCAT')
-    expect(screen.getByText('1% to the platform')).toBeInTheDocument()
-    expect(screen.getByText(/pays a 1% fee to the platform/)).toBeInTheDocument()
+    expect(screen.getByText('1%: 0.3% to you, 0.7% to the platform')).toBeInTheDocument()
+    expect(screen.getByText(/0\.3% of the trade to you, as the creator/)).toBeInTheDocument()
     const launch = await screen.findByRole('button', { name: '[ launch on the curve ]' })
     await vi.waitFor(() => expect(launch).toBeEnabled())
     await userEvent.click(launch)

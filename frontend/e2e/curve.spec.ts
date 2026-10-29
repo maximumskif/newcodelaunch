@@ -17,6 +17,8 @@ const CURVE_ABI = parseAbi([
   'function quoteSell(uint256 tokens) view returns (uint256 eth, uint256 fee)',
   'function feeRecipient() view returns (address)',
   'function feesOwed() view returns (uint256)',
+  'function creator() view returns (address)',
+  'function creatorFeesOwed() view returns (uint256)',
   'function withdrawFees() returns (uint256)',
 ])
 const PAIR_ABI = parseAbi([
@@ -52,7 +54,7 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   const summary = page.getByRole('complementary', { name: 'Summary' })
   await expect(summary).toContainText('Uniswap V2')
   await expect(summary).toContainText('market cap then')
-  await expect(summary).toContainText('1% to the platform')
+  await expect(summary).toContainText('1%: 0.3% to you, 0.7% to the platform')
   await expectNoA11yViolations(page, 'curve launch form')
   await summary.getByRole('button', { name: '[ launch on the curve ]' }).click()
 
@@ -62,7 +64,12 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   // The creator buy pays the fee too: 0.002 sent, 1/1.01 of it raised.
   const creatorRaised = (parseEther('0.002') * 100n) / 101n
   expect(await read<bigint>(token, 'ethReserve')).toBe(creatorRaised)
-  expect(await read<bigint>(token, 'feesOwed')).toBe(parseEther('0.002') - creatorRaised)
+  // Split 0.3 : 0.7 between the creator (the launching wallet) and the platform.
+  const fees = async () => (await read<bigint>(token, 'feesOwed')) + (await read<bigint>(token, 'creatorFeesOwed'))
+  const creatorFee = parseEther('0.002') - creatorRaised
+  expect(await fees()).toBe(creatorFee)
+  expect(await read<bigint>(token, 'creatorFeesOwed')).toBe((creatorFee * 30n) / 100n)
+  expect((await read<Address>(token, 'creator')).toLowerCase()).toBe(me.toLowerCase())
   expect((await read<Address>(token, 'feeRecipient')).toLowerCase()).toBe(FEE_WALLET.toLowerCase())
   const creatorTokens = await read<bigint>(token, 'balanceOf', [me])
   expect(creatorTokens).toBe(await read<bigint>(token, 'tokensSold'))
@@ -101,7 +108,7 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   expect(gained).toBeLessThanOrEqual(ethBack) // less the gas
   expect(gained).toBeGreaterThan(ethBack - parseEther('0.001'))
   expect(await read<bigint>(token, 'ethReserve')).toBe(creatorRaised + buyCost - ethBack - sellFee)
-  expect(await read<bigint>(token, 'feesOwed')).toBe(parseEther('0.002') - creatorRaised + buyFee + sellFee)
+  expect(await fees()).toBe(creatorFee + buyFee + sellFee)
 
   // The trades so far (creator buy, buy, sell), charted and listed from the curve's events.
   const activity = curveCard.getByTestId('curve-activity')
@@ -137,15 +144,16 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   expect(tokenIs0 ? r1 : r0).toBe(await read<bigint>(token, 'ethReserve'))
   const lpSupply = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'totalSupply' })
   expect(await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: [DEAD] })).toBe(lpSupply - 1000n)
-  // The curve keeps only the fees, and anyone can send them on, only to the platform.
+  // The curve keeps only the fees, and anyone can send the platform's share on, only to the platform.
   const owed = await read<bigint>(token, 'feesOwed')
-  expect(await publicClient.getBalance({ address: token })).toBe(owed)
-  expect(owed * 100n).toBeGreaterThanOrEqual(await read<bigint>(token, 'ethReserve'))
+  const creatorOwed = await read<bigint>(token, 'creatorFeesOwed')
+  expect(await publicClient.getBalance({ address: token })).toBe(owed + creatorOwed)
+  expect((owed + creatorOwed) * 100n).toBeGreaterThanOrEqual(await read<bigint>(token, 'ethReserve'))
   const feeWalletBefore = await publicClient.getBalance({ address: FEE_WALLET })
   const sendOn = await ownerWallet.writeContract({ address: token, abi: CURVE_ABI, functionName: 'withdrawFees' })
   expect((await publicClient.waitForTransactionReceipt({ hash: sendOn })).status).toBe('success')
   expect((await publicClient.getBalance({ address: FEE_WALLET })) - feeWalletBefore).toBe(owed)
-  expect(await publicClient.getBalance({ address: token })).toBe(0n)
+  expect(await publicClient.getBalance({ address: token })).toBe(creatorOwed)
 
   // The page, read again: a live pool, its liquidity burned.
   await page.reload()
@@ -168,4 +176,18 @@ test('a real bonding-curve launch: creator buy, buy and sell on the public page,
   await creatorPage.goto('/tokens/curve')
   const mine = creatorPage.getByRole('region', { name: 'your curve launches' })
   await expect(mine.getByText('Graduated to Uniswap V2')).toBeVisible({ timeout: 20_000 })
+
+  // The creator claims their share there, after graduation.
+  const earnings = mine.getByTestId('curve-creator-fees')
+  await expect(earnings).toContainText('to claim')
+  const creatorBefore = await publicClient.getBalance({ address: me })
+  await earnings.getByRole('button', { name: 'Claim' }).click()
+  await expect(mine.getByText('Your creator fees are on their way to your wallet.')).toBeVisible({ timeout: 20_000 })
+  expect(await read<bigint>(token, 'creatorFeesOwed')).toBe(0n)
+  expect(await publicClient.getBalance({ address: token })).toBe(0n)
+  const creatorGained = (await publicClient.getBalance({ address: me })) - creatorBefore
+  expect(creatorGained).toBeLessThanOrEqual(creatorOwed) // less the gas
+  expect(creatorGained).toBeGreaterThan(creatorOwed - parseEther('0.001'))
+  await expect(earnings.getByRole('button', { name: 'Claim' })).toBeDisabled()
+  await expectNoA11yViolations(creatorPage, 'curve launches with creator earnings')
 })

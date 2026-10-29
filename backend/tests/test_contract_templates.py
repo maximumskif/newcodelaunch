@@ -265,7 +265,7 @@ def test_curve_token_compiles_with_no_owner_and_fixed_terms():
     assert compiled.success, compiled.error_message
     functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
     assert {"buy", "sell", "quoteBuy", "quoteSell", "pair", "graduated", "ethReserve", "tokensSold", "transfer"} <= functions
-    assert {"FEE_BPS", "feeRecipient", "feesOwed", "withdrawFees"} <= functions
+    assert {"FEE_BPS", "CREATOR_FEE_BPS", "feeRecipient", "feesOwed", "withdrawFees", "creator", "creatorFeesOwed", "claimCreatorFees"} <= functions
     assert not functions & {"owner", "transferOwnership", "withdraw", "mint", "setPair"}
     payable = {item.get("name", item["type"]) for item in compiled.abi if item.get("stateMutability") == "payable"}
     assert payable == {"buy", "constructor"}
@@ -276,7 +276,8 @@ def test_curve_token_fee_is_the_platforms_and_fixed_in_its_code():
     from app.services import contracts
 
     code = contract_templates.render_contract("curve_token", CURVE_PARAMS)["contract_code"]
-    assert f"FEE_BPS = {contracts.CURVE_FEE_BPS};" in code
+    assert f" FEE_BPS = {contracts.CURVE_FEE_BPS};" in code
+    assert f"CREATOR_FEE_BPS = {contracts.CURVE_CREATOR_FEE_BPS};" in code
     assert "feeRecipient = 0x00000000000000000000000000000000000FEE00;" in code
 
 

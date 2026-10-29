@@ -32,6 +32,10 @@ export function VestingPanel({ deployment, initialAmount = '' }: { deployment: C
   const reads = useQuery({
     queryKey: ['token-vesting', chainId, vesting, wallet],
     enabled: Boolean(publicClient),
+    // Vesting moves with the chain's clock, so keep up with it (as the curve
+    // panel does). Without this a panel kept its first read: found in the
+    // e2e run, a read started just before a time jump answered after it.
+    refetchInterval: 15_000,
     queryFn: async () => {
       const client = publicClient!
       const read = <T,>(functionName: 'token' | 'beneficiary' | 'startTime' | 'cliffTime' | 'endTime' | 'released' | 'releasable') =>

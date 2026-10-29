@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/maximumskif/newcodelaunch/main/deploy/bootstrap.sh -o bootstrap.sh
 #   PLATFORM_FEE_RECIPIENT=0x... ETHERSCAN_API_KEY=... HELIUS_API_KEY=... PINATA_JWT=... bash bootstrap.sh [domain]
 #
-# PLATFORM_FEE_RECIPIENT, the EVM wallet bonding curves pay their 1% fee to,
+# PLATFORM_FEE_RECIPIENT, the EVM wallet bonding curves pay the platform's 0.7% (of a 1% fee) to,
 # is required for a first run: without it the backend refuses curve launches.
 #
 # Installs Docker and a firewall (SSH, HTTP, HTTPS only), clones the repo to

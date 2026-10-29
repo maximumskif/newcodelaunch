@@ -303,7 +303,7 @@ def test_curve_fee_route_tells_the_launch_form_where_the_fee_goes(app, client):
     assert response.status_code == 503
 
     app.config["PLATFORM_FEE_RECIPIENT"] = FEE_WALLET.lower()
-    assert client.get("/api/contracts/curve-fee").get_json() == {"fee_bps": 100, "recipient": FEE_WALLET}
+    assert client.get("/api/contracts/curve-fee").get_json() == {"fee_bps": 100, "creator_fee_bps": 30, "recipient": FEE_WALLET}
 
 
 def test_a_source_compiles_once_and_a_failure_is_not_kept(app, monkeypatch):

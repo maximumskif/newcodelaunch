@@ -5,9 +5,10 @@ import type { CurveTrade } from './tokenPagesApi'
 // contract_templates' curve_token: a token that is its own market until it
 // graduates. 80% of the supply sells on a constant-product curve with
 // virtual reserves; buying the last of it moves the raised ETH and the other
-// 20% into the network's V2 pool, LP burned. Every buy and sell pays the
-// platform a 1% fee in ETH, on top of a buy and out of a sale, kept apart
-// from the reserve until withdrawFees() sends it on. Trades read the contract's own
+// 20% into the network's V2 pool, LP burned. Every buy and sell pays a 1%
+// fee in ETH, on top of a buy and out of a sale: 0.3% of the trade to the
+// creator, 0.7% to the platform. Each share is kept apart from the reserve
+// until it's sent on (claimCreatorFees(), withdrawFees()). Trades read the contract's own
 // quoteBuy/quoteSell; this file's math (the contract's, in bigint) is for
 // previews before there is a contract to ask.
 export const CURVE_ABI = parseAbi([
@@ -27,6 +28,9 @@ export const CURVE_ABI = parseAbi([
   'function FEE_BPS() view returns (uint256)',
   'function feeRecipient() view returns (address)',
   'function feesOwed() view returns (uint256)',
+  'function creator() view returns (address)',
+  'function creatorFeesOwed() view returns (uint256)',
+  'function claimCreatorFees() returns (uint256 amount)',
   'function quoteBuy(uint256 value) view returns (uint256 tokens, uint256 cost, uint256 fee)',
   'function quoteSell(uint256 tokens) view returns (uint256 eth, uint256 fee)',
   'function buy(uint256 minTokens) payable returns (uint256 tokens)',
@@ -36,10 +40,13 @@ export const CURVE_ABI = parseAbi([
   'event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 fee, uint256 ethReserve, uint256 tokensSold)',
   'event Graduated(address indexed pair, uint256 eth, uint256 tokens)',
   'event FeesWithdrawn(address indexed to, uint256 amount)',
+  'event CreatorFeesClaimed(address indexed to, uint256 amount)',
 ])
 
-// The template's FEE_BPS: 1% of every curve buy and sell.
+// The template's FEE_BPS and CREATOR_FEE_BPS: 1% of every curve buy and
+// sell, 0.3% of it to the creator.
 export const FEE_BPS = 100n
+export const CREATOR_FEE_BPS = 30n
 
 const UNIT = 10n ** 18n
 

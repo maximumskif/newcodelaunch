@@ -67,7 +67,7 @@ Optional (default in brackets):
 | `PINATA_BASE_URL`, `PINATA_UPLOADS_URL`, `PINATA_GATEWAY_URL` (`app/services/ipfs.py`) | [Pinata's classic API / v3 uploads host / public gateway] **Set the gateway to your dedicated Pinata gateway** (`https://<name>.mypinata.cloud/ipfs/`, included in the free plan) for production: the public gateway rate-limits and sends `Cross-Origin-Resource-Policy: same-origin`, so browsers won't show its images on this site. The storefront falls back to ipfs.io and dweb.link when an image fails to load. |
 | `OPENAI_BASE_URL` (`app/services/ai_traits.py`) | ["" → the SDK's default] Exists for the e2e stub. |
 | `ETHERSCAN_API_URL` | [Etherscan V2] Exists for the e2e stub. |
-| `PLATFORM_FEE_RECIPIENT` | [unset → bonding-curve launches are refused, at compile and when recorded] The EVM wallet every curve's 1% trading fee goes to, fixed in each curve's code when it launches. Changing it only affects later launches. `flask curve-fees` lists what's waiting in each curve. |
+| `PLATFORM_FEE_RECIPIENT` | [unset → bonding-curve launches are refused, at compile and when recorded] The EVM wallet every curve pays the platform's share of its trading fee to (0.7% of each trade; the creator gets 0.3%), fixed in each curve's code when it launches. Changing it only affects later launches. `flask curve-fees` lists what's waiting in each curve. |
 | `DEX_OVERRIDES` | [unset — the built-in, verified Uniswap/PancakeSwap V2 addresses] JSON replacing a network's DEX for adding liquidity, e.g. `{"sepolia": {"name": "…", "router": "0x…", "factory": "0x…", "wrapped_native": "0x…"}}`. For local chains (the e2e suite); leave unset in production. |
 | `MAINTENANCE_INTERVAL_SECONDS` | [300] Read only by the scheduler script, not the app. |
 | `MORALIS_API_KEY`, `SOLSCAN_API_KEY` | Read into config but not used by any code yet. |
@@ -132,7 +132,7 @@ Both are idempotent, so running them twice at once is harmless. `backend/scripts
 
 ## Collecting the curve fees
 
-Each bonding curve holds its 1% trading fees until someone calls its `withdrawFees()`, which always pays the curve's fixed fee wallet, whoever sends it. Fees keep building up after graduation, and a fee wallet that refuses ETH blocks only the withdrawal, never trading. `flask curve-fees` lists every curve holding fees, with a total per network. To collect, send `withdrawFees()` to each curve from any funded wallet, for example `cast send <curve> "withdrawFees()" --rpc-url <rpc> --private-key <key>`. Nothing in the app does this on a schedule yet.
+Each bonding curve charges 1% per trade and holds the fees in two shares: the platform's 0.7% until someone calls its `withdrawFees()`, which always pays the curve's fixed fee wallet, whoever sends it, and the creator's 0.3% until `claimCreatorFees()`, which only ever pays the wallet that launched it (creators claim from the curve's panel). Fees keep building up after graduation. A wallet that refuses ETH blocks only its own share, never the other share or trading. `flask curve-fees` lists every curve holding fees, with a total per network. To collect, send `withdrawFees()` to each curve from any funded wallet, for example `cast send <curve> "withdrawFees()" --rpc-url <rpc> --private-key <key>`. Nothing in the app does this on a schedule yet.
 
 ## Rate limiting with more than one worker
 

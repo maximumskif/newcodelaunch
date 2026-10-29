@@ -37,8 +37,10 @@ class CompilationFailedError(RuntimeError):
     pass
 
 
-# The curve template's FEE_BPS: 1% of every curve buy and sell.
+# The curve template's FEE_BPS and CREATOR_FEE_BPS: 1% of every curve buy
+# and sell, 0.3% of it to the curve's creator and the rest to the platform.
 CURVE_FEE_BPS = 100
+CURVE_CREATOR_FEE_BPS = 30
 
 
 class CurveFeeNotConfiguredError(ValueError):

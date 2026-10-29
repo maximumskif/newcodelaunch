@@ -161,7 +161,8 @@ test('vesting for several wallets: one contract each, funded together through th
   await expect(panels).toHaveCount(3, { timeout: 15_000 })
   for (let i = 0; i < 3; i++) {
     const panel = panels.nth(i)
-    await expect(panel.getByText('Fully vested')).toBeVisible({ timeout: 15_000 })
+    // Up to one 15-second panel refresh behind the chain.
+    await expect(panel.getByText('Fully vested')).toBeVisible({ timeout: 30_000 })
     await panel.getByRole('button', { name: /^Release .* CREW to beneficiary$/ }).click()
     await expect(panel.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
   }

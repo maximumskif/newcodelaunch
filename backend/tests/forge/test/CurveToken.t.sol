@@ -50,6 +50,10 @@ interface ICurve {
     function feeRecipient() external view returns (address);
     function feesOwed() external view returns (uint256);
     function withdrawFees() external returns (uint256);
+    function CREATOR_FEE_BPS() external view returns (uint256);
+    function creator() external view returns (address);
+    function creatorFeesOwed() external view returns (uint256);
+    function claimCreatorFees() external returns (uint256);
 }
 
 interface IFactory {
@@ -221,6 +225,11 @@ abstract contract CurveTest is WithUniswap {
         (tokenReserve, wethReserve) = pair.token0() == address(curve) ? (uint256(r0), uint256(r1)) : (uint256(r1), uint256(r0));
     }
 
+    // Both shares of the fee still in the curve: the platform's and the creator's.
+    function _fees(ICurve c) internal view returns (uint256) {
+        return c.feesOwed() + c.creatorFeesOwed();
+    }
+
     function _sellEth(uint256 tokens) internal view returns (uint256 eth) {
         (eth, ) = curve.quoteSell(tokens);
     }
@@ -262,8 +271,8 @@ abstract contract CurveTest is WithUniswap {
 
         assertTrue(curve.graduated(), "graduated");
         assertEq(curve.balanceOf(alice), curve.curveSupply(), "alice holds every curve token");
-        assertEq(paid, curve.ethReserve() + curve.feesOwed(), "paid what was raised plus the fee (overshoot refunded)");
-        _assertOnePercent(curve.feesOwed(), curve.ethReserve(), "fees on the buy-out");
+        assertEq(paid, curve.ethReserve() + _fees(curve), "paid what was raised plus the fee (overshoot refunded)");
+        _assertOnePercent(_fees(curve), curve.ethReserve(), "fees on the buy-out");
         // Raised within 0.0001% of the target.
         uint256 raised = curve.ethReserve();
         uint256 diff = raised > _target() ? raised - _target() : _target() - raised;
@@ -272,7 +281,7 @@ abstract contract CurveTest is WithUniswap {
         (uint256 tokenReserve, uint256 wethReserve) = _reserves();
         assertEq(tokenReserve, curve.poolSupply(), "pool got the other 20%");
         assertEq(wethReserve, raised, "pool got everything raised");
-        assertEq(address(curve).balance, curve.feesOwed(), "curve keeps only the fees");
+        assertEq(address(curve).balance, _fees(curve), "curve keeps only the fees");
         assertEq(curve.balanceOf(address(curve)), 0, "curve keeps no tokens");
 
         IPair pair = IPair(curve.pair());
@@ -382,8 +391,8 @@ abstract contract CurveTest is WithUniswap {
         // Early sellers can profit from later buyers, but all together, never.
         assertLe(returned, paid, "paid out more than was paid in");
         assertEq(curve.ethReserve(), paid - returned, "reserve accounting");
-        assertEq(curve.feesOwed(), fees, "fee accounting");
-        assertEq(address(curve).balance, curve.ethReserve() + curve.feesOwed(), "balance = reserve + fees");
+        assertEq(_fees(curve), fees, "fee accounting");
+        assertEq(address(curve).balance, curve.ethReserve() + _fees(curve), "balance = reserve + fees");
     }
 
     function test_slippageLimits() public {
@@ -432,7 +441,7 @@ abstract contract CurveTest is WithUniswap {
         r.buy{value: _target() / 10}();
         r.sellAll();
         assertTrue(r.reentryFailed(), "re-entered while paying out");
-        assertEq(address(curve).balance, curve.ethReserve() + curve.feesOwed(), "balance = reserve + fees");
+        assertEq(address(curve).balance, curve.ethReserve() + _fees(curve), "balance = reserve + fees");
     }
 
     // ── Creator buy ────────────────────────────────────────────────────────
@@ -442,9 +451,10 @@ abstract contract CurveTest is WithUniswap {
         vm.deal(address(this), before + _target());
         ICurve c = _deployCurve(_target() / 10);
         assertTrue(c.balanceOf(address(this)) > 0, "creator got tokens");
-        assertEq(c.ethReserve() + c.feesOwed(), _target() / 10, "raised the creator buy, less its fee");
-        _assertOnePercent(c.feesOwed(), c.ethReserve(), "creator buy fee");
-        assertEq(address(c).balance, c.ethReserve() + c.feesOwed(), "balance = reserve + fees");
+        assertEq(c.ethReserve() + _fees(c), _target() / 10, "raised the creator buy, less its fee");
+        _assertOnePercent(_fees(c), c.ethReserve(), "creator buy fee");
+        assertEq(address(c).balance, c.ethReserve() + _fees(c), "balance = reserve + fees");
+        assertTrue(c.creator() == address(this), "the deployer is the creator");
     }
 
     function test_creatorBuyCantTakeTheWholeCurve() public {
@@ -540,13 +550,20 @@ abstract contract CurveTest is WithUniswap {
         assertLe(fee, (amount * curve.FEE_BPS()) / 10000 + 3, string.concat(what, ": over 1%"));
     }
 
-    function test_theFeeIsFixedAndThePlatforms() public {
-        assertEq(curve.FEE_BPS(), 100, "1%");
-        assertTrue(curve.feeRecipient() == FEE_RECIPIENT, "fee recipient");
-        assertEq(curve.feesOwed(), 0, "nothing owed yet");
+    // The creator's share of a fee: 30 of its 100 bps, rounded down.
+    function _creatorShare(uint256 fee) internal pure returns (uint256) {
+        return (fee * 30) / 100;
     }
 
-    function testFuzz_everyTradePaysOnePercent(uint256 eth, uint256 share) public {
+    function test_theFeeIsFixed_andSplitBetweenThePlatformAndTheCreator() public {
+        assertEq(curve.FEE_BPS(), 100, "1%");
+        assertEq(curve.CREATOR_FEE_BPS(), 30, "0.3% of it to the creator");
+        assertTrue(curve.feeRecipient() == FEE_RECIPIENT, "fee recipient");
+        assertTrue(curve.creator() == address(this), "the deployer is the creator");
+        assertEq(_fees(curve), 0, "nothing owed yet");
+    }
+
+    function testFuzz_everyTradePaysOnePercent_splitSevenToThree(uint256 eth, uint256 share) public {
         eth = 1000 + (eth % (_target() / 2));
         (uint256 tokens, uint256 cost, uint256 fee) = curve.quoteBuy(eth);
         vm.assume(tokens > 0);
@@ -556,7 +573,8 @@ abstract contract CurveTest is WithUniswap {
         _buy(alice, eth);
         assertEq(before - alice.balance, eth, "buyer paid what was sent");
         assertEq(curve.ethReserve(), cost, "only the cost joined the reserve");
-        assertEq(curve.feesOwed(), fee, "the fee is owed to the platform");
+        assertEq(curve.creatorFeesOwed(), _creatorShare(fee), "creator's 30%");
+        assertEq(curve.feesOwed(), fee - _creatorShare(fee), "platform's 70%, and the rounding");
 
         uint256 selling = (tokens * (1 + (share % 100))) / 100;
         (uint256 back, uint256 sellFee) = curve.quoteSell(selling);
@@ -566,25 +584,35 @@ abstract contract CurveTest is WithUniswap {
         _sell(alice, selling);
         assertEq(alice.balance - before, back, "seller got the quote, less the fee");
         assertEq(curve.ethReserve(), cost - back - sellFee, "the reserve paid the sale and its fee");
-        assertEq(curve.feesOwed(), fee + sellFee, "both fees owed");
-        assertEq(address(curve).balance, curve.ethReserve() + curve.feesOwed(), "balance = reserve + fees");
+        assertEq(curve.creatorFeesOwed(), _creatorShare(fee) + _creatorShare(sellFee), "creator's share of both");
+        assertEq(_fees(curve), fee + sellFee, "both fees owed, nothing lost to the split");
+        assertEq(address(curve).balance, curve.ethReserve() + _fees(curve), "balance = reserve + fees");
     }
 
-    function test_feesGoOnlyToThePlatform_andAnyoneCanSendThem() public {
+    function test_eachShareGoesOnlyToItsOwner_andAnyoneCanSendIt() public {
         vm.prank(alice);
         vm.expectRevert(bytes("No fees to withdraw"));
         curve.withdrawFees();
+        vm.prank(alice);
+        vm.expectRevert(bytes("No creator fees to claim"));
+        curve.claimCreatorFees();
 
         _buy(alice, _target() / 5);
         _sell(alice, curve.balanceOf(alice) / 2);
-        uint256 owed = curve.feesOwed();
+        uint256 platform = curve.feesOwed();
+        uint256 creatorShare = curve.creatorFeesOwed();
         uint256 reserve = curve.ethReserve();
         uint256 bobBefore = bob.balance;
-        vm.prank(bob); // not the platform: it still pays only the platform
-        assertEq(curve.withdrawFees(), owed, "withdrew what was owed");
-        assertEq(FEE_RECIPIENT.balance, owed, "platform got the fees");
+        uint256 creatorBefore = address(this).balance;
+        vm.prank(bob); // neither the platform nor the creator: pays only the platform
+        assertEq(curve.withdrawFees(), platform, "withdrew the platform's share");
+        assertEq(FEE_RECIPIENT.balance, platform, "platform got its share");
+        assertEq(curve.creatorFeesOwed(), creatorShare, "the creator's share stays the creator's");
+        vm.prank(bob); // pays only the creator
+        assertEq(curve.claimCreatorFees(), creatorShare, "claimed the creator's share");
+        assertEq(address(this).balance - creatorBefore, creatorShare, "creator got its share");
         assertEq(bob.balance, bobBefore, "the caller got nothing");
-        assertEq(curve.feesOwed(), 0, "nothing owed");
+        assertEq(_fees(curve), 0, "nothing owed");
         assertEq(curve.ethReserve(), reserve, "the reserve is untouched");
         assertEq(address(curve).balance, reserve, "balance = reserve");
         // Sellers can still all be paid.
@@ -597,21 +625,44 @@ abstract contract CurveTest is WithUniswap {
         assertTrue(curve.graduated(), "graduated");
         (, uint256 wethReserve) = _reserves();
         assertEq(wethReserve, curve.ethReserve(), "the pool got the raise, not the fees");
-        uint256 owed = curve.feesOwed();
-        assertTrue(owed > 0, "fees owed");
+        uint256 platform = curve.feesOwed();
+        uint256 creatorShare = curve.creatorFeesOwed();
+        assertTrue(platform > 0 && creatorShare > 0, "fees owed");
+        uint256 creatorBefore = address(this).balance;
         curve.withdrawFees();
-        assertEq(FEE_RECIPIENT.balance, owed, "platform got the fees");
+        curve.claimCreatorFees();
+        assertEq(FEE_RECIPIENT.balance, platform, "platform got its share");
+        assertEq(address(this).balance - creatorBefore, creatorShare, "creator got its share");
         assertEq(address(curve).balance, 0, "curve keeps no ETH");
     }
 
-    function test_aFeeWalletThatRefusesEthCantStopTrading() public {
+    function test_aFeeWalletThatRefusesEthCantStopTradingOrTheCreator() public {
         vm.etch(FEE_RECIPIENT, hex"fe"); // reverts on any call
         _buy(alice, _target() / 5);
         _sell(alice, curve.balanceOf(alice) / 2);
         vm.expectRevert(bytes("Fee transfer failed"));
         curve.withdrawFees();
+        curve.claimCreatorFees();
+        assertEq(curve.creatorFeesOwed(), 0, "the creator was paid anyway");
         _buy(bob, 2 * _target());
         assertTrue(curve.graduated(), "graduated anyway");
+    }
+
+    function test_aCreatorThatRefusesEthCantStopTradingOrThePlatform() public {
+        // Launched by a contract that takes no ETH.
+        Deployer deployer = new Deployer();
+        ICurve c = ICurve(deployer.deploy(vm.getCode(string.concat(variant(), ".sol:", variant()))));
+        assertTrue(c.creator() == address(deployer), "creator");
+        vm.prank(alice);
+        c.buy{value: c.graduationTarget() / 5}(0);
+        vm.expectRevert(bytes("Creator fee transfer failed"));
+        c.claimCreatorFees();
+        uint256 platform = c.feesOwed();
+        c.withdrawFees();
+        assertEq(FEE_RECIPIENT.balance, platform, "the platform was paid anyway");
+        vm.prank(bob);
+        c.buy{value: 2 * c.graduationTarget()}(0);
+        assertTrue(c.graduated(), "graduated anyway");
     }
 
     // ── After graduation ───────────────────────────────────────────────────
@@ -679,7 +730,9 @@ contract Handler {
     address[4] actors = [address(0x1001), address(0x1002), address(0x1003), address(0x1004)];
     uint256 public netPaid; // ETH paid in minus ETH paid out, on the curve
     uint256 public feesCharged;
+    uint256 public creatorFeesCharged;
     uint256 public feesWithdrawn;
+    uint256 public creatorFeesClaimed;
     uint256 public calls;
 
     constructor(ICurve curve_) {
@@ -698,6 +751,7 @@ contract Handler {
         curve.buy{value: eth}(0);
         netPaid += cost;
         feesCharged += fee;
+        creatorFeesCharged += (fee * 30) / 100;
         calls++;
     }
 
@@ -711,6 +765,7 @@ contract Handler {
         curve.sell(tokens, 0);
         netPaid -= eth + fee;
         feesCharged += fee;
+        creatorFeesCharged += (fee * 30) / 100;
         calls++;
     }
 
@@ -718,6 +773,12 @@ contract Handler {
         if (curve.feesOwed() == 0) return;
         vm.prank(actors[who % 4]);
         feesWithdrawn += curve.withdrawFees();
+    }
+
+    function claimCreatorFees(uint256 who) external {
+        if (curve.creatorFeesOwed() == 0) return;
+        vm.prank(actors[who % 4]);
+        creatorFeesClaimed += curve.claimCreatorFees();
     }
 
     function transfer(uint256 from, uint256 to, uint256 share) external {
@@ -735,6 +796,7 @@ contract Handler {
 abstract contract CurveInvariants is WithUniswap {
     ICurve curve;
     Handler handler;
+    uint256 startBalance; // forge starts a test contract with a large balance
 
     function variant() internal pure virtual returns (string memory);
 
@@ -742,7 +804,10 @@ abstract contract CurveInvariants is WithUniswap {
         _deployUniswap();
         curve = ICurve(_create(vm.getCode(string.concat(variant(), ".sol:", variant())), 0));
         handler = new Handler(curve);
+        startBalance = address(this).balance;
     }
+
+    receive() external payable {} // the creator: it launched the curve
 
     function targetContracts() public view returns (address[] memory targets) {
         targets = new address[](1);
@@ -751,7 +816,7 @@ abstract contract CurveInvariants is WithUniswap {
 
     function invariant_theCurveCanAlwaysPayEverySeller() public view {
         if (curve.graduated()) return;
-        assertEq(address(curve).balance, curve.ethReserve() + curve.feesOwed(), "balance = reserve + fees");
+        assertEq(address(curve).balance, curve.ethReserve() + curve.feesOwed() + curve.creatorFeesOwed(), "balance = reserve + fees");
         assertEq(curve.ethReserve(), handler.netPaid(), "reserve = net paid in");
         // Selling every token in circulation at once (and its fee) takes at most the reserve.
         (uint256 eth, uint256 fee) = curve.quoteSell(curve.tokensSold());
@@ -765,7 +830,7 @@ abstract contract CurveInvariants is WithUniswap {
     function invariant_tokensAreAccountedFor() public view {
         if (curve.graduated()) {
             assertEq(curve.balanceOf(address(curve)), 0, "curve empty after graduation");
-            assertEq(address(curve).balance, curve.feesOwed(), "only fees left after graduation");
+            assertEq(address(curve).balance, curve.feesOwed() + curve.creatorFeesOwed(), "only fees left after graduation");
             return;
         }
         assertEq(curve.balanceOf(address(curve)) + curve.tokensSold(), curve.totalSupply(), "held + sold = supply");
@@ -773,9 +838,16 @@ abstract contract CurveInvariants is WithUniswap {
         assertLe(curve.tokensSold(), curve.curveSupply(), "never more than the curve sells");
     }
 
-    function invariant_feesAreOwedOrWithdrawn_toThePlatformOnly() public view {
-        assertEq(curve.feesOwed() + handler.feesWithdrawn(), handler.feesCharged(), "fees charged = owed + withdrawn");
+    function invariant_feesAreOwedOrPaid_eachShareToItsOwnerOnly() public view {
+        // Every fee charged is the creator's 30% (rounded down) or the platform's rest.
+        assertEq(curve.creatorFeesOwed() + handler.creatorFeesClaimed(), handler.creatorFeesCharged(), "creator: charged = owed + claimed");
+        assertEq(
+            curve.feesOwed() + handler.feesWithdrawn(),
+            handler.feesCharged() - handler.creatorFeesCharged(),
+            "platform: charged = owed + withdrawn"
+        );
         assertEq(FEE_RECIPIENT.balance, handler.feesWithdrawn(), "withdrawn fees reached the platform");
+        assertEq(address(this).balance - startBalance, handler.creatorFeesClaimed(), "claimed fees reached the creator");
     }
 
     function invariant_afterGraduationThePoolHasEverything() public view {

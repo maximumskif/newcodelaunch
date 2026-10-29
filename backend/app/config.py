@@ -165,8 +165,8 @@ class Config:
     # its own Uniswap V2 on anvil); the built-in addresses are the real ones.
     DEX_OVERRIDES = os.environ.get("DEX_OVERRIDES", "")
     # The platform's fee wallet (one EVM address, every network): bonding
-    # curves launched here pay their 1% trading fee to it, fixed in each
-    # curve's code. Unset: curve launches are refused rather than launched
+    # curves launched here pay it the platform's 0.7% of their 1% trading
+    # fee (the creator gets 0.3%), fixed in each curve's code. Unset: curve launches are refused rather than launched
     # with a fee going nowhere.
     PLATFORM_FEE_RECIPIENT = os.environ.get("PLATFORM_FEE_RECIPIENT", "").strip()
 

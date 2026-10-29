@@ -205,13 +205,14 @@ export function CurveLaunchPage() {
                 <SummaryRow label="first price">—</SummaryRow>
               )}
               <SummaryRow label="DEX">{dex?.name ?? '—'}</SummaryRow>
-              <SummaryRow label="trading fee">1% to the platform</SummaryRow>
+              <SummaryRow label="trading fee">1%: 0.3% to you, 0.7% to the platform</SummaryRow>
               <SummaryRow label="transactions">1</SummaryRow>
             </dl>
             <p className="text-xs text-ink-faint">
               One transaction creates the token, its curve and its future pool. You pay the network's gas{creatorBuy ? ', plus your buy and its fee' : ''}.
-              Every buy and sell on the curve, yours included, pays a 1% fee to the platform. It's kept apart from what the curve raises, so the pool
-              still gets all of it. Trades on the DEX after graduation pay no platform fee.
+              Every buy and sell on the curve, yours included, pays a 1% fee: 0.3% of the trade to you, as the creator, and 0.7% to the platform. Your
+              share builds up in the curve and you claim it from its panel, even after graduation. Fees are kept apart from what the curve raises, so
+              the pool still gets all of it. Trades on the DEX after graduation pay no fee.
             </p>
             {isMainnet && (
               <MainnetConfirmCheckbox

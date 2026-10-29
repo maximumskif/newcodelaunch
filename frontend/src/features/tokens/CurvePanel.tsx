@@ -27,6 +27,8 @@ type ViewFunction =
   | 'tokensSold'
   | 'graduated'
   | 'pair'
+  | 'creator'
+  | 'creatorFeesOwed'
 
 const inputClass =
   'h-10 min-w-0 flex-1 rounded-md border border-border bg-canvas px-3 font-mono text-sm text-ink placeholder:text-ink-faint focus:border-accent-500 focus:outline-none'
@@ -35,8 +37,9 @@ const inputClass =
 // no sign-in, it's the buyer's own transaction. Quotes use the contract's
 // own math on the state just read (lib/curve.ts matches it to the wei),
 // with 1% slippage, so a trade that lands after someone else's still goes
-// through unless the price moved more than that. Each shows the 1%
-// platform fee it pays.
+// through unless the price moved more than that. Each shows the 1% fee it
+// pays. The curve's creator also sees their 0.3% share building up, and
+// claims it here.
 export function CurvePanel({ network, address, dexName = 'the DEX' }: { network: string; address: `0x${string}`; dexName?: string }) {
   const chainId = NETWORK_TO_CHAIN_ID[network]
   const native = EVM_NETWORKS.find((n) => n.id === network)?.nativeToken ?? 'ETH'
@@ -55,7 +58,7 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
     queryFn: async () => {
       const client = publicClient!
       const read = <F extends ViewFunction>(functionName: F) => client.readContract({ address, abi: CURVE_ABI, functionName })
-      const [symbol, totalSupply, curveSupply, poolSupply, target, virtualEth, virtualTokens, ethReserve, tokensSold, graduated, pair] = await Promise.all([
+      const [symbol, totalSupply, curveSupply, poolSupply, target, virtualEth, virtualTokens, ethReserve, tokensSold, graduated, pair, creator, creatorFees] = await Promise.all([
         read('symbol'),
         read('totalSupply'),
         read('curveSupply'),
@@ -67,6 +70,8 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
         read('tokensSold'),
         read('graduated'),
         read('pair'),
+        read('creator'),
+        read('creatorFeesOwed'),
       ])
       const [held, nativeBalance] = wallet
         ? await Promise.all([
@@ -75,13 +80,13 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
           ])
         : [0n, 0n]
       const terms: CurveTerms = { totalSupply, curveSupply, poolSupply, target, virtualEth, virtualTokens }
-      return { symbol, terms, state: { ethReserve, tokensSold }, graduated, pair, held, nativeBalance }
+      return { symbol, terms, state: { ethReserve, tokensSold }, graduated, pair, held, nativeBalance, creator, creatorFees }
     },
   })
 
-  const { send, isBusy, error, done } = useOwnerTransaction<'buy' | 'sell'>({
+  const { send, isBusy, error, done } = useOwnerTransaction<'buy' | 'sell' | 'claim'>({
     chainId,
-    doneMessages: { buy: 'Bought.', sell: 'Sold.' },
+    doneMessages: { buy: 'Bought.', sell: 'Sold.', claim: 'Your creator fees are on their way to your wallet.' },
     onSettled: ({ status }) => {
       if (status === 'success') setAmountText('')
       void reads.refetch()
@@ -93,7 +98,8 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
   if (reads.isLoading) return <p className="text-sm text-ink-muted">Reading the curve…</p>
   if (reads.isError || !reads.data) return <InlineError>Couldn't read this curve right now.</InlineError>
 
-  const { symbol, terms, state, graduated, pair, held, nativeBalance } = reads.data
+  const { symbol, terms, state, graduated, pair, held, nativeBalance, creator, creatorFees } = reads.data
+  const isCreator = Boolean(wallet && creator.toLowerCase() === wallet.toLowerCase())
   const short = (n: bigint) => formatAmount(Number(formatUnits(n, 18)))
   const tokens = (n: bigint) => `${short(n)} ${symbol}`
   const coins = (n: bigint) => `${short(n)} ${native}`
@@ -226,7 +232,22 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
         </div>
       )}
 
-      {!graduated && <p className="text-xs text-ink-faint">Every buy and sell on the curve pays a 1% fee to the platform.</p>}
+      {isCreator && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3" data-testid="curve-creator-fees">
+          <p className="text-ink-muted">
+            You launched this. Your 0.3% of every trade: <span className="font-mono text-ink">{coins(creatorFees)}</span> to claim.
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={creatorFees === 0n || isBusy()}
+            onClick={() => void send('claim', () => writeContractAsync({ address, abi: CURVE_ABI, functionName: 'claimCreatorFees', chainId }))}
+          >
+            Claim
+          </Button>
+        </div>
+      )}
+      {!graduated && <p className="text-xs text-ink-faint">Every buy and sell on the curve pays a 1% fee: 0.3% to its creator and 0.7% to the platform.</p>}
       {done && <p className="text-success">{done}</p>}
       {error && <InlineError>{error}</InlineError>}
     </div>

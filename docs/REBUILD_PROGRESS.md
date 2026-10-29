@@ -1213,6 +1213,19 @@ Decisions with the owner: **1% of every curve buy and sell, all to the platform*
 
 **Tool check, 2026-10-29**: every tool in the six menus maps to a passing e2e test, except Research (market lookup, trending, top tokens, DeFi scanner, token checker) and the template library. Those were checked live against a local backend and returned real data. The checker's source check needs `ETHERSCAN_API_KEY`.
 
+## P0 fixes, and the creator's share of the curve fee, 2026-10-29
+
+From a production audit (confirmed defects first).
+
+- **CI's e2e job had failed since 2026-10-15** at the Foundry step: `tests/forge/render.py` imports the app, whose config requires `SECRET_KEY`. It passed locally only because `backend/.env` exists. It now sets test-only values, as `tests/conftest.py` does. So the e2e suite hadn't run in CI for two weeks; it does again.
+- **Deploys and the fee wallet**: `deploy/bootstrap.sh` didn't write `PLATFORM_FEE_RECIPIENT`, so a new server would refuse every curve launch. It now writes it and refuses a first run without a valid address. CI's docker job sets one and checks `/api/contracts/curve-fee` through Caddy.
+- **Compile and estimate** need no account and had no limit, and every compile ran solc afresh (up to 120 s; slower on the ARM host's WebAssembly solc). They're now limited per IP to 60/min (compile) and 30/min (estimate). 60 leaves room for the Vesting page's batch, which compiles once per wallet, up to 50. Successful compiles are cached per source, so a launch's compile, estimate and code check compile once. Failures aren't kept, because a compiler crash or timeout is reported as one.
+- **Creator split** (owner's decision): of the 1% per trade, 0.3% goes to the curve's creator (the launching wallet, set in the constructor) and 0.7% to the platform; rounding goes to the platform. `creatorFeesOwed` and `claimCreatorFees()` (which pays only the creator) sit next to `feesOwed` and `withdrawFees()`. Either side refusing ETH blocks only its own share, never the other or trading. The panel shows the creator their share with a Claim button, after graduation too. The launch summary says "1%: 0.3% to you, 0.7% to the platform". `/curve-fee` adds `creator_fee_bps`.
+
+**Verified**: pytest 430 (the two limits, another IP unaffected; a source compiles once; a failed compile is retried). Foundry 107/107: the 7:3 split fuzzed across trades; each share pays only its owner, whoever sends it; fees outlive graduation; a platform wallet or a creator refusing ETH blocks neither the other nor trading; and an invariant, over about 1,500 withdrawals and claims per run, that each share charged = owed + paid, reaching only its owner. Vitest 284 (the creator's claim, also after graduation; nothing to claim at 0). Playwright 52/52, including `curve.spec.ts`, where the creator claims through the launch page after graduation and the curve ends with no ETH. CI is fully green on GitHub again (all six jobs).
+
+- **Found by the e2e run: vesting and time-lock panels never refreshed.** The several-wallets vesting test failed twice in full runs. The kept trace showed two panels with the same dates disagreeing: one "Fully vested", one still "Cliff until". So the chain was fine; one panel was showing a read that started just before the test's time jump and answered after it, and the panel never read again. Real users had the same problem in a slower form: a panel left open didn't update as tokens vested or unlocked. Both panels now refresh every 15 seconds, as the curve panel does. (A first guess, anvil answering from the previous block after a mine, was tested with a wait-for-the-new-block helper; it still failed, so that helper was dropped.) The Sepolia smoke is updated for the split but not run.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:
