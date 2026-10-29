@@ -17,18 +17,27 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 from urllib.parse import urlencode
 
 import requests
 from flask import current_app
 
+from ..extensions import db
+from ..models.deployment import ContractDeployment
 from . import blockchain, liquidity
 
 API_URL = "https://api.telegram.org/bot{token}/{method}"
 REQUEST_TIMEOUT_SECONDS = 10
 POLL_TIMEOUT_SECONDS = 30
 MAX_NAME_LENGTH = 64
+# Short, because a launch is posted while its creator waits for it to be
+# recorded; one that times out is posted later by `flask announce-launches`.
+ANNOUNCE_TIMEOUT_SECONDS = 5
+# How far back `flask announce-launches` looks for launches still to post.
+ANNOUNCE_WINDOW = timedelta(days=1)
 _TICKER = re.compile(r"^\$?([A-Za-z0-9]{1,16})$")
 # "/launch", or "/launch@SomeBot" as Telegram writes it in groups.
 _COMMAND = re.compile(r"^/([A-Za-z_]+)(?:@\S+)?(?:\s+(.*))?$", re.S)
@@ -57,6 +66,21 @@ class TelegramNotConfiguredError(RuntimeError):
 
 def is_configured() -> bool:
     return bool(current_app.config.get("TELEGRAM_BOT_TOKEN"))
+
+
+_usernames: dict[str, str] = {}
+
+
+def bot_username() -> str | None:
+    """The bot's @username (asked of Telegram once per token), or None if
+    Telegram doesn't answer."""
+    token = current_app.config.get("TELEGRAM_BOT_TOKEN")
+    if token and token not in _usernames:
+        try:
+            _usernames[token] = call("getMe")["username"]
+        except Exception:
+            return None
+    return _usernames.get(token)
 
 
 def _curve_networks() -> list[str]:
@@ -99,7 +123,7 @@ def launch_link(name: str, symbol: str, network: str) -> str:
     return f"{current_app.config['PUBLIC_APP_URL']}/tokens/curve?{query}"
 
 
-def _reply(chat_id: int, text: str, button: tuple[str, str] | None = None) -> dict[str, Any]:
+def _reply(chat_id: int | str, text: str, button: tuple[str, str] | None = None) -> dict[str, Any]:
     reply: dict[str, Any] = {
         "method": "sendMessage",
         "chat_id": chat_id,
@@ -179,3 +203,78 @@ def poll_once(offset: int | None) -> int | None:
             except Exception:  # one chat that can't be answered mustn't stop the bot
                 current_app.logger.exception("telegram reply failed")
     return offset
+
+
+def _should_announce(deployment: ContractDeployment) -> bool:
+    config = current_app.config
+    if deployment.template_id != "curve_token" or not config.get("TELEGRAM_ANNOUNCE_CHAT") or not is_configured():
+        return False
+    network = blockchain.EVM_NETWORKS.get(deployment.network)
+    return network is not None and (not network["is_testnet"] or config.get("TELEGRAM_ANNOUNCE_TESTNETS"))
+
+
+def announcement(deployment: ContractDeployment) -> dict[str, Any]:
+    """The channel post for a new curve launch."""
+    params = deployment.parameters or {}
+    network = blockchain.EVM_NETWORKS[deployment.network]
+    symbol = str(params.get("TOKEN_SYMBOL") or "")
+    page = f"{current_app.config['PUBLIC_APP_URL']}/token/{deployment.network}/{deployment.contract_address}"
+    target = Decimal(int(params.get("GRADUATION_TARGET") or 0)) / Decimal(10**18)
+    dex = liquidity.dexes().get(deployment.network, {}).get("name", "a DEX")
+    text = (
+        f"New launch on {html.escape(network['name'])}\n\n"
+        f"<b>{html.escape(str(params.get('TOKEN_NAME') or ''))}</b> (${html.escape(symbol)})\n"
+        f"Buy it now on its bonding curve. At {target.normalize():f} {network['native_token']} raised it moves "
+        f"to {html.escape(dex)}, with the liquidity burned.\n\n"
+        f"<code>{html.escape(deployment.contract_address)}</code>\n"
+        f"{html.escape(page)}"
+    )
+    # Every post is also an invitation to launch one.
+    username = bot_username()
+    if username:
+        text += f"\n\nLaunch your own: send /launch to @{username}"
+    return _reply(current_app.config["TELEGRAM_ANNOUNCE_CHAT"], text, (f"Buy ${symbol}", page))
+
+
+def announce_launch(deployment: ContractDeployment, timeout: float = ANNOUNCE_TIMEOUT_SECONDS) -> bool:
+    """Posts a curve launch to the launch channel, once. Returns whether this
+    call posted it. Never raises: a launch is recorded whether or not
+    Telegram answers, and one that wasn't posted is tried again later."""
+    if not _should_announce(deployment):
+        return False
+    # The claim: only one caller (the launch's own request, or the retry
+    # command running at the same moment) gets to set it.
+    claimed = (
+        ContractDeployment.query.filter_by(id=deployment.id, announced_at=None)
+        .update({"announced_at": datetime.now(timezone.utc)}, synchronize_session=False)
+    )
+    db.session.commit()
+    if not claimed:
+        return False
+    try:
+        payload = announcement(deployment)
+        call(payload.pop("method"), payload, timeout=timeout)
+        return True
+    except Exception:
+        current_app.logger.exception("posting launch %s to Telegram failed", deployment.id)
+        ContractDeployment.query.filter_by(id=deployment.id).update({"announced_at": None}, synchronize_session=False)
+        db.session.commit()
+        return False
+
+
+def announce_pending() -> int:
+    """Posts the recent curve launches that haven't been posted yet (Telegram
+    was down, or the post timed out). Returns how many were posted."""
+    if not current_app.config.get("TELEGRAM_ANNOUNCE_CHAT") or not is_configured():
+        return 0
+    since = datetime.now(timezone.utc) - ANNOUNCE_WINDOW
+    pending = (
+        ContractDeployment.query.filter(
+            ContractDeployment.template_id == "curve_token",
+            ContractDeployment.announced_at.is_(None),
+            ContractDeployment.created_at >= since,
+        )
+        .order_by(ContractDeployment.created_at)
+        .all()
+    )
+    return sum(announce_launch(deployment, timeout=REQUEST_TIMEOUT_SECONDS) for deployment in pending)

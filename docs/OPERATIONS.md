@@ -74,6 +74,8 @@ Optional (default in brackets):
 | `PUBLIC_APP_URL` | [`http://localhost:5173`] The site's address, which the bot's launch links point at. Telegram only shows a button for an https link; otherwise the link is in the text. |
 | `PUBLIC_API_URL` | [unset] Where Telegram reaches this API (https), for `flask telegram-set-webhook`. The same as `PUBLIC_APP_URL` behind the Compose Caddy. |
 | `TELEGRAM_LAUNCH_NETWORK` | [`base`] The network a `/launch` opens on when the message doesn't name one. It needs a curve DEX. |
+| `TELEGRAM_ANNOUNCE_CHAT` | [unset → nothing is posted] The launch channel: a channel's `@username` (or numeric id) where the bot posts every new curve launch. The bot must be an admin there. |
+| `TELEGRAM_ANNOUNCE_TESTNETS` | [false] `true` posts testnet launches too; useful for trying it, noise on a public channel. |
 | `DEX_OVERRIDES` | [unset — the built-in, verified Uniswap/PancakeSwap V2 addresses] JSON replacing a network's DEX for adding liquidity, e.g. `{"sepolia": {"name": "…", "router": "0x…", "factory": "0x…", "wrapped_native": "0x…"}}`. For local chains (the e2e suite); leave unset in production. |
 | `MAINTENANCE_INTERVAL_SECONDS` | [300] Read only by the scheduler script, not the app. |
 | `MORALIS_API_KEY`, `SOLSCAN_API_KEY` | Read into config but not used by any code yet. |
@@ -151,6 +153,10 @@ Setting it up:
 3. Run `flask telegram-set-webhook` once (under Compose: `docker compose exec backend flask telegram-set-webhook`). It points Telegram at `/api/telegram/webhook` and sets the bot's command menu. The webhook answers each update in its response body, so it makes no outgoing requests.
 
 Locally, where Telegram can't reach the webhook, run `flask telegram-poll` instead, which asks Telegram for messages. It doesn't work while a webhook is set: `flask telegram-set-webhook --delete` removes it. Use a separate test bot for this, so the live bot's webhook stays in place.
+
+### The launch channel
+
+With `TELEGRAM_ANNOUNCE_CHAT` set, every curve launch is posted there as it's recorded: name, ticker, network, the graduation target and DEX, the contract address, and a "Buy $TICKER" button to its token page. Mainnet launches only, unless `TELEGRAM_ANNOUNCE_TESTNETS=true`. To set it up, create a public channel in Telegram, add the bot as an admin with permission to post, and set its `@username`. A post that fails (Telegram down or slow) doesn't fail the launch. `flask announce-launches`, which the `scheduler` service runs every few minutes, posts launches from the last day that were missed. Each launch is posted once (`contract_deployments.announced_at`). Launches from before the channel existed count as posted.
 
 ## Rate limiting with more than one worker
 

@@ -187,6 +187,11 @@ class Config:
     PUBLIC_API_URL = os.environ.get("PUBLIC_API_URL", "").strip().rstrip("/")
     # The network a /launch link opens on when the message doesn't name one.
     TELEGRAM_LAUNCH_NETWORK = os.environ.get("TELEGRAM_LAUNCH_NETWORK", "").strip() or "base"
+    # Where the bot posts each new curve launch: a channel's @username or
+    # numeric id, with the bot added as an admin. Unset: nothing is posted.
+    TELEGRAM_ANNOUNCE_CHAT = os.environ.get("TELEGRAM_ANNOUNCE_CHAT", "").strip()
+    # Testnet launches are left out of the channel unless this is "true".
+    TELEGRAM_ANNOUNCE_TESTNETS = os.environ.get("TELEGRAM_ANNOUNCE_TESTNETS", "").strip().lower() == "true"
 
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
@@ -239,6 +244,15 @@ class TestConfig(Config):
     CANDY_MACHINE_SHARED_SECRET = "test-shared-secret"
     # Drops refuse to launch without it (candy_machine.platform_mint_fee).
     PLATFORM_SOLANA_FEE_RECIPIENT = "GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB"
+    # Never the real bot or channel from a developer's .env: a test that
+    # records a curve launch would post it. Tests that want the bot set these.
+    TELEGRAM_BOT_TOKEN = ""
+    TELEGRAM_WEBHOOK_SECRET = ""
+    TELEGRAM_ANNOUNCE_CHAT = ""
+    TELEGRAM_ANNOUNCE_TESTNETS = False
+    PUBLIC_APP_URL = "http://localhost:5173"
+    PUBLIC_API_URL = ""
+    TELEGRAM_LAUNCH_NETWORK = "base"
     # Quiets the per-request JSON log line (see logging_config.py) across
     # 130+ tests' worth of requests — tests that specifically want to
     # assert on logging behavior use caplog.set_level(..., logger="app")

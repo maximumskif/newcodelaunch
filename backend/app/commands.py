@@ -140,9 +140,21 @@ def telegram_set_webhook_command(delete: bool) -> None:
     )
     click.echo(f"Telegram now sends updates to {url}")
 
+@click.command("announce-launches")
+@with_appcontext
+def announce_launches_command() -> None:
+    """Posts recent curve launches the Telegram launch channel missed. A
+    launch is posted as it's recorded; this catches the ones Telegram didn't
+    take then. Does nothing when no channel is set."""
+    from .services import telegram_bot
+
+    click.echo(f"Posted {telegram_bot.announce_pending()} launch(es) to Telegram.")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(prune_nonces_command)
     app.cli.add_command(reap_stale_generation_jobs_command)
     app.cli.add_command(curve_fees_command)
     app.cli.add_command(telegram_poll_command)
     app.cli.add_command(telegram_set_webhook_command)
+    app.cli.add_command(announce_launches_command)

@@ -3,7 +3,7 @@ from eth_utils import is_hex_address
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...extensions import limiter
-from ...services import blockchain, contract_templates, contracts, explorer_verification, liquidity, projects
+from ...services import blockchain, contract_templates, contracts, explorer_verification, liquidity, projects, telegram_bot
 
 contracts_bp = Blueprint("contracts", __name__)
 
@@ -105,6 +105,10 @@ def create_deployment():
         return jsonify(error=str(exc)), 404
     except ValueError as exc:
         return jsonify(error=str(exc)), 422
+
+    # Posts a new curve launch to the Telegram launch channel, when there is
+    # one; never fails the request.
+    telegram_bot.announce_launch(deployment)
 
     project_id = data.get("project_id")
     if project_id:

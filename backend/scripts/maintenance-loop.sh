@@ -5,6 +5,9 @@
 #   flask reap-stale-generation-jobs  fails NFT generation jobs whose worker
 #                                     died mid-run (see app/commands.py)
 #   flask prune-nonces                deletes spent/expired sign-in nonces
+#   flask announce-launches           posts curve launches the Telegram
+#                                     launch channel missed (a no-op
+#                                     without TELEGRAM_ANNOUNCE_CHAT)
 #
 # Both existed for months with nothing running them (README "Known gaps").
 # This is what docker-compose.yml's `scheduler` service runs. Why a sleep
@@ -57,6 +60,7 @@ run_all() {
   failed=0
   run reap-stale-generation-jobs
   run prune-nonces
+  run announce-launches
 }
 
 # --once exits non-zero if either command failed, so an external scheduler

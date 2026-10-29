@@ -1245,7 +1245,11 @@ The first step to distribution: people launch a coin from Telegram (the owner ch
 
 **Verified**: pytest 465 (28 new: parsing, networks and aliases, escaping, refusals, the secret, off without a token, polling offsets, the webhook registration). Vitest 287 (a Telegram link fills in and launches; an unknown network is ignored). Not yet tried against the real Telegram: that needs a bot token from @BotFather.
 
-**Next**: auto-post each launch to a Telegram channel (the bot can do it once it's an admin there), then X.
+**Launch channel** (same day): every new curve launch is posted to `TELEGRAM_ANNOUNCE_CHAT` as it's recorded: name, ticker, network, graduation target and DEX, contract, and a "Buy $TICKER" button to its token page. Mainnet only unless `TELEGRAM_ANNOUNCE_TESTNETS=true`. A launch is never failed or slowed for long by Telegram (5 s limit). `flask announce-launches`, now in the scheduler's loop, posts the last day's missed ones. Posting once is enforced by claiming `announced_at` before sending (cleared if it fails), so the request and the retry can't both post. Migration `5b1e7c9a2d40`, round-tripped, marks every earlier launch as posted, so turning it on doesn't post the history.
+
+**Verified**: pytest 476 (posted once; the "launch your own" line; a failed post retried; only the last day; curves only; testnets left out unless asked; off without a channel; recording a launch posts it). Not yet tried against the real Telegram. Local pytest crashes at random on this machine since 2026-10-29 (segfaults, also on already-green commits); it crashes about half the time on its own, outside the project, and not with memory-layout randomisation off (`setarch x86_64 -R`), under which the suite passed in full. A real post went to the live channel through the same code.
+
+**Next**: X.
 
 ## Where we left off, 2026-09-30
 

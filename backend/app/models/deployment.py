@@ -47,6 +47,11 @@ class ContractDeployment(db.Model):
     verification_guid = db.Column(db.String(128), nullable=True)
     verification_message = db.Column(db.String(512), nullable=True)
 
+    # When a curve launch was posted to the Telegram launch channel
+    # (services/telegram_bot.announce_launch). Also the claim that stops it
+    # being posted twice: set before sending, cleared again if sending fails.
+    announced_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
 
     def to_dict(self) -> dict:

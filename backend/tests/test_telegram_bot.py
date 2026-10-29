@@ -194,3 +194,137 @@ def test_set_webhook_needs_a_public_https_api(bot):
     bot.config["PUBLIC_API_URL"] = "http://localhost:5000"
     result = bot.test_cli_runner().invoke(telegram_set_webhook_command)
     assert result.exit_code != 0 and "PUBLIC_API_URL" in result.output
+
+
+# The launch channel.
+
+CURVE = "0x00000000000000000000000000000000000C0FFE"
+
+
+def _curve_launch(network="base", template_id="curve_token", **fields):
+    from app.extensions import db
+    from app.models.deployment import ContractDeployment
+    from app.models.user import Chain, User
+
+    user = User(wallet_address=f"0x{len(User.query.all()):040x}", chain=Chain.EVM)
+    db.session.add(user)
+    db.session.commit()
+    deployment = ContractDeployment(
+        user_id=user.id,
+        template_id=template_id,
+        template_name="Bonding-Curve Token",
+        contract_type="erc20",
+        network=network,
+        contract_address=CURVE,
+        transaction_hash=f"0x{ContractDeployment.query.count():064x}",
+        deployer_address="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        parameters={"TOKEN_NAME": "Moon <Cat>", "TOKEN_SYMBOL": "MCAT", "GRADUATION_TARGET": "4500000000000000000"},
+        **fields,
+    )
+    db.session.add(deployment)
+    db.session.commit()
+    return deployment
+
+
+@pytest.fixture
+def channel(bot, monkeypatch):
+    bot.config["TELEGRAM_ANNOUNCE_CHAT"] = "@launches"
+    monkeypatch.setattr(telegram_bot, "_usernames", {"123:abc": "NovaLaunchBot"})
+    return bot
+
+
+def test_a_curve_launch_is_posted_once(channel, monkeypatch):
+    calls = _telegram(monkeypatch, [{"message_id": 1}])
+    launch = _curve_launch()
+    assert telegram_bot.announce_launch(launch) is True
+    ((method, payload),) = calls
+    assert method == "sendMessage" and payload["chat_id"] == "@launches"
+    assert "New launch on Base" in payload["text"]
+    assert "<b>Moon &lt;Cat&gt;</b> ($MCAT)" in payload["text"]
+    assert "At 4.5 ETH raised it moves to Uniswap V2" in payload["text"]
+    assert payload["text"].endswith("Launch your own: send /launch to @NovaLaunchBot")
+    assert payload["reply_markup"]["inline_keyboard"][0][0] == {"text": "Buy $MCAT", "url": f"https://launch.example/token/base/{CURVE}"}
+    assert launch.announced_at is not None
+    # Recorded again, or the retry command running too: not posted again.
+    assert telegram_bot.announce_launch(launch) is False
+    assert telegram_bot.announce_pending() == 0
+    assert len(calls) == 1
+
+
+def test_a_failed_post_is_tried_again_later(channel, monkeypatch):
+    down = MagicMock(side_effect=telegram_bot.requests.ConnectionError("down"))
+    monkeypatch.setattr(telegram_bot.requests, "post", down)
+    launch = _curve_launch()
+    assert telegram_bot.announce_launch(launch) is False
+    assert launch.announced_at is None
+    calls = _telegram(monkeypatch, [{"message_id": 1}])
+    assert telegram_bot.announce_pending() == 1
+    assert len(calls) == 1 and launch.announced_at is not None
+
+
+def test_only_recent_launches_are_retried(channel, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    _curve_launch(created_at=datetime.now(timezone.utc) - timedelta(days=2))
+    calls = _telegram(monkeypatch, [])
+    assert telegram_bot.announce_pending() == 0 and calls == []
+
+
+@pytest.mark.parametrize(
+    ("network", "template_id", "testnets", "posted"),
+    [
+        ("base", "erc20_basic", False, False),  # only curve launches
+        ("base_sepolia", "curve_token", False, False),  # testnets are left out
+        ("base_sepolia", "curve_token", True, True),  # unless asked for
+    ],
+)
+def test_what_gets_posted(channel, monkeypatch, network, template_id, testnets, posted):
+    channel.config["TELEGRAM_ANNOUNCE_TESTNETS"] = testnets
+    calls = _telegram(monkeypatch, [{"message_id": 1}])
+    assert telegram_bot.announce_launch(_curve_launch(network=network, template_id=template_id)) is posted
+    assert len(calls) == int(posted)
+
+
+def test_nothing_is_posted_without_a_channel(bot, monkeypatch):
+    calls = _telegram(monkeypatch, [])
+    assert telegram_bot.announce_launch(_curve_launch()) is False
+    assert telegram_bot.announce_pending() == 0 and calls == []
+
+
+def test_the_retry_command_reports_what_it_posted(channel, monkeypatch):
+    _curve_launch()
+    _telegram(monkeypatch, [{"message_id": 1}])
+    result = channel.test_cli_runner().invoke(args=["announce-launches"])
+    assert result.exit_code == 0 and "Posted 1 launch(es)" in result.output
+
+
+def test_recording_a_launch_posts_it(channel, client, monkeypatch):
+    from flask_jwt_extended import create_access_token
+
+    from app.services import contracts
+
+    launch = _curve_launch()
+    monkeypatch.setattr(contracts, "record_deployment", lambda **_: launch)
+    posted = MagicMock(return_value=True)
+    monkeypatch.setattr(telegram_bot, "announce_launch", posted)
+    response = client.post(
+        "/api/contracts/deployments",
+        json={"template_id": "curve_token", "network": "base", "contract_address": CURVE, "transaction_hash": "0x1", "deployer_address": "0x2"},
+        headers={"Authorization": f"Bearer {create_access_token(identity=launch.user_id)}"},
+    )
+    assert response.status_code == 201
+    posted.assert_called_once_with(launch)
+
+
+def test_a_post_goes_out_without_the_invitation_if_telegram_wont_say_the_bots_name(bot, monkeypatch):
+    bot.config["TELEGRAM_ANNOUNCE_CHAT"] = "@launches"
+    monkeypatch.setattr(telegram_bot, "_usernames", {})
+    monkeypatch.setattr(telegram_bot, "call", MagicMock(side_effect=RuntimeError("down")))
+    assert "Launch your own" not in telegram_bot.announcement(_curve_launch())["text"]
+
+
+def test_the_bots_name_is_asked_once(bot, monkeypatch):
+    monkeypatch.setattr(telegram_bot, "_usernames", {})
+    calls = _telegram(monkeypatch, [{"username": "NovaLaunchBot"}])
+    assert telegram_bot.bot_username() == "NovaLaunchBot" == telegram_bot.bot_username()
+    assert len(calls) == 1
