@@ -16,10 +16,10 @@ function buys(n: number): CurveTrade[] {
   const trades: CurveTrade[] = []
   let state = { ethReserve: 0n, tokensSold: 0n }
   for (let i = 0; i < n; i++) {
-    const { tokens, cost } = quoteBuy(terms, state, parseEther('0.1'))
+    const { tokens, cost, fee } = quoteBuy(terms, state, parseEther('0.1'))
     state = { ethReserve: state.ethReserve + cost, tokensSold: state.tokensSold + tokens }
     trades.push({
-      kind: 'buy', wallet: `0x${String(i).padStart(40, '0')}`, eth: cost.toString(), tokens: tokens.toString(),
+      kind: 'buy', wallet: `0x${String(i).padStart(40, '0')}`, eth: cost.toString(), fee: fee.toString(), tokens: tokens.toString(),
       eth_reserve: state.ethReserve.toString(), tokens_sold: state.tokensSold.toString(), block: 100 + i, tx: `0x${i}`, time: now - (n - i) * 60,
     })
   }

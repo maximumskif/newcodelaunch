@@ -252,6 +252,7 @@ CURVE_PARAMS = {
     "GRADUATION_TARGET": str(4 * 10**18),
     "FACTORY": "0x7e0987e5b3a30e3f2828572bb659a548460a3003",
     "WRAPPED_NATIVE": "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
+    "FEE_RECIPIENT": "0x00000000000000000000000000000000000fee00",
 }
 
 
@@ -264,10 +265,19 @@ def test_curve_token_compiles_with_no_owner_and_fixed_terms():
     assert compiled.success, compiled.error_message
     functions = {item["name"] for item in compiled.abi if item.get("type") == "function"}
     assert {"buy", "sell", "quoteBuy", "quoteSell", "pair", "graduated", "ethReserve", "tokensSold", "transfer"} <= functions
+    assert {"FEE_BPS", "feeRecipient", "feesOwed", "withdrawFees"} <= functions
     assert not functions & {"owner", "transferOwnership", "withdraw", "mint", "setPair"}
     payable = {item.get("name", item["type"]) for item in compiled.abi if item.get("stateMutability") == "payable"}
     assert payable == {"buy", "constructor"}
     assert not any(item["type"] in ("receive", "fallback") for item in compiled.abi)
+
+
+def test_curve_token_fee_is_the_platforms_and_fixed_in_its_code():
+    from app.services import contracts
+
+    code = contract_templates.render_contract("curve_token", CURVE_PARAMS)["contract_code"]
+    assert f"FEE_BPS = {contracts.CURVE_FEE_BPS};" in code
+    assert "feeRecipient = 0x00000000000000000000000000000000000FEE00;" in code
 
 
 def test_curve_token_supply_defaults_to_a_billion():
@@ -282,7 +292,7 @@ def test_curve_token_supply_defaults_to_a_billion():
      ({"TOKEN_SUPPLY": str(10**15 + 1)}, "TOKEN_SUPPLY can be at most"),
      ({"GRADUATION_TARGET": str(10**15 - 1)}, "GRADUATION_TARGET must be at least"),
      ({"GRADUATION_TARGET": str(10**24 + 1)}, "GRADUATION_TARGET can be at most"),
-     ({"FACTORY": "0x123"}, "FACTORY"), ({"WRAPPED_NATIVE": ""}, "WRAPPED_NATIVE")],
+     ({"FACTORY": "0x123"}, "FACTORY"), ({"WRAPPED_NATIVE": ""}, "WRAPPED_NATIVE"), ({"FEE_RECIPIENT": ""}, "FEE_RECIPIENT")],
 )
 def test_curve_token_parameters_are_checked(overrides, message):
     with pytest.raises(contract_templates.TemplateParameterError, match=message):

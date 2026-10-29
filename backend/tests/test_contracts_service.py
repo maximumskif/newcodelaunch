@@ -248,6 +248,9 @@ def test_record_deployment_refuses_a_contract_whose_code_is_not_the_template(app
         assert deployment.parameters == BASIC_PARAMS
 
 
+FEE_WALLET = "0x00000000000000000000000000000000000FEE00"
+
+
 def test_a_curve_is_recorded_only_if_it_graduates_into_the_networks_real_dex(app, monkeypatch, code_matches):
     # The curve sends everything raised to the pair its FACTORY returns: a
     # lookalike pointing at a factory of its own would pass the code check.
@@ -256,8 +259,9 @@ def test_a_curve_is_recorded_only_if_it_graduates_into_the_networks_real_dex(app
     with app.app_context():
         user = _make_user()
         monkeypatch.setattr(blockchain, "get_transaction_status", _successful_receipt())
+        app.config["PLATFORM_FEE_RECIPIENT"] = FEE_WALLET
         dex = liquidity.get_dex("sepolia")
-        params = {"FACTORY": dex["factory"], "WRAPPED_NATIVE": dex["wrapped_native"]}
+        params = {"FACTORY": dex["factory"], "WRAPPED_NATIVE": dex["wrapped_native"], "FEE_RECIPIENT": FEE_WALLET}
 
         with pytest.raises(ValueError, match="FACTORY must be Uniswap"):
             _record(user, template_id="curve_token", parameters={**params, "FACTORY": "0x" + "11" * 20})
@@ -265,8 +269,38 @@ def test_a_curve_is_recorded_only_if_it_graduates_into_the_networks_real_dex(app
             _record(user, template_id="curve_token", parameters={**params, "WRAPPED_NATIVE": "0x" + "22" * 20})
         with pytest.raises(ValueError, match="polygon-amoy has none"):
             _record(user, template_id="curve_token", network="polygon-amoy", parameters=params)
+        # Its fee must be the platform's: a curve keeping it would still be listed here.
+        with pytest.raises(ValueError, match="FEE_RECIPIENT must be the platform's fee wallet"):
+            _record(user, template_id="curve_token", parameters={**params, "FEE_RECIPIENT": "0x" + "33" * 20})
+        app.config["PLATFORM_FEE_RECIPIENT"] = ""
+        with pytest.raises(ValueError, match="fee wallet isn't set up"):
+            _record(user, template_id="curve_token", parameters=params)
+        app.config["PLATFORM_FEE_RECIPIENT"] = FEE_WALLET
         assert ContractDeployment.query.count() == 0
 
         lowercase = {key: value.lower() for key, value in params.items()}
         deployment = _record(user, template_id="curve_token", parameters=lowercase)
         assert deployment.contract_type == "curve"
+
+
+def test_a_curve_paying_its_fee_elsewhere_isnt_even_compiled(app):
+    # Refused before the creator pays for a launch that recording would turn away.
+    from app.services import contract_templates
+    from tests.test_contract_templates import CURVE_PARAMS
+
+    with app.app_context():
+        app.config["PLATFORM_FEE_RECIPIENT"] = FEE_WALLET
+        with pytest.raises(contract_templates.TemplateParameterError, match="FEE_RECIPIENT must be"):
+            contracts.compile_template("curve_token", {**CURVE_PARAMS, "FEE_RECIPIENT": "0x" + "33" * 20})
+        assert contracts.compile_template("curve_token", {**CURVE_PARAMS, "FEE_RECIPIENT": FEE_WALLET.lower()})["contract_name"] == "MoonCat"
+
+
+def test_curve_fee_route_tells_the_launch_form_where_the_fee_goes(app, client):
+    app.config["PLATFORM_FEE_RECIPIENT"] = ""
+    response = client.get("/api/contracts/curve-fee")
+    assert response.status_code == 503 and "isn't set up" in response.get_json()["error"]
+    response = client.post("/api/contracts/compile", json={"template_id": "curve_token", "parameters": {}})
+    assert response.status_code == 503
+
+    app.config["PLATFORM_FEE_RECIPIENT"] = FEE_WALLET.lower()
+    assert client.get("/api/contracts/curve-fee").get_json() == {"fee_bps": 100, "recipient": FEE_WALLET}

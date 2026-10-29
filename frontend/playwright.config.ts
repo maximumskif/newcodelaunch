@@ -68,7 +68,7 @@ export default defineConfig({
     },
     {
       command: 'bash ./e2e/setup/run-candy-machine-sidecar.sh',
-      url: 'http://localhost:4000/health',
+      url: `http://localhost:${process.env.E2E_SIDECAR_PORT ?? '4000'}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },

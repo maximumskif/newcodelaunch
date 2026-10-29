@@ -18,14 +18,33 @@ from . import blockchain
 from .holder_snapshot import _cached, fetch_logs
 from .token_pages import _fn
 
-BUY_TOPIC = "0x" + Web3.keccak(text="Buy(address,uint256,uint256,uint256,uint256)").hex().removeprefix("0x")
-SELL_TOPIC = "0x" + Web3.keccak(text="Sell(address,uint256,uint256,uint256,uint256)").hex().removeprefix("0x")
-GRADUATED_TOPIC = "0x" + Web3.keccak(text="Graduated(address,uint256,uint256)").hex().removeprefix("0x")
+
+def _topic(signature: str) -> str:
+    return "0x" + Web3.keccak(text=signature).hex().removeprefix("0x")
+
+
+# Trades carry their fee since the template took one; curves launched
+# before that emit the fee-less events.
+BUY_TOPIC = _topic("Buy(address,uint256,uint256,uint256,uint256,uint256)")
+SELL_TOPIC = _topic("Sell(address,uint256,uint256,uint256,uint256,uint256)")
+LEGACY_BUY_TOPIC = _topic("Buy(address,uint256,uint256,uint256,uint256)")
+LEGACY_SELL_TOPIC = _topic("Sell(address,uint256,uint256,uint256,uint256)")
+GRADUATED_TOPIC = _topic("Graduated(address,uint256,uint256)")
+# Each trade event's data words. "eth" is what the trader paid into the
+# curve (buy) or received (sell); the fee is on top of a buy and out of a
+# sale.
+_TRADE_LAYOUTS = {
+    BUY_TOPIC: ("buy", ("eth", "fee", "tokens", "eth_reserve", "tokens_sold")),
+    SELL_TOPIC: ("sell", ("tokens", "eth", "fee", "eth_reserve", "tokens_sold")),
+    LEGACY_BUY_TOPIC: ("buy", ("eth", "tokens", "eth_reserve", "tokens_sold")),
+    LEGACY_SELL_TOPIC: ("sell", ("tokens", "eth", "eth_reserve", "tokens_sold")),
+}
 # Trades returned, newest first. Each distinct block costs one timestamp read.
 MAX_TRADES = 100
 MAX_LAUNCHES = 48
 
 _STATE_ABI = [_fn("graduated", ["bool"]), _fn("ethReserve", ["uint256"])]
+_FEES_ABI = [_fn("feesOwed", ["uint256"])]
 
 
 class NotFoundError(ValueError):
@@ -76,7 +95,7 @@ def curve_trades(network: str, address: str) -> dict[str, Any]:
     def build() -> dict[str, Any]:
         try:
             start = w3.eth.get_transaction_receipt(deployment.transaction_hash)["blockNumber"]
-            logs = fetch_logs(w3, checksum, [BUY_TOPIC, SELL_TOPIC, GRADUATED_TOPIC], start, latest)
+            logs = fetch_logs(w3, checksum, [*_TRADE_LAYOUTS, GRADUATED_TOPIC], start, latest)
         except Exception as exc:  # noqa: BLE001 — RPC trouble; the route answers generically
             raise ChainReadError(str(exc)) from exc
 
@@ -87,12 +106,11 @@ def curve_trades(network: str, address: str) -> dict[str, Any]:
             words = _words(log["data"])
             who = Web3.to_checksum_address("0x" + topics[1][-40:]) if len(topics) > 1 else None
             where = {"block": log["blockNumber"], "tx": _hex(log["transactionHash"])}
-            if topics[0] == BUY_TOPIC and len(words) == 4:
-                eth, tokens, reserve, sold = words
-                trades.append({"kind": "buy", "wallet": who, "eth": str(eth), "tokens": str(tokens), "eth_reserve": str(reserve), "tokens_sold": str(sold), **where})
-            elif topics[0] == SELL_TOPIC and len(words) == 4:
-                tokens, eth, reserve, sold = words
-                trades.append({"kind": "sell", "wallet": who, "eth": str(eth), "tokens": str(tokens), "eth_reserve": str(reserve), "tokens_sold": str(sold), **where})
+            layout = _TRADE_LAYOUTS.get(topics[0])
+            if layout and len(words) == len(layout[1]):
+                kind, fields = layout
+                trade = {"fee": "0", **{field: str(word) for field, word in zip(fields, words)}}
+                trades.append({"kind": kind, "wallet": who, **trade, **where})
             elif topics[0] == GRADUATED_TOPIC and len(words) == 2:
                 graduated = {"pair": who, "eth": str(words[0]), "tokens": str(words[1]), **where}
 
@@ -157,3 +175,22 @@ def curve_launches(network: Optional[str] = None) -> dict[str, Any]:
         return {"launches": launches}
 
     return _cached(("curve-launches", network), build, seconds=15)
+
+
+def fees_owed() -> list[dict[str, Any]]:
+    """Every curve launched here that holds platform fees, with how much.
+    Anyone can send them on with the curve's withdrawFees(); they only ever
+    go to its fixed feeRecipient. Curves launched before the fee (no
+    feesOwed()) and ones whose network can't be read are left out."""
+    owed = []
+    clients: dict[str, Any] = {}
+    for row in ContractDeployment.query.filter(ContractDeployment.template_id == "curve_token").order_by(ContractDeployment.created_at.asc()):
+        try:
+            w3 = clients.get(row.network) or clients.setdefault(row.network, blockchain.get_web3(row.network))
+            curve = w3.eth.contract(address=Web3.to_checksum_address(row.contract_address), abi=_FEES_ABI)
+            amount = curve.functions.feesOwed().call()
+        except Exception:  # noqa: BLE001 — a legacy curve, or the network is down
+            continue
+        if amount:
+            owed.append({"network": row.network, "address": Web3.to_checksum_address(row.contract_address), "symbol": (row.parameters or {}).get("TOKEN_SYMBOL"), "fees_owed": amount})
+    return owed

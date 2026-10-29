@@ -14,8 +14,9 @@
 //
 // --only curve runs just a bonding-curve launch (a 0.001 ETH target, a
 // creator buy, a second wallet buying, selling and buying it out, the real
-// Uniswap V2 pool it graduates into, a router swap after) — about 0.0015
-// Sepolia ETH plus gas, most of it left in the burned pool.
+// Uniswap V2 pool it graduates into, a router swap after, the 1% fees sent
+// to the platform's wallet) — about 0.0015 Sepolia ETH plus gas, most of it
+// left in the burned pool. The backend needs PLATFORM_FEE_RECIPIENT set.
 //
 // --key-file is `cast wallet new --json` output (or {"private_key": "0x…"}).
 // Spends roughly 0.02 Sepolia ETH at ~1 gwei, 0.01 of it into the pool.
@@ -79,10 +80,13 @@ const CURVE_ABI = parseAbi([
   'function poolSupply() view returns (uint256)',
   'function graduated() view returns (bool)',
   'function pair() view returns (address)',
-  'function quoteBuy(uint256 eth) view returns (uint256 tokens, uint256 cost)',
-  'function quoteSell(uint256 tokens) view returns (uint256 eth)',
+  'function quoteBuy(uint256 value) view returns (uint256 tokens, uint256 cost, uint256 fee)',
+  'function quoteSell(uint256 tokens) view returns (uint256 eth, uint256 fee)',
   'function buy(uint256 minTokens) payable returns (uint256)',
   'function sell(uint256 tokens, uint256 minEth) returns (uint256)',
+  'function feeRecipient() view returns (address)',
+  'function feesOwed() view returns (uint256)',
+  'function withdrawFees() returns (uint256)',
 ])
 const SWAP_ABI = parseAbi(['function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable returns (uint256[])'])
 const VESTING_ABI = parseAbi(['function releasable() view returns (uint256)', 'function released() view returns (uint256)', 'function release()'])
@@ -234,18 +238,21 @@ async function curveSmoke() {
   ok('signed in with the wallet', Boolean(token))
   const { data: { dexes } } = await api('GET', '/contracts/dexes')
   const dex = dexes.sepolia
+  const { data: fee } = await api('GET', '/contracts/curve-fee')
 
   const target = parseEther('0.001')
   const creatorBuy = parseEther('0.0001')
   const params = {
     TOKEN_NAME: 'Curve Smoke', TOKEN_SYMBOL: 'CSMK', TOKEN_SUPPLY: '1000000000', GRADUATION_TARGET: target.toString(),
-    FACTORY: dex.factory, WRAPPED_NATIVE: dex.wrapped_native,
+    FACTORY: dex.factory, WRAPPED_NATIVE: dex.wrapped_native, FEE_RECIPIENT: fee.recipient,
   }
   const row = await deployTemplate('curve_token', params, 'curve launch with a creator buy', creatorBuy)
   const curve = row.contract_address
   ok('curve recorded after the backend checked its code and DEX', Boolean(row.id), etherscan('address', curve))
   const read = (functionName, args = []) => publicClient.readContract({ address: curve, abi: CURVE_ABI, functionName, args })
-  ok('creator buy raised exactly what was sent', (await read('ethReserve')) === creatorBuy)
+  const creatorRaised = await read('ethReserve')
+  ok('creator buy raised what was sent less the 1% fee', creatorRaised + (await read('feesOwed')) === creatorBuy && creatorRaised === (creatorBuy * 100n) / 101n)
+  ok("the fee goes to the platform's wallet", (await read('feeRecipient')).toLowerCase() === fee.recipient.toLowerCase(), fee.recipient)
   ok('creator holds what the curve sold', (await read('balanceOf', [me])) === (await read('tokensSold')))
   const pair = await read('pair')
   ok('the pair exists from launch, empty', pair === (await publicClient.readContract({ address: dex.factory, abi: FACTORY_ABI, functionName: 'getPair', args: [curve, dex.wrapped_native] })))
@@ -257,7 +264,7 @@ async function curveSmoke() {
 
   token = null // the public page, as a buyer with no account
   const { data: page } = await api('GET', `/token-pages/evm/sepolia/${curve}`)
-  ok('public page shows the curve', page.curve && !page.curve.graduated && BigInt(page.curve.eth_reserve) === creatorBuy && page.code_matches_template === true)
+  ok('public page shows the curve', page.curve && !page.curve.graduated && BigInt(page.curve.eth_reserve) === creatorRaised && page.code_matches_template === true)
 
   // A second wallet: buy, sell half, then buy out the curve.
   const buyerAccount = privateKeyToAccount(generatePrivateKey())
@@ -265,21 +272,25 @@ async function curveSmoke() {
   const gasMoney = parseEther('0.0025')
   const fundHash = await wallet.sendTransaction({ to: buyerAccount.address, value: gasMoney })
   await publicClient.waitForTransactionReceipt({ hash: fundHash })
-  const [quoted] = await read('quoteBuy', [parseEther('0.0003')])
+  const [quoted, buyCost] = await read('quoteBuy', [parseEther('0.0003')])
   await send('buyer buys on the curve', { address: curve, abi: CURVE_ABI, functionName: 'buy', args: [(quoted * 99n) / 100n], value: parseEther('0.0003') }, buyer)
   ok('buyer got exactly the quote', (await read('balanceOf', [buyerAccount.address])) === quoted)
-  const ethBack = await read('quoteSell', [quoted / 2n])
+  const [ethBack, sellFee] = await read('quoteSell', [quoted / 2n])
   await send('buyer sells half', { address: curve, abi: CURVE_ABI, functionName: 'sell', args: [quoted / 2n, (ethBack * 99n) / 100n] }, buyer)
-  ok('reserve is what was paid in less what was paid out', (await read('ethReserve')) === creatorBuy + parseEther('0.0003') - ethBack)
+  ok('reserve is what went in less what came out, fees apart', (await read('ethReserve')) === creatorRaised + buyCost - ethBack - sellFee)
 
-  const [rest, cost] = await read('quoteBuy', [parseEther('0.002')])
+  const [rest, cost, buyOutFee] = await read('quoteBuy', [parseEther('0.002')])
   await send('buyer buys out the curve: it graduates', { address: curve, abi: CURVE_ABI, functionName: 'buy', args: [rest], value: parseEther('0.002') }, buyer)
-  ok('graduated', await read('graduated'), `cost ${formatEther(cost)} ETH, the rest refunded`)
+  ok('graduated', await read('graduated'), `cost ${formatEther(cost)} ETH + ${formatEther(buyOutFee)} fee, the rest refunded`)
   const [r0, r1] = await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'getReserves' })
   const tokenIs0 = (await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'token0' })).toLowerCase() === curve.toLowerCase()
   const raised = await read('ethReserve')
   ok('pool holds the last 20% and everything raised', (tokenIs0 ? r0 : r1) === (await read('poolSupply')) && (tokenIs0 ? r1 : r0) === raised, `${formatEther(raised)} ETH`)
-  ok('curve kept no ETH', (await publicClient.getBalance({ address: curve })) === 0n)
+  const owed = await read('feesOwed')
+  ok('curve kept only the fees', (await publicClient.getBalance({ address: curve })) === owed && owed * 100n >= raised, `${formatEther(owed)} ETH`)
+  const feeWalletBefore = await publicClient.getBalance({ address: fee.recipient })
+  await send("anyone sends the fees on: the buyer does", { address: curve, abi: CURVE_ABI, functionName: 'withdrawFees' }, buyer)
+  ok("the platform's wallet got the fees, the curve kept nothing", (await publicClient.getBalance({ address: fee.recipient })) - feeWalletBefore === owed && (await publicClient.getBalance({ address: curve })) === 0n)
   const lpSupply = await publicClient.readContract({ address: pair, abi: parseAbi(['function totalSupply() view returns (uint256)']), functionName: 'totalSupply' })
   ok('all LP burned', (await publicClient.readContract({ address: pair, abi: PAIR_ABI, functionName: 'balanceOf', args: ['0x000000000000000000000000000000000000dEaD'] })) === lpSupply - 1000n)
 

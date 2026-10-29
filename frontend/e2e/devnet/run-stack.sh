@@ -38,6 +38,8 @@ bash "$SCRIPT_DIR/../setup/run-pinata-stub.sh" > "$WORK/pinata.log" 2>&1 &
   export PINATA_API="legacy" PINATA_UPLOADS_URL="http://127.0.0.1:5555"
   export SEPOLIA_RPC_URL="${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
   export OPENAI_API_KEY="" ETHERSCAN_API_KEY="${ETHERSCAN_API_KEY:-}"
+  # The curve smoke launches with this as its fee wallet; unset, curve launches are refused.
+  export PLATFORM_FEE_RECIPIENT="${PLATFORM_FEE_RECIPIENT:-}"
   .venv/bin/flask db upgrade
   exec .venv/bin/flask run --port 5100
 ) > "$WORK/backend.log" 2>&1 &

@@ -1,6 +1,7 @@
 """Renders the Bonding-Curve Token template into src/ for the Foundry tests,
 exactly as the backend renders it for a deploy. FACTORY and WRAPPED_NATIVE
 are fixed test addresses; the tests put Uniswap's own V2 code there.
+FEE_RECIPIENT is a fixed test address too.
 
     cd backend && .venv/bin/python tests/forge/render.py && cd tests/forge && forge test
 """
@@ -14,6 +15,7 @@ from app.services import contract_templates  # noqa: E402
 
 FACTORY = "0x00000000000000000000000000000000000fAc70"
 WRAPPED_NATIVE = "0x0000000000000000000000000000000000057e70"
+FEE_RECIPIENT = "0x000000000000000000000000000000000000FEE0"
 
 # (display name, supply in whole tokens, graduation target in wei)
 VARIANTS = [
@@ -35,6 +37,7 @@ for display_name, supply, target in VARIANTS:
             "GRADUATION_TARGET": target,
             "FACTORY": FACTORY,
             "WRAPPED_NATIVE": WRAPPED_NATIVE,
+            "FEE_RECIPIENT": FEE_RECIPIENT,
         },
     )
     (out / f"{rendered['contract_name']}.sol").write_text(rendered["contract_code"])

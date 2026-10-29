@@ -36,6 +36,8 @@ def compile_template():
         result = contracts.compile_template(template_id, parameters)
     except contract_templates.UnknownTemplateError as exc:
         return jsonify(error=str(exc)), 404
+    except contracts.CurveFeeNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
     except contract_templates.TemplateParameterError as exc:
         return jsonify(error=str(exc)), 400
     except contracts.CompilationFailedError as exc:
@@ -59,6 +61,8 @@ def estimate():
         result = contracts.estimate_deployment(template_id, parameters, network, deployer_address)
     except contract_templates.UnknownTemplateError as exc:
         return jsonify(error=str(exc)), 404
+    except contracts.CurveFeeNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
     except contract_templates.TemplateParameterError as exc:
         return jsonify(error=str(exc)), 400
     except contracts.CompilationFailedError as exc:
@@ -195,6 +199,17 @@ def list_dexes():
     """The DEX each EVM network supports for adding liquidity (none listed:
     not supported there)."""
     return jsonify(dexes=liquidity.dexes())
+
+
+@contracts_bp.get("/curve-fee")
+def curve_fee():
+    """What a bonding-curve launch pays the platform, and where it goes:
+    the launch form fills FEE_RECIPIENT from this."""
+    try:
+        recipient = contracts.curve_fee_recipient()
+    except contracts.CurveFeeNotConfiguredError as exc:
+        return jsonify(error=str(exc)), 503
+    return jsonify(fee_bps=contracts.CURVE_FEE_BPS, recipient=recipient)
 
 
 @contracts_bp.get("/deployments/<deployment_id>/liquidity")

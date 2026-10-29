@@ -112,10 +112,14 @@ export interface HolderSnapshot {
 // A bonding-curve token's trades, from its own events (backend
 // services/curve_market.py). Amounts are wei / base units as strings;
 // eth_reserve and tokens_sold are the curve's state right after the trade.
+// eth is what went into the curve (buy) or to the seller (sell); the 1%
+// platform fee was on top of a buy and out of a sale ("0" for curves
+// launched before there was one).
 export interface CurveTrade {
   kind: 'buy' | 'sell'
   wallet: string
   eth: string
+  fee: string
   tokens: string
   eth_reserve: string
   tokens_sold: string

@@ -29,7 +29,7 @@ export SEPOLIA_RPC_URL="http://127.0.0.1:8545"
 export SOLANA_DEVNET_RPC_URL="http://127.0.0.1:8899"
 export CORS_ORIGINS="http://localhost:5173"
 export CANDY_MACHINE_SHARED_SECRET="e2e-test-shared-secret"
-export CANDY_MACHINE_SERVICE_URL="http://localhost:4000"
+export CANDY_MACHINE_SERVICE_URL="http://localhost:${E2E_SIDECAR_PORT:-4000}"
 # Real credential shape (a JWT the stub never actually checks) so
 # ipfs.py's _auth_headers() doesn't short-circuit with IPFSNotConfiguredError
 # before the request ever reaches PINATA_BASE_URL.
@@ -73,6 +73,9 @@ export RATE_LIMIT_ENABLED="false"
 # The Uniswap V2 the e2e suite deploys onto anvil itself (e2e/setup/localUniswap.ts —
 # fixed addresses, from a dedicated deployer key at nonces 0-2).
 export DEX_OVERRIDES='{"sepolia": {"name": "Uniswap V2 (local)", "router": "0x494fb8c2Bd7f47cC945fd1054895bAcBf6DeaE4f", "factory": "0x303C579059DB0c79a1da9aD632858E5B755b340b", "wrapped_native": "0xdcF212126CDEB374aFDFb7ba5C35aA9108b353d4"}}'
+# Where curve launches send their 1% trading fee: an address with no code
+# and no other use on anvil, so curve.spec.ts can check its balance exactly.
+export PLATFORM_FEE_RECIPIENT="0x000000000000000000000000000000000000FEE0"
 
 .venv/bin/flask db upgrade
 exec .venv/bin/flask run

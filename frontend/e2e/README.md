@@ -151,6 +151,13 @@ starts the real candy-machine sidecar and the real Vite dev server, runs
 the tests, then tears everything down. No manual multi-terminal setup — see
 `playwright.config.ts`'s `webServer` array and the scripts under `e2e/setup/`.
 
+Locally, Playwright reuses anything already answering on a webServer port
+instead of starting its own. So stop your dev backend (5000), Vite (5173)
+and sidecar (4000) first, or the suite runs against them, with the wrong
+settings. A dev sidecar can stay up if you move the suite's elsewhere:
+`E2E_SIDECAR_PORT=4100 npm run test:e2e`. Use Node 24 (as CI does):
+Playwright can't load the Solana specs on Node 22.22.
+
 ## What's covered so far
 
 - `token-deploy.spec.ts` — connect wallet → sign in (real nonce + real

@@ -60,10 +60,10 @@ class _Chain:
         self.block_number = 200
         self.blocks_read = []
         self.logs = [
-            _log(110, curve_market.BUY_TOPIC, A, 10, 1000, 10, 1000, tx="0x0a"),
-            _log(120, curve_market.BUY_TOPIC, B, 20, 1500, 30, 2500, tx="0x0b"),
-            _log(130, curve_market.SELL_TOPIC, A, 500, 6, 24, 2000, tx="0x0c"),
-            _log(140, curve_market.BUY_TOPIC, B, 30, 6000, 54, 8000, tx="0x0d"),
+            _log(110, curve_market.BUY_TOPIC, A, 10, 1, 1000, 10, 1000, tx="0x0a"),
+            _log(120, curve_market.BUY_TOPIC, B, 20, 1, 1500, 30, 2500, tx="0x0b"),
+            _log(130, curve_market.SELL_TOPIC, A, 500, 6, 1, 23, 2000, tx="0x0c"),
+            _log(140, curve_market.BUY_TOPIC, B, 30, 1, 6000, 53, 8000, tx="0x0d"),
             _log(140, curve_market.GRADUATED_TOPIC, PAIR, 54, 2000, tx="0x0d"),
         ]
 
@@ -71,7 +71,9 @@ class _Chain:
         return {"blockNumber": 100}
 
     def get_logs(self, query):
-        assert query["topics"] == [[curve_market.BUY_TOPIC, curve_market.SELL_TOPIC, curve_market.GRADUATED_TOPIC]]
+        assert query["topics"] == [[
+            curve_market.BUY_TOPIC, curve_market.SELL_TOPIC, curve_market.LEGACY_BUY_TOPIC, curve_market.LEGACY_SELL_TOPIC, curve_market.GRADUATED_TOPIC,
+        ]]
         return [log for log in self.logs if query["fromBlock"] <= log["blockNumber"] <= query["toBlock"]]
 
     def get_block(self, number):
@@ -89,17 +91,33 @@ def test_trades_come_from_the_curves_own_events_newest_first(app, curves, monkey
     assert [(t["kind"], t["wallet"], t["eth"], t["tokens"]) for t in result["trades"]] == [
         ("buy", B, "30", "6000"), ("sell", A, "6", "500"), ("buy", B, "20", "1500"), ("buy", A, "10", "1000"),
     ]
-    assert result["trades"][1]["eth_reserve"] == "24" and result["trades"][1]["tokens_sold"] == "2000"
+    assert result["trades"][1]["eth_reserve"] == "23" and result["trades"][1]["tokens_sold"] == "2000"
+    assert [t["fee"] for t in result["trades"]] == ["1", "1", "1", "1"]
     assert result["trades"][0]["time"] == 1_800_000_140 and result["trades"][0]["tx"].endswith("0d")
     assert result["graduated"]["pair"] == PAIR and result["graduated"]["eth"] == "54"
     assert sorted(set(chain.blocks_read)) == [110, 120, 130, 140]  # one timestamp read per block
     assert result["explorer_tx"] == "https://sepolia.etherscan.io/tx/"
 
 
+def test_curves_launched_before_the_fee_still_list_their_trades(app, curves, monkeypatch):
+    chain = _Chain()
+    chain.logs = [
+        _log(110, curve_market.LEGACY_BUY_TOPIC, A, 10, 1000, 10, 1000),
+        _log(120, curve_market.LEGACY_SELL_TOPIC, A, 500, 6, 4, 500),
+        _log(130, curve_market.BUY_TOPIC, A, 10, 1000, 10),  # a trade event of the wrong length is skipped
+    ]
+    monkeypatch.setattr(blockchain, "get_web3", lambda network: chain)
+    with app.app_context():
+        result = curve_market.curve_trades("sepolia", CURVE)
+    assert [(t["kind"], t["eth"], t["fee"], t["tokens"], t["eth_reserve"]) for t in result["trades"]] == [
+        ("sell", "6", "0", "500", "4"), ("buy", "10", "0", "1000", "10"),
+    ]
+
+
 def test_only_the_latest_trades_are_listed(app, curves, monkeypatch):
     chain = _Chain()
     chain.block_number = 1_000
-    chain.logs = [_log(101 + i, curve_market.BUY_TOPIC, A, 1, 1, i + 1, i + 1) for i in range(curve_market.MAX_TRADES + 20)]
+    chain.logs = [_log(101 + i, curve_market.BUY_TOPIC, A, 1, 0, 1, i + 1, i + 1) for i in range(curve_market.MAX_TRADES + 20)]
     monkeypatch.setattr(blockchain, "get_web3", lambda network: chain)
     with app.app_context():
         result = curve_market.curve_trades("sepolia", CURVE)
@@ -156,7 +174,31 @@ def test_a_new_block_brings_new_trades_at_once(app, curves, monkeypatch):
     monkeypatch.setattr(blockchain, "get_web3", lambda network: chain)
     with app.app_context():
         assert curve_market.curve_trades("sepolia", CURVE)["trade_count"] == 1
-        chain.logs.append(_log(201, curve_market.BUY_TOPIC, B, 20, 1500, 30, 2500))
+        chain.logs.append(_log(201, curve_market.BUY_TOPIC, B, 20, 1, 1500, 30, 2500))
         assert curve_market.curve_trades("sepolia", CURVE)["trade_count"] == 1  # same block: cached
         chain.block_number = 201
         assert curve_market.curve_trades("sepolia", CURVE)["trade_count"] == 2
+
+
+def test_fees_owed_lists_curves_holding_fees_and_skips_the_rest(app, curves, monkeypatch):
+    owed = {CURVE: 3 * 10**15, OTHER: 0}
+
+    class _Fees:
+        def __init__(self, address):
+            self.functions = SimpleNamespace(feesOwed=lambda: SimpleNamespace(call=lambda: owed[address]))
+
+    chain = SimpleNamespace(eth=SimpleNamespace(contract=lambda address, abi: _Fees(address)))
+    monkeypatch.setattr(blockchain, "get_web3", lambda network: chain)
+    with app.app_context():
+        assert curve_market.fees_owed() == [{"network": "sepolia", "address": CURVE, "symbol": "MCAT", "fees_owed": 3 * 10**15}]
+        result = app.test_cli_runner().invoke(args=["curve-fees"])
+    assert "MCAT" in result.output and "total on sepolia: 0.003" in result.output
+
+    # A curve from before the fee has no feesOwed(): left out, not an error.
+    def legacy(address, abi):
+        raise ValueError("execution reverted")
+
+    chain.eth.contract = legacy
+    with app.app_context():
+        assert curve_market.fees_owed() == []
+        assert "No curve holds any fees." in app.test_cli_runner().invoke(args=["curve-fees"]).output

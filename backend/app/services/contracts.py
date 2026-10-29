@@ -13,6 +13,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Optional
 
+from flask import current_app
 from web3 import Web3
 
 from ..extensions import db
@@ -36,7 +37,29 @@ class CompilationFailedError(RuntimeError):
     pass
 
 
+# The curve template's FEE_BPS: 1% of every curve buy and sell.
+CURVE_FEE_BPS = 100
+
+
+class CurveFeeNotConfiguredError(ValueError):
+    pass
+
+
+def curve_fee_recipient() -> str:
+    """The platform's fee wallet, which every curve launched here pays."""
+    recipient = current_app.config.get("PLATFORM_FEE_RECIPIENT") or ""
+    if not Web3.is_address(recipient):
+        raise CurveFeeNotConfiguredError("Bonding-curve launches aren't available: the platform fee wallet isn't set up")
+    return Web3.to_checksum_address(recipient)
+
+
 def compile_template(template_id: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    # Refused here, not only when recorded: a curve paying its fee anywhere
+    # else would be launched (and paid for) only to be turned away after.
+    if template_id == "curve_token":
+        recipient = curve_fee_recipient()
+        if str(parameters.get("FEE_RECIPIENT") or "").lower() != recipient.lower():
+            raise contract_templates.TemplateParameterError(f"FEE_RECIPIENT must be the platform's fee wallet: {recipient}")
     rendered = contract_templates.render_contract(template_id, parameters)
     result = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
     if not result.success:
@@ -80,7 +103,9 @@ def check_curve_dex(network: str, parameters: dict[str, Any]) -> None:
     """A Bonding-Curve Token sends everything it raises to whatever pair its
     FACTORY hands it, so a recorded curve must graduate into this network's
     real DEX. Its code alone can't show that: a lookalike with a factory of
-    the deployer's own would pass the code check and take the money."""
+    the deployer's own would pass the code check and take the money. Its
+    trading fee must go to the platform's wallet, or a launch could keep the
+    fee for itself and still be listed here."""
     try:
         dex = liquidity.get_dex(network)
     except liquidity.DexNotAvailableError as exc:
@@ -88,6 +113,9 @@ def check_curve_dex(network: str, parameters: dict[str, Any]) -> None:
     for key, param in (("factory", "FACTORY"), ("wrapped_native", "WRAPPED_NATIVE")):
         if str(parameters.get(param) or "").lower() != dex[key].lower():
             raise ValueError(f"{param} must be {dex['name']}'s on {network}: {dex[key]}")
+    recipient = curve_fee_recipient()
+    if str(parameters.get("FEE_RECIPIENT") or "").lower() != recipient.lower():
+        raise ValueError(f"FEE_RECIPIENT must be the platform's fee wallet: {recipient}")
 
 
 def estimate_deployment(

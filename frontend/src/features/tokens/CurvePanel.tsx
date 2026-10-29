@@ -35,7 +35,8 @@ const inputClass =
 // no sign-in, it's the buyer's own transaction. Quotes use the contract's
 // own math on the state just read (lib/curve.ts matches it to the wei),
 // with 1% slippage, so a trade that lands after someone else's still goes
-// through unless the price moved more than that.
+// through unless the price moved more than that. Each shows the 1%
+// platform fee it pays.
 export function CurvePanel({ network, address, dexName = 'the DEX' }: { network: string; address: `0x${string}`; dexName?: string }) {
   const chainId = NETWORK_TO_CHAIN_ID[network]
   const native = EVM_NETWORKS.find((n) => n.id === network)?.nativeToken ?? 'ETH'
@@ -103,7 +104,8 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
 
   const amount = toBaseUnits(amountText, 18)
   const buy = side === 'buy' && amount ? quoteBuy(terms, state, amount) : null
-  const sellEth = side === 'sell' && amount ? quoteSell(terms, state, amount) : null
+  const sale = side === 'sell' && amount ? quoteSell(terms, state, amount) : null
+  const sellEth = sale?.eth ?? null
   const buysOut = Boolean(buy && buy.tokens > 0n && state.tokensSold + buy.tokens === terms.curveSupply)
   const overBalance = amount !== null && (side === 'buy' ? amount > nativeBalance : amount > held)
   const canTrade = Boolean(wallet && amount && !overBalance && !isBusy() && (side === 'buy' ? buy && buy.tokens > 0n : sellEth && sellEth > 0n))
@@ -209,19 +211,22 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
           {buy && buy.tokens > 0n && !overBalance && (
             <p className="font-mono text-xs text-ink-muted" data-testid="curve-quote">
               {buysOut
-                ? `Buys the last ${tokens(buy.tokens)} for ${coins(buy.cost)}; the rest is refunded. This graduates it to ${dexName}.`
-                : `≈ ${tokens(buy.tokens)} (at least ${tokens(withSlippage(buy.tokens))})`}
+                ? `Buys the last ${tokens(buy.tokens)} for ${coins(buy.cost + buy.fee)}, fee included; the rest is refunded. This graduates it to ${dexName}.`
+                : `≈ ${tokens(buy.tokens)} (at least ${tokens(withSlippage(buy.tokens))}) · includes a ${coins(buy.fee)} fee`}
             </p>
           )}
           {buy && buy.tokens === 0n && <p className="text-xs text-warning">Too little to buy any tokens.</p>}
           {sellEth !== null && amount !== null && amount > 0n && !overBalance && (
             <p className="font-mono text-xs text-ink-muted" data-testid="curve-quote">
-              {sellEth > 0n ? `≈ ${coins(sellEth)} (at least ${coins(withSlippage(sellEth))})` : 'Too few tokens to get anything back.'}
+              {sellEth > 0n
+                ? `≈ ${coins(sellEth)} (at least ${coins(withSlippage(sellEth))}) after a ${coins(sale!.fee)} fee`
+                : 'Too few tokens to get anything back.'}
             </p>
           )}
         </div>
       )}
 
+      {!graduated && <p className="text-xs text-ink-faint">Every buy and sell on the curve pays a 1% fee to the platform.</p>}
       {done && <p className="text-success">{done}</p>}
       {error && <InlineError>{error}</InlineError>}
     </div>

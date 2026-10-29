@@ -5,7 +5,9 @@ import type { CurveTrade } from './tokenPagesApi'
 // contract_templates' curve_token: a token that is its own market until it
 // graduates. 80% of the supply sells on a constant-product curve with
 // virtual reserves; buying the last of it moves the raised ETH and the other
-// 20% into the network's V2 pool, LP burned. Trades read the contract's own
+// 20% into the network's V2 pool, LP burned. Every buy and sell pays the
+// platform a 1% fee in ETH, on top of a buy and out of a sale, kept apart
+// from the reserve until withdrawFees() sends it on. Trades read the contract's own
 // quoteBuy/quoteSell; this file's math (the contract's, in bigint) is for
 // previews before there is a contract to ask.
 export const CURVE_ABI = parseAbi([
@@ -22,14 +24,22 @@ export const CURVE_ABI = parseAbi([
   'function graduated() view returns (bool)',
   'function pair() view returns (address)',
   'function balanceOf(address owner) view returns (uint256)',
-  'function quoteBuy(uint256 eth) view returns (uint256 tokens, uint256 cost)',
-  'function quoteSell(uint256 tokens) view returns (uint256 eth)',
+  'function FEE_BPS() view returns (uint256)',
+  'function feeRecipient() view returns (address)',
+  'function feesOwed() view returns (uint256)',
+  'function quoteBuy(uint256 value) view returns (uint256 tokens, uint256 cost, uint256 fee)',
+  'function quoteSell(uint256 tokens) view returns (uint256 eth, uint256 fee)',
   'function buy(uint256 minTokens) payable returns (uint256 tokens)',
   'function sell(uint256 tokens, uint256 minEth) returns (uint256 eth)',
-  'event Buy(address indexed buyer, uint256 eth, uint256 tokens, uint256 ethReserve, uint256 tokensSold)',
-  'event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 ethReserve, uint256 tokensSold)',
+  'function withdrawFees() returns (uint256 amount)',
+  'event Buy(address indexed buyer, uint256 eth, uint256 fee, uint256 tokens, uint256 ethReserve, uint256 tokensSold)',
+  'event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 fee, uint256 ethReserve, uint256 tokensSold)',
   'event Graduated(address indexed pair, uint256 eth, uint256 tokens)',
+  'event FeesWithdrawn(address indexed to, uint256 amount)',
 ])
+
+// The template's FEE_BPS: 1% of every curve buy and sell.
+export const FEE_BPS = 100n
 
 const UNIT = 10n ** 18n
 
@@ -63,25 +73,30 @@ export function curveTerms(supplyWhole: bigint, target: bigint): CurveTerms {
 
 const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b
 
-// The contract's quoteBuy: tokens for `eth`, and what it actually costs
-// (less than `eth` when it buys out the curve; the rest is refunded).
-export function quoteBuy(terms: CurveTerms, state: CurveState, eth: bigint): { tokens: bigint; cost: bigint } {
-  if (eth <= 0n) return { tokens: 0n, cost: 0n }
+// The contract's quoteBuy: for `value` paid, the tokens, what goes into the
+// curve (cost) and the fee. cost + fee is all of `value`, except when it buys
+// out the curve: then it's less, and the rest is refunded.
+export function quoteBuy(terms: CurveTerms, state: CurveState, value: bigint): { tokens: bigint; cost: bigint; fee: bigint } {
+  if (value <= 0n) return { tokens: 0n, cost: 0n, fee: 0n }
   const k = terms.virtualEth * terms.virtualTokens
-  let tokens = terms.virtualTokens - state.tokensSold - ceilDiv(k, terms.virtualEth + state.ethReserve + eth)
-  let cost = eth
+  let cost = (value * 10000n) / (10000n + FEE_BPS)
+  let tokens = terms.virtualTokens - state.tokensSold - ceilDiv(k, terms.virtualEth + state.ethReserve + cost)
+  let fee = value - cost
   if (tokens >= terms.curveSupply - state.tokensSold) {
     tokens = terms.curveSupply - state.tokensSold
     cost = ceilDiv(k, terms.virtualTokens - terms.curveSupply) - terms.virtualEth - state.ethReserve
+    fee = ceilDiv(cost * FEE_BPS, 10000n)
   }
-  return { tokens, cost }
+  return { tokens, cost, fee }
 }
 
-// The contract's quoteSell.
-export function quoteSell(terms: CurveTerms, state: CurveState, tokens: bigint): bigint {
-  if (tokens <= 0n || tokens > state.tokensSold) return 0n
+// The contract's quoteSell: the ETH the seller receives, and the fee.
+export function quoteSell(terms: CurveTerms, state: CurveState, tokens: bigint): { eth: bigint; fee: bigint } {
+  if (tokens <= 0n || tokens > state.tokensSold) return { eth: 0n, fee: 0n }
   const k = terms.virtualEth * terms.virtualTokens
-  return terms.virtualEth + state.ethReserve - ceilDiv(k, terms.virtualTokens - state.tokensSold + tokens)
+  const out = terms.virtualEth + state.ethReserve - ceilDiv(k, terms.virtualTokens - state.tokensSold + tokens)
+  const fee = ceilDiv(out * FEE_BPS, 10000n)
+  return { eth: out - fee, fee }
 }
 
 // Price of one whole token, in the native coin, at a point on the curve.

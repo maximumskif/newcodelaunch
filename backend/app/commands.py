@@ -67,6 +67,33 @@ def reap_stale_generation_jobs_command() -> None:
     click.echo(f"Reaped {len(stuck_jobs)} stale generation job(s).")
 
 
+@click.command("curve-fees")
+@with_appcontext
+def curve_fees_command() -> None:
+    """List the platform fees waiting in bonding curves launched here.
+
+    Each curve keeps its 1% trading fees until someone calls its
+    withdrawFees(), which pays them to the curve's fixed feeRecipient (the
+    PLATFORM_FEE_RECIPIENT it was launched with) whoever sends it, e.g.
+    `cast send <curve> "withdrawFees()" --rpc-url ... --private-key ...`.
+    """
+    from web3 import Web3
+
+    from .services import curve_market
+
+    owed = curve_market.fees_owed()
+    if not owed:
+        click.echo("No curve holds any fees.")
+        return
+    totals: dict[str, int] = {}
+    for item in owed:
+        totals[item["network"]] = totals.get(item["network"], 0) + item["fees_owed"]
+        click.echo(f"{item['network']:<14} {item['address']}  {item['symbol'] or '?':<10} {Web3.from_wei(item['fees_owed'], 'ether')}")
+    for network, total in totals.items():
+        click.echo(f"total on {network}: {Web3.from_wei(total, 'ether')}")
+
+
 def register_cli(app) -> None:
     app.cli.add_command(prune_nonces_command)
     app.cli.add_command(reap_stale_generation_jobs_command)
+    app.cli.add_command(curve_fees_command)

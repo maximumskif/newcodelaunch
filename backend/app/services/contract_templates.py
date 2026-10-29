@@ -811,6 +811,12 @@ contract {{CONTRACT_NAME}} {
     address public constant wrappedNative = {{WRAPPED_NATIVE}};
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
+    // The platform fee: 1% of the curve side of every buy and sell, in ETH,
+    // on top of a buy and out of a sale. It never joins the reserve or the
+    // pool; it waits here for withdrawFees(), which pays only feeRecipient.
+    uint256 public constant FEE_BPS = 100;
+    address public constant feeRecipient = {{FEE_RECIPIENT}};
+
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
@@ -818,13 +824,15 @@ contract {{CONTRACT_NAME}} {
     uint256 public ethReserve;
     uint256 public tokensSold;
     bool public graduated;
+    uint256 public feesOwed;
     uint256 private unlocked = 1;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
-    event Buy(address indexed buyer, uint256 eth, uint256 tokens, uint256 ethReserve, uint256 tokensSold);
-    event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 ethReserve, uint256 tokensSold);
+    event Buy(address indexed buyer, uint256 eth, uint256 fee, uint256 tokens, uint256 ethReserve, uint256 tokensSold);
+    event Sell(address indexed seller, uint256 tokens, uint256 eth, uint256 fee, uint256 ethReserve, uint256 tokensSold);
     event Graduated(address indexed pair, uint256 eth, uint256 tokens);
+    event FeesWithdrawn(address indexed to, uint256 amount);
 
     modifier lock() {
         require(unlocked == 1, "Busy");
@@ -839,7 +847,7 @@ contract {{CONTRACT_NAME}} {
         address existing = IUniswapV2Factory(factory).getPair(address(this), wrappedNative);
         pair = existing != address(0) ? existing : IUniswapV2Factory(factory).createPair(address(this), wrappedNative);
         if (msg.value > 0) {
-            (uint256 tokens, ) = quoteBuy(msg.value);
+            (uint256 tokens, , ) = quoteBuy(msg.value);
             require(tokens < curveSupply, "The creator buy can't buy the whole curve");
             _buy(msg.sender, msg.value, 0);
         }
@@ -887,19 +895,28 @@ contract {{CONTRACT_NAME}} {
 
     // The curve
 
-    function quoteBuy(uint256 eth) public view returns (uint256 tokens, uint256 cost) {
-        if (graduated || eth == 0) return (0, 0);
-        tokens = virtualTokens - tokensSold - _ceilDiv(K, virtualEth + ethReserve + eth);
-        cost = eth;
+    // For `value` paid: the tokens, what of it goes into the curve (cost)
+    // and the fee. cost + fee never exceeds value; the rest is refunded
+    // (only when the buy takes the last of the curve).
+    function quoteBuy(uint256 value) public view returns (uint256 tokens, uint256 cost, uint256 fee) {
+        if (graduated || value == 0) return (0, 0, 0);
+        cost = (value * 10000) / (10000 + FEE_BPS);
+        tokens = virtualTokens - tokensSold - _ceilDiv(K, virtualEth + ethReserve + cost);
+        fee = value - cost;
         if (tokens >= curveSupply - tokensSold) {
             tokens = curveSupply - tokensSold;
             cost = _ceilDiv(K, virtualTokens - curveSupply) - virtualEth - ethReserve;
+            fee = _ceilDiv(cost * FEE_BPS, 10000);
         }
     }
 
-    function quoteSell(uint256 tokens) public view returns (uint256 eth) {
-        if (graduated || tokens == 0 || tokens > tokensSold) return 0;
-        eth = virtualEth + ethReserve - _ceilDiv(K, virtualTokens - tokensSold + tokens);
+    // For `tokens` sold: the ETH the seller receives and the fee, which
+    // together leave the reserve.
+    function quoteSell(uint256 tokens) public view returns (uint256 eth, uint256 fee) {
+        if (graduated || tokens == 0 || tokens > tokensSold) return (0, 0);
+        uint256 out = virtualEth + ethReserve - _ceilDiv(K, virtualTokens - tokensSold + tokens);
+        fee = _ceilDiv(out * FEE_BPS, 10000);
+        eth = out - fee;
     }
 
     function buy(uint256 minTokens) external payable lock returns (uint256 tokens) {
@@ -910,13 +927,15 @@ contract {{CONTRACT_NAME}} {
         require(!graduated, "The curve has graduated: trade on the DEX");
         require(tokens > 0, "Nothing to sell");
         require(tokens <= tokensSold, "More than the curve has sold");
-        eth = quoteSell(tokens);
+        uint256 fee;
+        (eth, fee) = quoteSell(tokens);
         require(eth > 0, "Too few tokens to get any ETH back");
         require(eth >= minEth, "Price moved: less ETH than your minimum");
         tokensSold -= tokens;
-        ethReserve -= eth;
+        ethReserve -= eth + fee;
+        feesOwed += fee;
         _move(msg.sender, address(this), tokens);
-        emit Sell(msg.sender, tokens, eth, ethReserve, tokensSold);
+        emit Sell(msg.sender, tokens, eth, fee, ethReserve, tokensSold);
         (bool ok, ) = msg.sender.call{value: eth}("");
         require(ok, "ETH transfer failed");
     }
@@ -925,16 +944,18 @@ contract {{CONTRACT_NAME}} {
         require(!graduated, "The curve has graduated: trade on the DEX");
         require(value > 0, "Send some ETH to buy");
         uint256 cost;
-        (tokens, cost) = quoteBuy(value);
+        uint256 fee;
+        (tokens, cost, fee) = quoteBuy(value);
         require(tokens > 0, "Too little ETH to buy any tokens");
         require(tokens >= minTokens, "Price moved: fewer tokens than your minimum");
         ethReserve += cost;
         tokensSold += tokens;
+        feesOwed += fee;
         _move(address(this), buyer, tokens);
-        emit Buy(buyer, cost, tokens, ethReserve, tokensSold);
+        emit Buy(buyer, cost, fee, tokens, ethReserve, tokensSold);
         if (tokensSold == curveSupply) _graduate();
-        if (value > cost) {
-            (bool ok, ) = buyer.call{value: value - cost}("");
+        if (value > cost + fee) {
+            (bool ok, ) = buyer.call{value: value - cost - fee}("");
             require(ok, "Refund failed");
         }
     }
@@ -948,6 +969,16 @@ contract {{CONTRACT_NAME}} {
         _move(address(this), pair, tokens);
         IUniswapV2Pair(pair).mint(DEAD);
         emit Graduated(pair, eth, tokens);
+    }
+
+    // Anyone can send the fees on; they only ever go to feeRecipient.
+    function withdrawFees() external lock returns (uint256 amount) {
+        amount = feesOwed;
+        require(amount > 0, "No fees to withdraw");
+        feesOwed = 0;
+        emit FeesWithdrawn(feeRecipient, amount);
+        (bool ok, ) = feeRecipient.call{value: amount}("");
+        require(ok, "Fee transfer failed");
     }
 
     function _ceilDiv(uint256 a, uint256 b) private pure returns (uint256) {
@@ -1071,8 +1102,9 @@ _TEMPLATES: dict[str, ContractTemplate] = {
             {"name": "GRADUATION_TARGET", "type": "uint256", "required": True, "min": 10**15, "max": 10**24, "description": "How much the curve raises, in wei, before it moves to the DEX"},
             {"name": "FACTORY", "type": "address", "required": True, "description": "The network's Uniswap V2-style factory; filled in for you"},
             {"name": "WRAPPED_NATIVE", "type": "address", "required": True, "description": "The network's wrapped native coin (WETH, WBNB); filled in for you"},
+            {"name": "FEE_RECIPIENT", "type": "address", "required": True, "description": "Where the 1% trading fee goes: the platform's fee wallet; filled in for you"},
         ],
-        features=["Bonding Curve", "Graduates to a DEX", "Liquidity Burned", "No Owner"],
+        features=["Bonding Curve", "Graduates to a DEX", "Liquidity Burned", "No Owner", "1% Trading Fee"],
         gas_estimate=3_500_000,
     ),
 }

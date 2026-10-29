@@ -125,7 +125,8 @@ export function CurveActivity({ network, address, terms, symbol, native }: { net
               <tr key={`${trade.tx}-${trade.kind}-${trade.tokens}`} className="border-t border-border">
                 <td className={`py-1.5 pr-3 ${trade.kind === 'buy' ? 'text-success' : 'text-warning'}`}>{trade.kind === 'buy' ? '▲ buy' : '▼ sell'}</td>
                 <td className="hidden py-1.5 pr-3 text-ink-muted sm:table-cell">{short(trade.wallet)}</td>
-                <td className="py-1.5 pr-3 text-right text-ink">{amount(trade.eth)}</td>
+                {/* What the trader paid (fee included) or received. */}
+                <td className="py-1.5 pr-3 text-right text-ink">{amount(trade.kind === 'buy' ? String(BigInt(trade.eth) + BigInt(trade.fee)) : trade.eth)}</td>
                 <td className="py-1.5 pr-3 text-right text-ink">{amount(trade.tokens)}</td>
                 <td className="py-1.5 pr-3 text-right text-ink-muted">
                   {explorer_tx ? (

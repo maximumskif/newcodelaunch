@@ -16,7 +16,8 @@ if [ ! -d "node_modules" ]; then
   exit 1
 fi
 
-export PORT="4000"
+# E2E_SIDECAR_PORT: run the suite next to a dev sidecar already on 4000.
+export PORT="${E2E_SIDECAR_PORT:-4000}"
 export CORS_ORIGINS="http://localhost:5173"
 export CANDY_MACHINE_SHARED_SECRET="e2e-test-shared-secret"
 export SOLANA_DEVNET_RPC_URL="http://127.0.0.1:8899"

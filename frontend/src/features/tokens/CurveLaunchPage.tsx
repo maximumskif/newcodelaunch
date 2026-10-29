@@ -43,6 +43,7 @@ export function CurveLaunchPage() {
   const { accessToken } = useAuth()
   const setup = useDeployTemplate()
   const dexes = useQuery({ queryKey: ['dexes'], queryFn: () => contractsApi.listDexes(), staleTime: Infinity })
+  const fee = useQuery({ queryKey: ['curve-fee'], queryFn: () => contractsApi.getCurveFee(), staleTime: Infinity })
   const networks = EVM_NETWORKS.filter((n) => dexes.data?.dexes[n.id])
 
   const [network, setNetwork] = useState(sharedNetwork)
@@ -89,7 +90,7 @@ export function CurveLaunchPage() {
   const busy = setup.step !== 'idle' && setup.step !== 'done' && setup.step !== 'error'
 
   const canLaunch = Boolean(
-    accessToken && address && dex && name.trim() && symbol.trim() && terms && !creatorBuyProblem && !busy && (!isMainnet || mainnetConfirmed),
+    accessToken && address && dex && fee.data && name.trim() && symbol.trim() && terms && !creatorBuyProblem && !busy && (!isMainnet || mainnetConfirmed),
   )
   const launch = () =>
     setup.deploy(
@@ -101,6 +102,7 @@ export function CurveLaunchPage() {
         GRADUATION_TARGET: String(target),
         FACTORY: dex!.factory,
         WRAPPED_NATIVE: dex!.wrapped_native,
+        FEE_RECIPIENT: fee.data!.recipient,
       },
       network,
       undefined,
@@ -152,6 +154,7 @@ export function CurveLaunchPage() {
             {!address && <p className="text-sm text-warning">Connect an EVM wallet above to launch.</p>}
             {dexes.isError && <InlineError>Couldn't load the supported DEXes right now.</InlineError>}
             {dexes.data && !dex && <p className="text-sm text-warning">There's no supported DEX on this network for the token to graduate to.</p>}
+            {fee.isError && <InlineError>Bonding-curve launches aren't available right now.</InlineError>}
 
             <div className="grid gap-4 sm:grid-cols-3">
               <label className="flex flex-col gap-1.5 text-sm">
@@ -202,11 +205,13 @@ export function CurveLaunchPage() {
                 <SummaryRow label="first price">—</SummaryRow>
               )}
               <SummaryRow label="DEX">{dex?.name ?? '—'}</SummaryRow>
+              <SummaryRow label="trading fee">1% to the platform</SummaryRow>
               <SummaryRow label="transactions">1</SummaryRow>
             </dl>
             <p className="text-xs text-ink-faint">
-              One transaction creates the token, its curve and its future pool. You pay the network's gas{creatorBuy ? ', plus your buy' : ''}. There are no
-              fees on curve trades.
+              One transaction creates the token, its curve and its future pool. You pay the network's gas{creatorBuy ? ', plus your buy and its fee' : ''}.
+              Every buy and sell on the curve, yours included, pays a 1% fee to the platform. It's kept apart from what the curve raises, so the pool
+              still gets all of it. Trades on the DEX after graduation pay no platform fee.
             </p>
             {isMainnet && (
               <MainnetConfirmCheckbox

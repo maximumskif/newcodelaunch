@@ -23,9 +23,9 @@ const CURVE = '0x7777777777777777777777777777777777777777'
 const WALLET = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const writeContractAsync = vi.fn()
 const connect = vi.fn()
-// A billion tokens, a 4 ETH target, 1 ETH raised so far.
+// A billion tokens, a 4 ETH target, 1 ETH raised so far (1.01 ETH paid, fee included).
 const terms = curveTerms(1_000_000_000n, parseEther('4'))
-const state = { ethReserve: parseEther('1'), tokensSold: quoteBuy(terms, { ethReserve: 0n, tokensSold: 0n }, parseEther('1')).tokens }
+const state = { ethReserve: parseEther('1'), tokensSold: quoteBuy(terms, { ethReserve: 0n, tokensSold: 0n }, parseEther('1.01')).tokens }
 
 function mockCurve({ wallet = WALLET as string | null, graduated = false, held = parseEther('1000000') } = {}) {
   vi.mocked(useAccount).mockReturnValue({ address: wallet ?? undefined } as unknown as ReturnType<typeof useAccount>)
@@ -68,6 +68,7 @@ describe('CurvePanel', () => {
     expect(await screen.findByTestId('curve-progress')).toHaveTextContent('25% · 1 ETH of 4 ETH raised')
     expect(screen.getByRole('progressbar', { name: 'Raised toward graduation' })).toHaveAttribute('aria-valuenow', '25')
     expect(screen.getByText('On the bonding curve')).toBeInTheDocument()
+    expect(screen.getByText('Every buy and sell on the curve pays a 1% fee to the platform.')).toBeInTheDocument()
   })
 
   it('buys with the quote less 1% as the minimum, sending what was typed', async () => {
@@ -75,7 +76,7 @@ describe('CurvePanel', () => {
     render(<CurvePanel network="sepolia" address={CURVE} />)
     await userEvent.type(await screen.findByLabelText(/^Spend \(ETH\)/), '0.5')
     const { tokens } = quoteBuy(terms, state, parseEther('0.5'))
-    expect(screen.getByTestId('curve-quote')).toHaveTextContent(/^≈ .* MCAT \(at least .* MCAT\)$/)
+    expect(screen.getByTestId('curve-quote')).toHaveTextContent(/^≈ .* MCAT \(at least .* MCAT\) · includes a 0\.00495 ETH fee$/)
     await userEvent.click(screen.getByRole('button', { name: 'Buy' }))
     expect(writeContractAsync).toHaveBeenCalledWith(
       expect.objectContaining({ address: CURVE, functionName: 'buy', args: [withSlippage(tokens)], value: parseEther('0.5'), chainId: 11155111 }),
@@ -86,7 +87,7 @@ describe('CurvePanel', () => {
     mockCurve()
     render(<CurvePanel network="sepolia" address={CURVE} dexName="Uniswap V2" />)
     await userEvent.type(await screen.findByLabelText(/^Spend \(ETH\)/), '5')
-    expect(screen.getByTestId('curve-quote')).toHaveTextContent(/Buys the last .* MCAT for 3 ETH; the rest is refunded\. This graduates it to Uniswap V2\./)
+    expect(screen.getByTestId('curve-quote')).toHaveTextContent(/Buys the last .* MCAT for 3\.03 ETH, fee included; the rest is refunded\. This graduates it to Uniswap V2\./)
   })
 
   it('sells with the quote less 1% as the minimum, and refuses more than is held', async () => {
@@ -100,9 +101,11 @@ describe('CurvePanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'max' }))
     expect(input).toHaveValue('1000')
+    expect(screen.getByTestId('curve-quote')).toHaveTextContent(/^≈ .* ETH \(at least .* ETH\) after a .* ETH fee$/)
     await userEvent.click(screen.getByRole('button', { name: 'Sell' }))
+    // The minimum is on what the seller receives, after the fee.
     expect(writeContractAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: 'sell', args: [parseEther('1000'), withSlippage(quoteSell(terms, state, parseEther('1000')))] }),
+      expect.objectContaining({ functionName: 'sell', args: [parseEther('1000'), withSlippage(quoteSell(terms, state, parseEther('1000')).eth)] }),
     )
   })
 
@@ -120,5 +123,6 @@ describe('CurvePanel', () => {
     expect(await screen.findByText('Graduated to Uniswap V2')).toBeInTheDocument()
     expect(screen.getByText(/nobody can withdraw that liquidity/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Buy' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/pays a 1% fee/)).not.toBeInTheDocument()
   })
 })
