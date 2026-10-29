@@ -61,7 +61,7 @@ def compile_template(template_id: str, parameters: dict[str, Any]) -> dict[str, 
         if str(parameters.get("FEE_RECIPIENT") or "").lower() != recipient.lower():
             raise contract_templates.TemplateParameterError(f"FEE_RECIPIENT must be the platform's fee wallet: {recipient}")
     rendered = contract_templates.render_contract(template_id, parameters)
-    result = solidity.compile_contract(rendered["contract_code"], rendered["contract_name"])
+    result = _compile(rendered["contract_code"], rendered["contract_name"])
     if not result.success:
         raise CompilationFailedError(result.error_message or "Compilation failed")
     return {
@@ -72,9 +72,32 @@ def compile_template(template_id: str, parameters: dict[str, Any]) -> dict[str, 
     }
 
 
+class _NotCached(Exception):
+    def __init__(self, result: solidity.CompilationResult):
+        self.result = result
+
+
 @lru_cache(maxsize=256)
+def _compiled(contract_code: str, contract_name: str) -> solidity.CompilationResult:
+    result = solidity.compile_contract(contract_code, contract_name)
+    if not result.success:
+        raise _NotCached(result)  # lru_cache keeps no exceptions
+    return result
+
+
+def _compile(contract_code: str, contract_name: str) -> solidity.CompilationResult:
+    """Compilation is deterministic, so a source compiles once per process:
+    a launch compiles, estimates and is code-checked from the same source.
+    Failures aren't kept: compile_contract also reports a compiler crash or
+    timeout as one, and those can pass."""
+    try:
+        return _compiled(contract_code, contract_name)
+    except _NotCached as exc:
+        return exc.result
+
+
 def _runtime_code(contract_code: str, contract_name: str) -> Optional[str]:
-    compiled = solidity.compile_contract(contract_code, contract_name)
+    compiled = _compile(contract_code, contract_name)
     return compiled.deployed_bytecode.lower() if compiled.success and compiled.deployed_bytecode else None
 
 

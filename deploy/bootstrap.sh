@@ -2,7 +2,10 @@
 # One-time setup of a fresh Ubuntu 24.04 server, run as root:
 #
 #   curl -fsSL https://raw.githubusercontent.com/maximumskif/newcodelaunch/main/deploy/bootstrap.sh -o bootstrap.sh
-#   ETHERSCAN_API_KEY=... HELIUS_API_KEY=... PINATA_JWT=... bash bootstrap.sh [domain]
+#   PLATFORM_FEE_RECIPIENT=0x... ETHERSCAN_API_KEY=... HELIUS_API_KEY=... PINATA_JWT=... bash bootstrap.sh [domain]
+#
+# PLATFORM_FEE_RECIPIENT, the EVM wallet bonding curves pay their 1% fee to,
+# is required for a first run: without it the backend refuses curve launches.
 #
 # Installs Docker and a firewall (SSH, HTTP, HTTPS only), clones the repo to
 # /opt/newcodelaunch, writes the three env files with freshly generated
@@ -16,6 +19,17 @@ set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/maximumskif/newcodelaunch.git}"
 APP_DIR="${APP_DIR:-/opt/newcodelaunch}"
+FEE_RECIPIENT="${PLATFORM_FEE_RECIPIENT:-}"
+
+# Checked before installing anything. A re-run keeps the existing backend/.env.
+if [ ! -f "$APP_DIR/backend/.env" ] && [ -z "$FEE_RECIPIENT" ]; then
+  echo "Set PLATFORM_FEE_RECIPIENT to the platform's EVM fee wallet (0x...)." >&2
+  exit 1
+fi
+if [ -n "$FEE_RECIPIENT" ] && ! [[ "$FEE_RECIPIENT" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+  echo "PLATFORM_FEE_RECIPIENT isn't an EVM address: $FEE_RECIPIENT" >&2
+  exit 1
+fi
 
 apt-get update -q
 apt-get install -y -q docker.io docker-compose-v2 git ufw openssl curl
@@ -55,6 +69,7 @@ LOG_LEVEL=INFO
 CANDY_MACHINE_SHARED_SECRET=$SHARED_SECRET
 ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-}
 PINATA_JWT=${PINATA_JWT:-}
+PLATFORM_FEE_RECIPIENT=$FEE_RECIPIENT
 SOLANA_RPC_URL=$MAINNET_RPC
 SOLANA_DEVNET_RPC_URL=$DEVNET_RPC
 EOF

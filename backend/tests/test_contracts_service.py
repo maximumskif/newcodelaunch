@@ -304,3 +304,46 @@ def test_curve_fee_route_tells_the_launch_form_where_the_fee_goes(app, client):
 
     app.config["PLATFORM_FEE_RECIPIENT"] = FEE_WALLET.lower()
     assert client.get("/api/contracts/curve-fee").get_json() == {"fee_bps": 100, "recipient": FEE_WALLET}
+
+
+def test_a_source_compiles_once_and_a_failure_is_not_kept(app, monkeypatch):
+    from app.services import solidity
+    from tests.test_contract_templates import CURVE_PARAMS
+
+    contracts._compiled.cache_clear()
+    real = solidity.compile_contract
+    calls = []
+
+    def counting(source, name):
+        calls.append(name)
+        return real(source, name)
+
+    monkeypatch.setattr(solidity, "compile_contract", counting)
+    params = {"TOKEN_NAME": "Cache Probe", "TOKEN_SYMBOL": "CP", "TOKEN_DECIMALS": 18, "TOKEN_SUPPLY": 1000}
+    first = contracts.compile_template("erc20_basic", params)
+    assert contracts.compile_template("erc20_basic", params)["bytecode"] == first["bytecode"]
+    assert len(calls) == 1
+    contracts.compile_template("erc20_basic", {**params, "TOKEN_SUPPLY": 2000})
+    assert len(calls) == 2  # other parameters, other source
+
+    # A failure (as a compiler crash or timeout is reported) is retried next time.
+    outcomes = [solidity.CompilationResult(success=False, error_message="solc timed out")]
+    monkeypatch.setattr(solidity, "compile_contract", lambda source, name: outcomes.pop(0) if outcomes else real(source, name))
+    with pytest.raises(contracts.CompilationFailedError, match="timed out"):
+        contracts.compile_template("erc20_basic", {**params, "TOKEN_SUPPLY": 3000})
+    assert contracts.compile_template("erc20_basic", {**params, "TOKEN_SUPPLY": 3000})["bytecode"].startswith("0x")
+    contracts._compiled.cache_clear()
+
+
+def test_compile_and_estimate_are_limited_per_ip(client):
+    body = {"template_id": "erc20_basic", "parameters": {"TOKEN_NAME": "Limit Probe", "TOKEN_SYMBOL": "LP", "TOKEN_DECIMALS": 18, "TOKEN_SUPPLY": 1000}}
+    for _ in range(60):
+        assert client.post("/api/contracts/compile", json=body).status_code == 200
+    assert client.post("/api/contracts/compile", json=body).status_code == 429
+    # Another visitor isn't affected.
+    assert client.post("/api/contracts/compile", json=body, environ_base={"REMOTE_ADDR": "10.0.0.2"}).status_code == 200
+
+    estimate = {**body, "network": "sepolia"}  # missing deployer_address: answered 400, still counted
+    for _ in range(30):
+        assert client.post("/api/contracts/estimate", json=estimate).status_code == 400
+    assert client.post("/api/contracts/estimate", json=estimate).status_code == 429

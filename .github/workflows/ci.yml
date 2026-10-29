@@ -216,7 +216,7 @@ jobs:
           secret() { openssl rand -hex 32; }
           shared=$(secret)
           printf 'DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\n' "$(secret)" > deploy/.env
-          printf 'SECRET_KEY=%s\nJWT_SECRET_KEY=%s\nCANDY_MACHINE_SHARED_SECRET=%s\n' "$(secret)" "$(secret)" "$shared" > backend/.env
+          printf 'SECRET_KEY=%s\nJWT_SECRET_KEY=%s\nCANDY_MACHINE_SHARED_SECRET=%s\nPLATFORM_FEE_RECIPIENT=0x000000000000000000000000000000000000FEE0\n' "$(secret)" "$(secret)" "$shared" > backend/.env
           printf 'PORT=4000\nCANDY_MACHINE_SHARED_SECRET=%s\n' "$shared" > services/candy-machine/.env
 
       - name: Build and start
@@ -234,6 +234,8 @@ jobs:
           curl -kfsS https://localhost/api/contracts/compile -H 'Content-Type: application/json' \
             -d '{"template_id":"erc20_basic","parameters":{"TOKEN_NAME":"CI","TOKEN_SYMBOL":"CI","TOKEN_DECIMALS":18,"TOKEN_SUPPLY":1000}}' \
             | grep -E '"bytecode": ?"0x'
+          # Curve launches are on: the fee wallet reached the backend.
+          curl -kfsS https://localhost/api/contracts/curve-fee | grep -i '"recipient": \?"0x000000000000000000000000000000000000FEE0"'
           # Nothing but Caddy is reachable from outside.
           for port in 5000 5432 6379 4000 8080; do
             ! curl -s -m 2 "http://localhost:$port" >/dev/null

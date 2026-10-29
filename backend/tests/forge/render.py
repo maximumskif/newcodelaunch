@@ -6,8 +6,14 @@ FEE_RECIPIENT is a fixed test address too.
     cd backend && .venv/bin/python tests/forge/render.py && cd tests/forge && forge test
 """
 
+import os
 from pathlib import Path
 import sys
+
+# Importing the app loads its config, which requires these (see app/config.py).
+# Rendering signs nothing, so test-only values do; tests/conftest.py does the same.
+os.environ.setdefault("SECRET_KEY", "forge-render-not-for-real-use")
+os.environ.setdefault("JWT_SECRET_KEY", "forge-render-jwt-not-for-real-use")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 

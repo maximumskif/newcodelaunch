@@ -23,7 +23,14 @@ def get_template(template_id):
     return jsonify(template=template.to_dict(include_source=True))
 
 
+# Compile and estimate need no account (the deploy flow runs them before
+# sign-in matters, and they're how anyone can check a template builds), so
+# they're limited per IP instead: each runs the Solidity compiler, and a new
+# set of parameters always compiles afresh. One a second leaves room for the
+# Vesting page's batch, which compiles once per wallet (each source names its
+# beneficiary), up to 50, as fast as the wallet confirms deploys.
 @contracts_bp.post("/compile")
+@limiter.limit("60/minute")
 def compile_template():
     data = request.get_json(silent=True) or {}
     template_id = data.get("template_id")
@@ -47,6 +54,7 @@ def compile_template():
 
 
 @contracts_bp.post("/estimate")
+@limiter.limit("30/minute")
 def estimate():
     data = request.get_json(silent=True) or {}
     template_id = data.get("template_id")
