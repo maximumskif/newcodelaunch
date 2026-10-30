@@ -114,3 +114,44 @@ def test_readiness_is_rate_limited(app, client, monkeypatch):
     statuses = [client.get("/api/health/ready").status_code for _ in range(61)]
     assert statuses[:60] == [200] * 60
     assert statuses[60] == 429
+
+
+def _csp_report(**fields):
+    return {"csp-report": {"document-uri": "https://example.com/tokens", "violated-directive": "script-src", **fields}}
+
+
+def test_csp_report_is_logged(client, caplog):
+    response = client.post(
+        "/api/csp-report",
+        json=_csp_report(**{"blocked-uri": "https://evil.example/x.js"}),
+        headers={"Content-Type": "application/csp-report"},
+    )
+
+    assert response.status_code == 204
+    assert "CSP violation" in caplog.text
+    assert "https://evil.example/x.js" in caplog.text
+
+
+def test_csp_report_ignores_junk(client, caplog):
+    for body in (b"not json", b"[1, 2]", b'{"csp-report": "x"}', b""):
+        response = client.post("/api/csp-report", data=body, headers={"Content-Type": "application/csp-report"})
+        assert response.status_code == 204
+    assert "CSP violation" not in caplog.text
+
+
+def test_csp_report_skips_oversized_bodies(client, caplog):
+    response = client.post(
+        "/api/csp-report",
+        json=_csp_report(**{"blocked-uri": "x" * (health.CSP_REPORT_MAX_BYTES + 1)}),
+        headers={"Content-Type": "application/csp-report"},
+    )
+
+    assert response.status_code == 204
+    assert "CSP violation" not in caplog.text
+
+
+def test_csp_report_truncates_long_fields(client, caplog):
+    client.post("/api/csp-report", json=_csp_report(**{"blocked-uri": "y" * 1000}))
+
+    assert "y" * 300 in caplog.text
+    assert "y" * 301 not in caplog.text

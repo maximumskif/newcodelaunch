@@ -1,5 +1,7 @@
+import json
+
 import requests
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import text
 
 from ..extensions import db, limiter
@@ -68,3 +70,28 @@ def ready():
     if failed:
         return jsonify(status="unavailable", failed=failed, checks=checks), 503
     return jsonify(status="ok", checks=checks)
+
+
+# Browsers send these on their own, with no auth, so only a bounded summary of
+# each report is logged: enough to see what the report-only CSP in
+# deploy/Caddyfile would have blocked before it is enforced.
+CSP_REPORT_MAX_BYTES = 8 * 1024
+_CSP_REPORT_FIELDS = ("violated-directive", "effective-directive", "blocked-uri", "document-uri", "source-file")
+
+
+@health_bp.post("/csp-report")
+@limiter.limit("30/minute")
+def csp_report():
+    """Receives Content-Security-Policy violation reports (the policy's
+    report-uri). Always 204, whatever the body: a browser does nothing with
+    the response, and an error here would only add noise to its console."""
+    if (request.content_length or 0) <= CSP_REPORT_MAX_BYTES:
+        try:
+            body = json.loads(request.get_data(cache=False) or b"{}")
+        except ValueError:
+            body = None
+        report = body.get("csp-report") if isinstance(body, dict) else None
+        if isinstance(report, dict):
+            summary = {key: str(report.get(key, ""))[:300] for key in _CSP_REPORT_FIELDS}
+            current_app.logger.warning("CSP violation: %s", json.dumps(summary))
+    return "", 204

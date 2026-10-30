@@ -11,9 +11,24 @@
 		reverse_proxy frontend:80
 	}
 
+	# Users sign wallet transactions here, so no other site may frame it
+	# (clickjacking). That part is enforced now; X-Frame-Options covers
+	# browsers without frame-ancestors.
+	#
+	# The full policy is report-only until MetaMask, Phantom and the Solana
+	# wallet adapters are checked against it in production: violations are
+	# logged as "CSP violation" by /api/csp-report. connect-src and img-src
+	# allow any https origin because RPC URLs come from VITE_*_RPC_URL at
+	# build time and token images from any IPFS gateway. style-src needs
+	# 'unsafe-inline' for the styles the wallet adapters inject, and Google
+	# Fonts because the Solana adapter's stylesheet imports DM Sans from it.
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'none'; worker-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; report-uri /api/csp-report"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 	}
 }
