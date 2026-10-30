@@ -61,9 +61,11 @@ test('a real vesting schedule: create, fund, nothing before the cliff, part-way 
   await testClient.mine({ blocks: 1 })
   await goTo(page, '/tokens/create')
   await goTo(page, '/liquidity/vesting')
-  const listed = page.getByRole('region', { name: 'your vesting schedules' }).getByTestId('token-vesting')
+  // This token's schedule only: a retry leaves the first attempt's behind.
+  const listed = page.getByRole('region', { name: 'your vesting schedules' }).getByTestId('token-vesting').filter({ hasText: token })
   await expect(listed).toHaveCount(1, { timeout: 15_000 })
-  await expect(listed.getByText(/^Vesting until/)).toBeVisible({ timeout: 15_000 })
+  // Up to one 15-second panel refresh behind the chain.
+  await expect(listed.getByText(/^Vesting until/)).toBeVisible({ timeout: 30_000 })
   await listed.getByRole('button', { name: /^Release .* TEAM to beneficiary$/ }).click()
   await expect(listed.getByText('Released to the beneficiary.')).toBeVisible({ timeout: 20_000 })
   const halfway = await balanceOf(beneficiary)
@@ -75,7 +77,7 @@ test('a real vesting schedule: create, fund, nothing before the cliff, part-way 
   await testClient.mine({ blocks: 1 })
   await goTo(page, '/tokens/create')
   await goTo(page, '/liquidity/vesting')
-  await expect(listed.getByText('Fully vested')).toBeVisible({ timeout: 15_000 })
+  await expect(listed.getByText('Fully vested')).toBeVisible({ timeout: 30_000 })
   await listed.getByRole('button', { name: /^Release .* TEAM to beneficiary$/ }).click()
   await expect(listed.getByText('Fully paid out')).toBeVisible({ timeout: 20_000 })
   expect(await balanceOf(beneficiary)).toBe(parseUnits('1200', 18))
