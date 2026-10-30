@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from eth_utils import is_address
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required
 from flask_limiter.util import get_remote_address
@@ -45,14 +46,26 @@ def request_nonce():
 
     if not wallet_address or chain not in Chain.ALL:
         return jsonify(error="wallet_address and a valid chain ('evm' or 'solana') are required"), 400
+    if chain == Chain.EVM and not is_address(wallet_address):
+        return jsonify(error="wallet_address is not a valid EVM address"), 400
 
     wallet_address = normalize_address(wallet_address, chain)
     nonce = generate_nonce()
+    message = build_sign_message(
+        nonce,
+        wallet_address,
+        chain,
+        current_app.config["PUBLIC_APP_URL"],
+        datetime.now(timezone.utc),
+        current_app.config["WALLET_NONCE_TTL_SECONDS"],
+    )
 
-    db.session.add(WalletNonce(wallet_address=wallet_address, chain=chain, nonce=nonce))
+    # Stored rather than rebuilt at verify time, so the check is against the
+    # exact text the wallet showed.
+    db.session.add(WalletNonce(wallet_address=wallet_address, chain=chain, nonce=nonce, message=message))
     db.session.commit()
 
-    return jsonify(message=build_sign_message(nonce), nonce=nonce)
+    return jsonify(message=message, nonce=nonce)
 
 
 class _ProofError(Exception):
@@ -84,12 +97,11 @@ def _verify_wallet_proof(data: dict) -> tuple[str, str]:
         .order_by(WalletNonce.created_at.desc())
         .first()
     )
-    if nonce_row is None:
+    if nonce_row is None or nonce_row.message is None:
         raise _ProofError("Nonce not found, already used, or expired — request a new one", 400)
 
-    message = build_sign_message(nonce)
     try:
-        valid = verify_signature(chain, wallet_address, message, signature)
+        valid = verify_signature(chain, wallet_address, nonce_row.message, signature)
     except SignatureVerificationError as exc:
         raise _ProofError(f"Signature verification failed: {exc}", 400) from exc
 

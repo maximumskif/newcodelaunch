@@ -55,6 +55,10 @@ services:
     environment:
       DATABASE_URL: postgresql://launchpad:${POSTGRES_PASSWORD}@postgres:5432/launchpad
       CORS_ORIGINS: https://${DOMAIN}
+      # From DOMAIN, not backend/.env, so it follows a domain change: wallet
+      # sign-in messages name this site, and wallets warn on a mismatch.
+      PUBLIC_APP_URL: https://${DOMAIN}
+      PUBLIC_API_URL: https://${DOMAIN}
       UPLOAD_FOLDER: /data/uploads
       # Exactly one proxy (Caddy) in front: take the client IP from its
       # X-Forwarded-For, so rate limits are per visitor, not one shared bucket.
@@ -66,6 +70,7 @@ services:
   scheduler:
     environment:
       DATABASE_URL: postgresql://launchpad:${POSTGRES_PASSWORD}@postgres:5432/launchpad
+      PUBLIC_APP_URL: https://${DOMAIN}
       UPLOAD_FOLDER: /data/uploads
     volumes:
       - uploads:/data/uploads

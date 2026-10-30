@@ -48,6 +48,8 @@ class WalletNonce(db.Model):
     wallet_address = db.Column(db.String(128), nullable=False, index=True)
     chain = db.Column(db.String(16), nullable=False)
     nonce = db.Column(db.String(64), nullable=False)
+    # The exact text issued for signing; null on rows from before it was stored.
+    message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
     consumed = db.Column(db.Boolean, default=False, nullable=False)
 

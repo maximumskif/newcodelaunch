@@ -71,7 +71,7 @@ Optional (default in brackets):
 | `PLATFORM_SOLANA_FEE_RECIPIENT` | [unset → NFT drops are refused, from their first step] The Solana wallet every drop's 0.01 SOL fee per mint goes to. The drop's own guard pays it on each mint, so there's nothing to collect. Fixed in each drop when it launches or its phases are edited. |
 | `TELEGRAM_BOT_TOKEN` | [unset → the launch bot is off; its webhook answers 404] The bot's token from @BotFather. See "The Telegram launch bot" below. |
 | `TELEGRAM_WEBHOOK_SECRET` | [unset → the webhook answers 404] Any long random string. Telegram sends it back with every update, and the webhook refuses updates without it. `bootstrap.sh` generates one. |
-| `PUBLIC_APP_URL` | [`http://localhost:5173`] The site's address, which the bot's launch links point at. Telegram only shows a button for an https link; otherwise the link is in the text. |
+| `PUBLIC_APP_URL` | [`http://localhost:5173`] The site's address. Wallet sign-in messages name its domain, and MetaMask and Phantom warn when that isn't the site asking for the signature, so it must be the address users actually open. The bot's launch links point here too. Behind the Compose Caddy it's set from `DOMAIN`. Telegram only shows a button for an https link; otherwise the link is in the text. |
 | `PUBLIC_API_URL` | [unset] Where Telegram reaches this API (https), for `flask telegram-set-webhook`. The same as `PUBLIC_APP_URL` behind the Compose Caddy. |
 | `TELEGRAM_LAUNCH_NETWORK` | [`base`] The network a `/launch` opens on when the message doesn't name one. It needs a curve DEX. |
 | `TELEGRAM_ANNOUNCE_CHAT` | [unset → nothing is posted] The launch channel: a channel's `@username` (or numeric id) where the bot posts every new curve launch. The bot must be an admin there. |

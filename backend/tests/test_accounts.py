@@ -150,3 +150,50 @@ def test_every_user_owned_table_is_merged(app):
         if fk.column.table.name == "users" and table.name != "wallet_identities"
     }
     assert owned == {model.__tablename__ for model in accounts.OWNED_MODELS}
+
+
+@pytest.mark.parametrize("wallet_cls", [EvmWallet, SolanaWallet])
+def test_sign_in_message_names_the_site(client, app, wallet_cls):
+    wallet = wallet_cls()
+    nonce = client.post("/api/auth/nonce", json={"wallet_address": wallet.address, "chain": wallet.chain}).get_json()
+    domain = app.config["PUBLIC_APP_URL"].split("://", 1)[1]
+
+    assert nonce["message"].startswith(f"{domain} wants you to sign in with your ")
+    assert f"\nNonce: {nonce['nonce']}\n" in nonce["message"]
+
+
+@pytest.mark.parametrize("wallet_cls", [EvmWallet, SolanaWallet])
+def test_sign_in_refuses_a_message_naming_another_site(client, wallet_cls):
+    # The phishing case: a look-alike site fetches a real nonce for the
+    # victim's wallet but shows its own domain, so the wallet doesn't warn.
+    wallet = wallet_cls()
+    nonce = client.post("/api/auth/nonce", json={"wallet_address": wallet.address, "chain": wallet.chain}).get_json()
+    phishing_message = nonce["message"].replace("localhost:5173", "newcode1aunch.example")
+    assert phishing_message != nonce["message"]
+
+    response = client.post(
+        "/api/auth/verify",
+        json={
+            "wallet_address": wallet.address,
+            "chain": wallet.chain,
+            "nonce": nonce["nonce"],
+            "signature": wallet.sign(phishing_message),
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_sign_in_refuses_a_nonce_issued_without_a_stored_message(client, app):
+    # Rows from before messages were stored can't be checked against the
+    # domain-bound text, so they're treated like an expired nonce.
+    wallet = EvmWallet()
+    proof = _proof(client, wallet)
+    with app.app_context():
+        _db.session.execute(_db.text("UPDATE wallet_nonces SET message = NULL"))
+        _db.session.commit()
+
+    response = client.post("/api/auth/verify", json=proof)
+
+    assert response.status_code == 400
+    assert "request a new one" in response.get_json()["error"]

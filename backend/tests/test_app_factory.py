@@ -32,7 +32,7 @@ def test_rate_limiting_can_be_disabled_for_the_e2e_harness():
     with app.app_context():
         db.create_all()
         client = app.test_client()
-        payload = {"wallet_address": "0xUnlimitedWallet", "chain": "evm"}
+        payload = {"wallet_address": "0x5555555555555555555555555555555555555555", "chain": "evm"}
         statuses = [client.post("/api/auth/nonce", json=payload).status_code for _ in range(15)]
         db.drop_all()
     assert statuses == [200] * 15
