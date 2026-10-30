@@ -80,4 +80,39 @@ describe('NFTGeneratorPage — collection-switch race', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Collection Two' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 2, name: 'Collection One' })).not.toBeInTheDocument()
   })
+
+  it('hides the previous collection while the newly selected one loads, so edits cannot land in it', async () => {
+    // Regression (seen in the nft-generator e2e): right after switching, the
+    // previous collection stayed rendered until the new one's fetch resolved,
+    // and a layer added in that window went into the previous collection.
+    const collectionOne = makeCollection('col-1', 'Collection One')
+    const collectionTwo = makeCollection('col-2', 'Collection Two')
+    vi.mocked(nftApi.listCollections).mockResolvedValue({ collections: [collectionOne, collectionTwo] })
+
+    let resolveColTwo!: (value: { collection: NFTCollection }) => void
+    vi.mocked(nftApi.getCollection).mockImplementation(async (_token, id) => {
+      if (id === 'col-1') return { collection: collectionOne }
+      return new Promise((resolve) => {
+        resolveColTwo = resolve
+      })
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <NFTGeneratorPage />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByRole('heading', { level: 2, name: 'Collection One' })).toBeInTheDocument()
+    expect(screen.getByLabelText('New layer name')).toBeInTheDocument()
+
+    await user.click(screen.getByText('Collection Two'))
+
+    expect(screen.queryByRole('heading', { level: 2, name: 'Collection One' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('New layer name')).not.toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+
+    resolveColTwo({ collection: collectionTwo })
+    expect(await screen.findByRole('heading', { level: 2, name: 'Collection Two' })).toBeInTheDocument()
+  })
 })

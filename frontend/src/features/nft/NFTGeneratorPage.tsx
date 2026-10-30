@@ -31,7 +31,7 @@ export function NFTGeneratorPage() {
   // glimpses the brand-new-account view (create form, "how it works").
   const [isLoadingCollections, setIsLoadingCollections] = useState(Boolean(accessToken))
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [collection, setCollection] = useState<NFTCollection | null>(null)
+  const [loadedCollection, setCollection] = useState<NFTCollection | null>(null)
   const [isLoadingCollection, setIsLoadingCollection] = useState(false)
   const [project, setProject] = useState<Project | null>(null)
   const [pendingDeleteCollection, setPendingDeleteCollection] = useState<NFTCollection | null>(null)
@@ -111,6 +111,11 @@ export function NFTGeneratorPage() {
     else setCollection(null)
   }, [accessToken, selectedId])
 
+  // The fetched collection, only while it's still the selected one. Right
+  // after a create or a sidebar click, `selectedId` has moved on but the
+  // previous collection is still loaded — rendering it then would put a
+  // new layer or trait into the wrong collection.
+  const collection = loadedCollection?.id === selectedId ? loadedCollection : null
   const layers = collection?.layers ?? []
   const hasTraitsEverywhere = layers.length > 0 && layers.every((layer) => layer.traits.length > 0)
   const activeId = hasTraitsEverywhere ? 'generate' : 'layers'
@@ -192,7 +197,7 @@ export function NFTGeneratorPage() {
                 <HowItWorks />
               ) : !collection ? (
                 <EmptyState
-                  title={isLoadingCollection ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
+                  title={isLoadingCollection || selectedId ? 'Loading…' : 'Pick a collection on the left, or create a new one.'}
                 />
               ) : (
                 <>
