@@ -63,7 +63,7 @@ def test_nonce_rate_limit_is_shared_across_separate_app_instances_via_redis(redi
     # not the in-process object. Simulate that by hammering the limit
     # against one app instance, then hitting it again on a second,
     # independently-created app instance pointed at the same Redis URL.
-    wallet_address = "0x000000000000000000000000000000000000aa"
+    wallet_address = "0x00000000000000000000000000000000000000aa"
     payload = {"wallet_address": wallet_address, "chain": "evm"}
 
     app_one = create_app(redis_test_config)
