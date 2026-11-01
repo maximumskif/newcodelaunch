@@ -23,9 +23,13 @@ const { values: args } = parseArgs({
     rpc: { type: 'string', default: 'https://api.devnet.solana.com' },
     api: { type: 'string', default: 'http://127.0.0.1:5100/api' },
     airdrop: { type: 'boolean', default: false },
+    // The backend's PLATFORM_SOLANA_FEE_RECIPIENT, to check each mint pays it.
+    'fee-wallet': { type: 'string', default: process.env.PLATFORM_SOLANA_FEE_RECIPIENT },
   },
 })
 if (!args.keypair) throw new Error('--keypair <solana keypair json> is required')
+if (!args['fee-wallet']) throw new Error('--fee-wallet (the backend\'s PLATFORM_SOLANA_FEE_RECIPIENT) is required')
+const FEE_LAMPORTS = 10_000_000
 
 const wallet = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(args.keypair, 'utf8'))))
 const me = wallet.publicKey.toBase58()
@@ -142,11 +146,15 @@ async function main() {
 
   let { data: status } = await api('GET', `/mint/public/${cm.candy_machine}?wallet=${me}`)
   check('storefront: allowlist phase, wallet eligible at 0.005 SOL', status.phase === 'allowlist' && status.allowlisted === true && status.mint_price_sol === 0.005)
+  check('storefront: 0.01 SOL platform fee per mint', status.platform_fee_sol === 0.01)
+  const feeWallet = new PublicKey(args['fee-wallet'])
+  const feeStart = await connection.getBalance(feeWallet)
   const outsider = Keypair.generate().publicKey.toBase58()
   check('a wallet not on the list is refused', (await api('POST', `/mint/public/${cm.candy_machine}/mint`, { minter_wallet: outsider }, { expect: [403] })).status === 403)
 
   const { data: mint1 } = await api('POST', `/mint/public/${cm.candy_machine}/mint`, { minter_wallet: me })
   await signAndSend(mint1.transaction, 'allowlist mint (proof route + mint)')
+  check('the allowlist mint paid the platform exactly 0.01 SOL', (await connection.getBalance(feeWallet)) - feeStart === FEE_LAMPORTS)
   status = (await api('GET', `/mint/public/${cm.candy_machine}?wallet=${me}`)).data
   check('mint counted by the on-chain mintLimit counter, limit reached', status.wallet_minted === 1 && status.limit_reached === true)
   check('a second mint is refused at the limit', (await api('POST', `/mint/public/${cm.candy_machine}/mint`, { minter_wallet: me }, { expect: [403] })).status === 403)
@@ -162,6 +170,7 @@ async function main() {
   check('storefront: public phase at the new price, counter carried over', status.phase === 'public' && status.mint_price_sol === 0.02 && status.wallet_minted === 1)
   const { data: mint2 } = await api('POST', `/mint/public/${cm.candy_machine}/mint`, { minter_wallet: me })
   await signAndSend(mint2.transaction, 'public mint')
+  check('the public mint paid the platform 0.01 SOL too', (await connection.getBalance(feeWallet)) - feeStart === 2 * FEE_LAMPORTS)
 
   const { data: dashboard } = await api('GET', '/mint/dashboard')
   const row = dashboard.drops.find((d) => d.candy_machine === cm.candy_machine)

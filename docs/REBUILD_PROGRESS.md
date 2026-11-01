@@ -1270,6 +1270,13 @@ The owner chose **post-only** for X: the platform's account posts every new curv
 
 **Telegram connectivity, 2026-11-01**: from this machine api.telegram.org answers, and the 39 bot tests pass. The live bot wasn't checked here: its token isn't in this machine's `backend/.env`.
 
+## Fees on the real networks, 2026-11-01
+
+Both platform fees, run on real public networks through the real backend (`e2e/devnet/run-stack.sh`), each paying a fresh fee wallet:
+
+- **Sepolia, `smoke.mjs --only curve`: 21/21.** A launch with a creator buy, a second wallet buying, selling and buying it out, graduation into the real Uniswap V2, then a router swap. The fees were split 0.7 : 0.3 (0.0000096 + 0.0000041 ETH), sent on by the buyer to the platform's wallet and claimed by the creator, and the curve kept nothing. The source was verified on the real Etherscan. It spent 0.00104 ETH; the smoke wallet has about 0.021 left. Curve [0xeaa6…747a](https://sepolia.etherscan.io/address/0xeaa6a60e023d8a8135973f51ea7aaae6188d747a).
+- **Solana devnet, `smoke.mjs`: 16/16, its first run on real devnet.** It now checks the fee: the storefront shows 0.01 SOL, and the allowlist mint and the public mint each paid the platform's wallet exactly 10,000,000 lamports. It needs `--fee-wallet` (or `PLATFORM_SOLANA_FEE_RECIPIENT`). It spent 0.051 SOL; the smoke wallet has about 1.89 left.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:
