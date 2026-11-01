@@ -1249,6 +1249,15 @@ The first step to distribution: people launch a coin from Telegram (the owner ch
 
 **Verified**: pytest 476 (posted once; the "launch your own" line; a failed post retried; only the last day; curves only; testnets left out unless asked; off without a channel; recording a launch posts it). Not yet tried against the real Telegram. Local pytest crashes at random on this machine since 2026-10-29 (segfaults, also on already-green commits); it crashes about half the time on its own, outside the project, and not with memory-layout randomisation off (`setarch x86_64 -R`), under which the suite passed in full. A real post went to the live channel through the same code.
 
+## Sign-in, security headers and test fixes, 2026-10-30
+
+- **Sign-in message (EIP-4361)**: the message used to hold only a fixed sentence and a nonce, so a look-alike site could have a wallet sign a real nonce and take over the session. It now names the site's domain and URI, the checksummed address, and issue and expiry times (Sign In With Solana layout on Solana), so MetaMask and Phantom warn when the domain isn't the site asking. The issued text is stored on the nonce row and verified exactly; older rows are refused like an expired nonce. `/auth/nonce` rejects invalid EVM addresses (400). In production `PUBLIC_APP_URL` comes from `DOMAIN`. Migration `9c4f2e81b7a3`.
+- **Security headers**: no framing (`frame-ancestors 'none'` and `X-Frame-Options`), since users sign wallet transactions here. The full CSP runs report-only, with violations going to `POST /api/csp-report`; checked enforced on all 21 routes and the wallet modal with no violations once Google Fonts (from the Solana wallet adapter's stylesheet) is allowed.
+- **NFT generator**: after creating or picking a collection, the page showed the previous one until the new one loaded, so a layer added in that moment went to the wrong collection (the e2e caught it, 84 ms apart). It now shows "Loading…" until the selected collection is loaded.
+- **Test fixes**: the Redis rate-limit test used a 38-digit address (only CI runs it); the vesting e2e waited exactly the panel's 15 s refresh (now 30 s) and its retry counted the first attempt's schedule.
+
+CI green on f6a8bed.
+
 ## Launches on X, 2026-11-01
 
 The owner chose **post-only** for X: the platform's account posts every new curve launch, which X's free API tier allows (a reply bot, like Telegram's `/launch`, would need a paid tier to read mentions).
