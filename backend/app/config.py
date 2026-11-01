@@ -193,6 +193,21 @@ class Config:
     # Testnet launches are left out of the channel unless this is "true".
     TELEGRAM_ANNOUNCE_TESTNETS = os.environ.get("TELEGRAM_ANNOUNCE_TESTNETS", "").strip().lower() == "true"
 
+    # The platform's X account, which posts each new curve launch (post-only,
+    # within X's free API tier). All four come from the X developer portal:
+    # the app's API key and secret, and the account's access token and
+    # secret, made after setting the app's permissions to "Read and write".
+    # Unset: nothing is posted.
+    X_API_KEY = os.environ.get("X_API_KEY", "").strip()
+    X_API_SECRET = os.environ.get("X_API_SECRET", "").strip()
+    X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "").strip()
+    X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "").strip()
+    # Testnet launches are left out unless this is "true".
+    X_ANNOUNCE_TESTNETS = os.environ.get("X_ANNOUNCE_TESTNETS", "").strip().lower() == "true"
+    # At most this many posts per 24 hours, under the free tier's cap; the
+    # rest wait for `flask announce-launches` (within its one-day window).
+    X_DAILY_POST_LIMIT = int(os.environ.get("X_DAILY_POST_LIMIT", "") or 15)
+
     # Market/chain-data API keys (Phase 6: Market Intelligence / DeFi Scanner).
     # COINGECKO_API_KEY is optional — market_intelligence.py works unauthenticated
     # too, just at CoinGecko's lower public rate limit. MORALIS/SOLSCAN aren't used yet.

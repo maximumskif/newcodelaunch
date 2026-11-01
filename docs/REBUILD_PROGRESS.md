@@ -1249,7 +1249,17 @@ The first step to distribution: people launch a coin from Telegram (the owner ch
 
 **Verified**: pytest 476 (posted once; the "launch your own" line; a failed post retried; only the last day; curves only; testnets left out unless asked; off without a channel; recording a launch posts it). Not yet tried against the real Telegram. Local pytest crashes at random on this machine since 2026-10-29 (segfaults, also on already-green commits); it crashes about half the time on its own, outside the project, and not with memory-layout randomisation off (`setarch x86_64 -R`), under which the suite passed in full. A real post went to the live channel through the same code.
 
-**Next**: X.
+## Launches on X, 2026-11-01
+
+The owner chose **post-only** for X: the platform's account posts every new curve launch, which X's free API tier allows (a reply bot, like Telegram's `/launch`, would need a paid tier to read mentions).
+
+- **How**: `services/x_poster.py` posts with the account's own keys (OAuth 1.0a, signed here with no new dependency; checked against the worked example in X's docs). The post: network, name and `$TICKER`, the graduation target and DEX, the contract address, the token page, and "Launch your own" while it fits. Length is counted as X does (links 23, wide characters 2): too long drops the invitation first, then shortens the name.
+- **Same rules as the Telegram channel**: curves only, mainnet unless `X_ANNOUNCE_TESTNETS=true`, posted as the launch is recorded (5 s limit, never fails it), and retried by `flask announce-launches` within a day. Tracked apart from Telegram (`x_announced_at`, migration `a3d8e6f1c254`, round-tripped; earlier launches count as posted), so one service being down doesn't hold back the other. At most `X_DAILY_POST_LIMIT` (15) posts per 24 hours, under the free tier's cap; the rest wait for the retry.
+- `flask x-whoami` checks the keys and prints the account, posting nothing. Setup is in OPERATIONS.md; `bootstrap.sh` passes the four keys through.
+
+**Verified**: pytest 513 (16 new: the signature, posted once, length and shortening, a refused post retried, X's error shown, the daily limit, what gets posted, off without all four keys, Telegram down doesn't stop X, the retry command, recording posts it, `x-whoami`). Not yet tried against the real X: that needs the account's keys.
+
+**Telegram connectivity, 2026-11-01**: from this machine api.telegram.org answers, and the 39 bot tests pass. The live bot wasn't checked here: its token isn't in this machine's `backend/.env`.
 
 ## Where we left off, 2026-09-30
 

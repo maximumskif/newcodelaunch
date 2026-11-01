@@ -143,12 +143,28 @@ def telegram_set_webhook_command(delete: bool) -> None:
 @click.command("announce-launches")
 @with_appcontext
 def announce_launches_command() -> None:
-    """Posts recent curve launches the Telegram launch channel missed. A
-    launch is posted as it's recorded; this catches the ones Telegram didn't
-    take then. Does nothing when no channel is set."""
-    from .services import telegram_bot
+    """Posts recent curve launches the Telegram launch channel or the X
+    account missed. A launch is posted as it's recorded; this catches the
+    ones a service didn't take then (or, on X, that waited for the daily
+    limit). Skips a service that isn't set up."""
+    from .services import telegram_bot, x_poster
 
     click.echo(f"Posted {telegram_bot.announce_pending()} launch(es) to Telegram.")
+    click.echo(f"Posted {x_poster.announce_pending()} launch(es) to X.")
+
+
+@click.command("x-whoami")
+@with_appcontext
+def x_whoami_command() -> None:
+    """Checks the X keys: prints the account they post as, posting nothing."""
+    from .services import x_poster
+
+    if not x_poster.is_configured():
+        raise click.ClickException("Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN and X_ACCESS_TOKEN_SECRET first.")
+    try:
+        click.echo(f"The X keys post as @{x_poster.whoami()}")
+    except (x_poster.XError, x_poster.requests.RequestException) as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 def register_cli(app) -> None:
@@ -158,3 +174,4 @@ def register_cli(app) -> None:
     app.cli.add_command(telegram_poll_command)
     app.cli.add_command(telegram_set_webhook_command)
     app.cli.add_command(announce_launches_command)
+    app.cli.add_command(x_whoami_command)

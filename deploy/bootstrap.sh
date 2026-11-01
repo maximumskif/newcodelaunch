@@ -13,6 +13,9 @@
 # bot, and TELEGRAM_ANNOUNCE_CHAT (a channel's @username) the launch channel; then run `docker compose exec backend flask telegram-set-webhook`
 # once (see docs/OPERATIONS.md).
 #
+# X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN and X_ACCESS_TOKEN_SECRET (from the
+# X developer portal) are optional and post each new launch to the platform's X account.
+#
 # Installs Docker and a firewall (SSH, HTTP, HTTPS only), clones the repo to
 # /opt/newcodelaunch, writes the three env files with freshly generated
 # secrets (never overwriting existing ones), and starts the stack. With no
@@ -92,6 +95,10 @@ PUBLIC_API_URL=https://$DOMAIN
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
 TELEGRAM_ANNOUNCE_CHAT=${TELEGRAM_ANNOUNCE_CHAT:-}
 TELEGRAM_WEBHOOK_SECRET=$(secret)
+X_API_KEY=${X_API_KEY:-}
+X_API_SECRET=${X_API_SECRET:-}
+X_ACCESS_TOKEN=${X_ACCESS_TOKEN:-}
+X_ACCESS_TOKEN_SECRET=${X_ACCESS_TOKEN_SECRET:-}
 SOLANA_RPC_URL=$MAINNET_RPC
 SOLANA_DEVNET_RPC_URL=$DEVNET_RPC
 EOF
