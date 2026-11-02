@@ -2,7 +2,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 
 import { apiClient } from '../../lib/apiClient'
@@ -200,5 +200,48 @@ describe('WalletConnect — linked wallets', () => {
 
     expect(unlink).toHaveBeenCalledWith('stored-token', 'solana', SOLANA_ADDRESS)
     await waitFor(() => expect(screen.queryByText(/SOLANA · FoEsHY/)).not.toBeInTheDocument())
+  })
+})
+
+describe('WalletConnect — connecting an EVM wallet', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockDefaults()
+    vi.mocked(useAccount).mockReturnValue({ address: undefined, isConnected: false } as unknown as ReturnType<typeof useAccount>)
+  })
+  afterEach(() => {
+    delete (window as unknown as { ethereum?: unknown }).ethereum
+  })
+
+  const withConnectors = (ids: string[]) => {
+    const connect = vi.fn()
+    vi.mocked(useConnect).mockReturnValue({ connectors: ids.map((id) => ({ id })), connect } as unknown as ReturnType<typeof useConnect>)
+    return connect
+  }
+
+  it('offers a phone wallet by QR next to the browser wallet', async () => {
+    ;(window as unknown as { ethereum?: unknown }).ethereum = {}
+    const connect = withConnectors(['injected', 'walletConnect'])
+    render(<AuthProvider><WalletConnect /></AuthProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'Phone wallet (QR)' }))
+    expect(connect).toHaveBeenCalledWith({ connector: { id: 'walletConnect' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Connect EVM Wallet' }))
+    expect(connect).toHaveBeenLastCalledWith({ connector: { id: 'injected' } })
+  })
+
+  it('goes straight to WalletConnect on a browser with no wallet', async () => {
+    const connect = withConnectors(['injected', 'walletConnect'])
+    render(<AuthProvider><WalletConnect /></AuthProvider>)
+    expect(screen.queryByRole('button', { name: 'Phone wallet (QR)' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Connect EVM Wallet' }))
+    expect(connect).toHaveBeenCalledWith({ connector: { id: 'walletConnect' } })
+  })
+
+  it('says how to get a wallet when nothing can connect', async () => {
+    const connect = withConnectors(['injected'])
+    render(<AuthProvider><WalletConnect /></AuthProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'Connect EVM Wallet' }))
+    expect(connect).not.toHaveBeenCalled()
+    expect(screen.getByText(/No EVM wallet found/)).toBeInTheDocument()
   })
 })

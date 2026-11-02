@@ -163,6 +163,10 @@ services:
         VITE_POLYGON_RPC_URL: ${VITE_POLYGON_RPC_URL:-}
         VITE_BSC_TESTNET_RPC_URL: ${VITE_BSC_TESTNET_RPC_URL:-}
         VITE_BSC_RPC_URL: ${VITE_BSC_RPC_URL:-}
+        VITE_BASE_SEPOLIA_RPC_URL: ${VITE_BASE_SEPOLIA_RPC_URL:-}
+        VITE_BASE_RPC_URL: ${VITE_BASE_RPC_URL:-}
+        # Optional: phone wallets through WalletConnect (docs/OPERATIONS.md).
+        VITE_WALLETCONNECT_PROJECT_ID: ${VITE_WALLETCONNECT_PROJECT_ID:-}
     container_name: launchpad-frontend
     ports:
       - '8080:80'

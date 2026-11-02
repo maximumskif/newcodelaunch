@@ -9,7 +9,7 @@ import { InlineError } from '../../components/ui/InlineError'
 import { fromBaseUnits, toBaseUnits } from '../../lib/airdrop'
 import { formatAmount } from '../../lib/marketFormat'
 import { CURVE_ABI, priceAt, progress, quoteBuy, quoteSell, withSlippage, type CurveTerms } from '../../lib/curve'
-import { pickEvmConnector } from '../auth/evmConnector'
+import { NO_EVM_WALLET, pickEvmConnector } from '../auth/evmConnector'
 import { NETWORK_TO_CHAIN_ID } from '../contracts/useDeployTemplate'
 import { useOwnerTransaction } from '../contracts/useOwnerTransaction'
 import { EVM_NETWORKS } from '../network/NetworkContext'
@@ -51,6 +51,7 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
   const queryClient = useQueryClient()
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [amountText, setAmountText] = useState('')
+  const [noWallet, setNoWallet] = useState(false)
 
   const reads = useQuery({
     queryKey: ['curve', chainId, address, wallet],
@@ -162,15 +163,19 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
           nobody can withdraw that liquidity.
         </p>
       ) : !wallet ? (
-        <Button
-          size="sm"
-          onClick={() => {
-            const connector = pickEvmConnector(connectors)
-            if (connector) connect({ connector })
-          }}
-        >
-          Connect wallet to trade
-        </Button>
+        <div className="space-y-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              const connector = pickEvmConnector(connectors)
+              setNoWallet(!connector)
+              if (connector) connect({ connector })
+            }}
+          >
+            Connect wallet to trade
+          </Button>
+          {noWallet && <p className="text-xs text-warning">{NO_EVM_WALLET}</p>}
+        </div>
       ) : (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="inline-flex rounded-lg border border-border p-1" role="group" aria-label="Buy or sell">

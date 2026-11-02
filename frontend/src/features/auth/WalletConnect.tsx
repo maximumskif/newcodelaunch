@@ -11,7 +11,7 @@ import { IconChevronDown } from '../../components/ui/icons'
 import { InlineError } from '../../components/ui/InlineError'
 import { apiClient, type Chain } from '../../lib/apiClient'
 import { useAuth } from './AuthContext'
-import { pickEvmConnector } from './evmConnector'
+import { NO_EVM_WALLET, pickEvmConnector, walletConnectConnector } from './evmConnector'
 import { errorMessage } from '../../lib/errors'
 
 export function WalletConnect() {
@@ -89,11 +89,16 @@ export function WalletConnect() {
   const handleConnectEvm = () => {
     const connector = pickEvmConnector(connectors)
     if (!connector) {
-      setError('No EVM wallet connector available — is MetaMask installed?')
+      setError(NO_EVM_WALLET)
       return
     }
+    setError(null)
     connect({ connector })
   }
+  // A phone wallet by QR code, offered next to a browser wallet. With no
+  // browser wallet the main button is already WalletConnect.
+  const phoneWallet = walletConnectConnector(connectors)
+  const offerPhoneWallet = Boolean(phoneWallet && pickEvmConnector(connectors) !== phoneWallet)
 
   const handleSignEvm = async () => {
     if (!address) return
@@ -275,9 +280,16 @@ export function WalletConnect() {
     <div className="flex flex-col items-end gap-2 text-sm">
       <div className="flex flex-wrap justify-end gap-2">
         {!isEvmConnected ? (
-          <Button variant="primary" size="sm" onClick={handleConnectEvm}>
-            Connect EVM Wallet
-          </Button>
+          <>
+            <Button variant="primary" size="sm" onClick={handleConnectEvm}>
+              Connect EVM Wallet
+            </Button>
+            {offerPhoneWallet && (
+              <Button variant="ghost" size="sm" onClick={() => connect({ connector: phoneWallet! })}>
+                Phone wallet (QR)
+              </Button>
+            )}
+          </>
         ) : (
           <Button variant="primary" size="sm" onClick={handleSignEvm} isLoading={isAuthenticating}>
             Sign in with {address?.slice(0, 6)}…{address?.slice(-4)}

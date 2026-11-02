@@ -116,11 +116,21 @@ describe('CurvePanel', () => {
   })
 
   it('offers to connect a wallet rather than a trade form', async () => {
+    ;(window as unknown as { ethereum?: unknown }).ethereum = {}
     mockCurve({ wallet: null })
     render(<CurvePanel network="sepolia" address={CURVE} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Connect wallet to trade' }))
-    expect(connect).toHaveBeenCalled()
+    expect(connect).toHaveBeenCalledWith({ connector: { id: 'injected' } })
     expect(screen.queryByLabelText(/^Spend/)).not.toBeInTheDocument()
+    delete (window as unknown as { ethereum?: unknown }).ethereum
+  })
+
+  it('says how to get a wallet when this browser has none to connect', async () => {
+    mockCurve({ wallet: null })
+    render(<CurvePanel network="sepolia" address={CURVE} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect wallet to trade' }))
+    expect(connect).not.toHaveBeenCalled()
+    expect(screen.getByText(/No EVM wallet found/)).toBeInTheDocument()
   })
 
   it('once graduated, points to the pool and offers no trades', async () => {

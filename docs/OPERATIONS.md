@@ -101,6 +101,7 @@ Vite inlines these into the static bundle when it's built; changing one means re
 | `VITE_API_BASE_URL` | **Required** for any deployment not on localhost (default `http://localhost:5000/api`). The backend's public URL plus `/api`. |
 | `VITE_SOLANA_RPC_URL`, `VITE_SOLANA_DEVNET_RPC_URL` | [public Solana endpoints] |
 | `VITE_SEPOLIA_RPC_URL`, `VITE_ETHEREUM_RPC_URL`, `VITE_POLYGON_AMOY_RPC_URL`, `VITE_POLYGON_RPC_URL`, `VITE_BSC_TESTNET_RPC_URL`, `VITE_BSC_RPC_URL`, `VITE_BASE_SEPOLIA_RPC_URL`, `VITE_BASE_RPC_URL` | [viem's public default for that chain] |
+| `VITE_WALLETCONNECT_PROJECT_ID` | [empty] Recommended. Turns on WalletConnect, so phone wallets (MetaMask Mobile, Rainbow, Trust…) can connect by QR code or deep link. Without it, a phone browser with no built-in wallet can't connect an EVM wallet at all. Free from [dashboard.reown.com](https://dashboard.reown.com): create a project and add the site's domain to its allowed domains. `deploy/bootstrap.sh` writes it to `deploy/.env` from `WALLETCONNECT_PROJECT_ID`. |
 
 ## Deploying and migrations
 

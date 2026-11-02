@@ -22,13 +22,15 @@
 	# build time and token images from any IPFS gateway. style-src needs
 	# 'unsafe-inline' for the styles the wallet adapters inject, and Google
 	# Fonts because the Solana adapter's stylesheet imports DM Sans from it.
+	# WalletConnect's QR modal loads its font from fonts.reown.com and runs
+	# its Verify check (is this site who it says it is?) in an iframe.
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
-		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; frame-src 'none'; worker-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; report-uri /api/csp-report"
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com; connect-src 'self' https: wss:; frame-src https://verify.walletconnect.org https://verify.walletconnect.com; worker-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; report-uri /api/csp-report"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 	}
 }

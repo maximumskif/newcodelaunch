@@ -43,7 +43,7 @@ Pass: `Content-Security-Policy` contains `frame-ancestors 'none'`, and `Content-
 ## Before mainnet
 
 ### 6. Enforce the full CSP
-The full policy is report-only today. Use the live site with MetaMask, Phantom and WalletConnect: connect, sign in, launch a token, trade on a curve, mint a drop. Then read the reports:
+The full policy is report-only today. WalletConnect needs `VITE_WALLETCONNECT_PROJECT_ID` in `deploy/.env` (free from dashboard.reown.com, with the site's domain allowed), otherwise phone browsers can't connect an EVM wallet. Use the live site with MetaMask, Phantom and WalletConnect (from a phone): connect, sign in, launch a token, trade on a curve, mint a drop. Then read the reports:
 
 ```bash
 docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml logs backend | grep 'CSP violation'

@@ -13,6 +13,9 @@
 # bot, and TELEGRAM_ANNOUNCE_CHAT (a channel's @username) the launch channel; then run `docker compose exec backend flask telegram-set-webhook`
 # once (see docs/OPERATIONS.md).
 #
+# WALLETCONNECT_PROJECT_ID (free, from dashboard.reown.com) is optional and
+# lets phone wallets connect through WalletConnect.
+#
 # X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN and X_ACCESS_TOKEN_SECRET (from the
 # X developer portal) are optional and post each new launch to the platform's X account.
 #
@@ -78,6 +81,7 @@ if [ ! -f deploy/.env ]; then
   cat > deploy/.env <<EOF
 DOMAIN=$DOMAIN
 POSTGRES_PASSWORD=$(secret)
+VITE_WALLETCONNECT_PROJECT_ID=${WALLETCONNECT_PROJECT_ID:-}
 EOF
 fi
 if [ ! -f backend/.env ]; then
