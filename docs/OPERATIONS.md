@@ -56,6 +56,7 @@ Optional (default in brackets):
 |---|---|
 | `SEPOLIA_RPC_URL`, `ETHEREUM_RPC_URL`, `POLYGON_AMOY_RPC_URL`, `POLYGON_RPC_URL`, `BSC_TESTNET_RPC_URL`, `BSC_RPC_URL`, `BASE_SEPOLIA_RPC_URL`, `BASE_RPC_URL`, `SOLANA_DEVNET_RPC_URL`, `SOLANA_RPC_URL` | [public endpoints] Optional to start, but see [RPC providers](#rpc-providers). |
 | `JWT_ACCESS_TOKEN_EXPIRES_SECONDS` | [3600] |
+| `JWT_SESSION_MAX_SECONDS` | [604800, 7 days] The longest a session lasts. The app renews its token before each expiry (`/api/auth/refresh`), but never past this long after the wallet signature that started it. |
 | `WALLET_NONCE_TTL_SECONDS` | [300] Also what `prune-nonces` uses as its cutoff. |
 | `NFT_GENERATION_JOB_STALE_SECONDS` | [600] How long a generation job can go without progress before the reaper fails it. |
 | `LOG_LEVEL` | [INFO] |

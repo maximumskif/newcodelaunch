@@ -15,7 +15,7 @@ import { pickEvmConnector } from './evmConnector'
 import { errorMessage } from '../../lib/errors'
 
 export function WalletConnect() {
-  const { user, accessToken, login, updateUser, logout } = useAuth()
+  const { user, accessToken, login, updateUser, logout, sessionNotice } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [didCopy, setDidCopy] = useState(false)
@@ -293,7 +293,11 @@ export function WalletConnect() {
           </Button>
         )}
       </div>
-      {error && <InlineError className="max-w-xs text-right text-danger">{error}</InlineError>}
+      {error ? (
+        <InlineError className="max-w-xs text-right text-danger">{error}</InlineError>
+      ) : (
+        sessionNotice && <p role="status" className="max-w-xs text-right text-xs text-warning">{sessionNotice}</p>
+      )}
     </div>
   )
 }

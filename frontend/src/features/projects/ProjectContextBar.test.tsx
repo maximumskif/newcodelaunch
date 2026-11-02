@@ -34,6 +34,7 @@ function mockSignedIn() {
     login: vi.fn(),
     updateUser: vi.fn(),
     logout: vi.fn(),
+    sessionNotice: null,
   })
 }
 

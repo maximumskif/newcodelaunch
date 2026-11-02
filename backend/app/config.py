@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -60,6 +61,12 @@ class Config:
     # independently now, same as SECRET_KEY — set a different value.
     JWT_SECRET_KEY = _require("JWT_SECRET_KEY")
     JWT_ACCESS_TOKEN_EXPIRES_SECONDS = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", "3600"))
+    # flask-jwt-extended reads JWT_ACCESS_TOKEN_EXPIRES, not the _SECONDS
+    # name above; without this line every token lasted its 15-minute default.
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=JWT_ACCESS_TOKEN_EXPIRES_SECONDS)
+    # The longest a session can be kept alive by /api/auth/refresh, counted
+    # from the wallet signature that started it. After this, sign in again.
+    JWT_SESSION_MAX_SECONDS = int(os.environ.get("JWT_SESSION_MAX_SECONDS", str(7 * 24 * 3600)))
     WALLET_NONCE_TTL_SECONDS = int(os.environ.get("WALLET_NONCE_TTL_SECONDS", "300"))
     # How long a generation job can sit with no progress (no item committed,
     # no status change — see NFTGenerationJob.updated_at) while still

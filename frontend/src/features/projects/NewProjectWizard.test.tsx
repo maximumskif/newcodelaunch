@@ -33,6 +33,7 @@ function mockSignedIn() {
     login: vi.fn(),
     updateUser: vi.fn(),
     logout: vi.fn(),
+    sessionNotice: null,
   })
 }
 
@@ -46,7 +47,7 @@ function renderWizard() {
 
 describe('NewProjectWizard', () => {
   it('prompts to sign in when there is no access token', () => {
-    vi.mocked(useAuth).mockReturnValue({ accessToken: null, user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: null, user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn(), sessionNotice: null })
 
     renderWizard()
 

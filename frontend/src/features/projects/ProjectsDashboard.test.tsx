@@ -44,6 +44,7 @@ function mockSignedIn() {
     accessToken: 'tok',
     user: { id: 'user-1', wallet_address: '0xabc', chain: 'evm', wallets: [], created_at: '2026-01-01T00:00:00Z' },
     login: vi.fn(),
+    sessionNotice: null,
     updateUser: vi.fn(),
     logout: vi.fn(),
   })
@@ -92,7 +93,7 @@ function renderDashboard() {
 
 describe('ProjectsDashboard', () => {
   it('prompts to sign in when there is no access token instead of calling the API', () => {
-    vi.mocked(useAuth).mockReturnValue({ accessToken: null, user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn() })
+    vi.mocked(useAuth).mockReturnValue({ accessToken: null, user: null, login: vi.fn(), updateUser: vi.fn(), logout: vi.fn(), sessionNotice: null })
 
     renderDashboard()
 

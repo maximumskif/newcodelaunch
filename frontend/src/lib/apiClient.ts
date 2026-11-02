@@ -57,6 +57,9 @@ export const apiClient = {
 
   me: (token: string) => request<{ user: AuthUser }>('/auth/me', {}, token),
 
+  // A fresh token for a session that's still valid (see AuthContext).
+  refresh: (token: string) => request<{ access_token: string; user: AuthUser }>('/auth/refresh', { method: 'POST' }, token),
+
   // Link another wallet to the signed-in account. If it has its own account,
   // that account merges into this one — `merged` counts what moved.
   linkWallet: (token: string, proof: WalletProof) =>

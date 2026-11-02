@@ -134,7 +134,34 @@ def verify():
     user = accounts.resolve_sign_in(wallet_address, chain)
     db.session.commit()
 
-    access_token = create_access_token(identity=user.id, additional_claims={"wallet": wallet_address, "chain": chain})
+    access_token = create_access_token(
+        identity=user.id,
+        additional_claims={"wallet": wallet_address, "chain": chain, "auth_time": int(datetime.now(timezone.utc).timestamp())},
+    )
+    return jsonify(access_token=access_token, user=accounts.account_view(user, wallet_address, chain))
+
+
+@auth_bp.post("/refresh")
+@jwt_required()
+@limiter.limit("30/minute")
+def refresh():
+    """A fresh token for a session that's still valid, so an active user isn't
+    signed out every JWT_ACCESS_TOKEN_EXPIRES_SECONDS. It keeps the session's
+    wallet and its sign-in time (auth_time), so refreshing can't stretch a
+    session past JWT_SESSION_MAX_SECONDS from the signature that began it.
+    Tokens from before auth_time existed count from when they were issued."""
+    claims = get_jwt()
+    user = db.session.get(User, get_jwt_identity())
+    if user is None:
+        return jsonify(error="This account no longer exists. Sign in again.", code="session_invalid"), 401
+    auth_time = int(claims.get("auth_time") or claims["iat"])
+    now = int(datetime.now(timezone.utc).timestamp())
+    if now - auth_time > current_app.config["JWT_SESSION_MAX_SECONDS"]:
+        return jsonify(error="Your session has ended. Sign in again.", code="session_expired"), 401
+    wallet_address, chain = _session_wallet()
+    access_token = create_access_token(
+        identity=user.id, additional_claims={"wallet": wallet_address, "chain": chain, "auth_time": auth_time}
+    )
     return jsonify(access_token=access_token, user=accounts.account_view(user, wallet_address, chain))
 
 

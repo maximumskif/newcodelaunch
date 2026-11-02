@@ -38,6 +38,26 @@ def create_app(config_object=Config):
     def rate_limited(_e):
         return jsonify(error="Too many requests — please wait a minute and try again."), 429
 
+    # flask-jwt-extended's own errors are {"msg": ...}, with 422 for a token
+    # it can't parse, so the frontend showed "Request to /x failed with status
+    # 401". Give them this API's {"error": ...} shape, always a 401, plus a
+    # `code` the frontend uses to tell an ended session (sign out and say so)
+    # from other 401s such as a wallet signature that doesn't match.
+    def _session_error(message, code):
+        return jsonify(error=message, code=code), 401
+
+    @jwt.expired_token_loader
+    def _expired(_header, _payload):
+        return _session_error("Your session has ended. Sign in again.", "session_expired")
+
+    @jwt.invalid_token_loader
+    def _invalid(_reason):
+        return _session_error("Your session isn't valid any more. Sign in again.", "session_invalid")
+
+    @jwt.unauthorized_loader
+    def _missing(_reason):
+        return _session_error("Sign in with your wallet first.", "sign_in_required")
+
     from . import models  # noqa: F401  (registers models with SQLAlchemy metadata)
 
     from .blueprints.health import health_bp
