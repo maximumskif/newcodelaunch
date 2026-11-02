@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { WalletConnect } from '../../features/auth/WalletConnect'
@@ -6,6 +6,7 @@ import { EVM_NETWORKS, useNetwork } from '../../features/network/NetworkContext'
 import { PILLARS, pillarForPath, toolForPath, type Pillar } from '../../lib/pillars'
 import { IconArrowRight, IconGrid } from '../ui/icons'
 import { CommandPalette, useCommandPalette } from './CommandPalette'
+import { PageFallback } from './PageFallback'
 
 // Only these routes actually consume the selected EVM network today — the
 // NFT generator's flow (traits/rarity/IPFS) has no network concept at all,
@@ -197,7 +198,9 @@ export function AppShell() {
           <WalletConnect />
         </header>
         <main className="min-w-0 flex-1" data-pillar={pillar?.id}>
+          <Suspense fallback={<PageFallback />}>
           <Outlet />
+        </Suspense>
         </main>
       </div>
       <CommandPalette open={palette.open} onClose={() => palette.setOpen(false)} />

@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { SolanaWalletButton } from '../../features/auth/SolanaWalletButton'
+import { PageFallback } from './PageFallback'
 
 // Pages meant for buyers, not creators (a drop's mint page, a token's public
 // page): no creator sidebar or account menu — just the brand, and a Solana
@@ -22,7 +24,9 @@ export function PublicLayout() {
         </div>
       </header>
       <main className="flex-1">
-        <Outlet />
+        <Suspense fallback={<PageFallback />}>
+          <Outlet />
+        </Suspense>
       </main>
       <footer className="border-t border-border px-4 py-6 text-center text-xs text-ink-faint sm:px-6">
         Powered by NewCodeLaunch · Every transaction is signed in your own wallet.

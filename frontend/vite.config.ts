@@ -24,12 +24,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // The wagmi/viem (EVM) and @solana/wallet-adapter-* (Solana) stacks
-        // are the bulk of the >500KB warning — both are used by WalletConnect,
-        // which renders on every page, so route-based splitting wouldn't help
-        // (every route needs it). Splitting them into their own vendor chunks
-        // doesn't shrink total bytes, but it separates rarely-changing wallet
-        // libraries from app code for better long-term browser caching, and
-        // each chunk is well under the 500KB warning threshold on its own.
+        // are needed on every page (the header's WalletConnect uses both), so
+        // they load up front in their own vendor chunks: rarely-changing
+        // libraries cached apart from app code. The pages themselves are
+        // split by route (App.tsx, lib/lazyPage.ts) and load when visited.
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
           if (id.includes('@solana') || id.includes('bs58')) return 'vendor-solana'
