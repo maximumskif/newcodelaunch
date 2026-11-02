@@ -13,6 +13,7 @@ import { pickEvmConnector } from '../auth/evmConnector'
 import { NETWORK_TO_CHAIN_ID } from '../contracts/useDeployTemplate'
 import { useOwnerTransaction } from '../contracts/useOwnerTransaction'
 import { EVM_NETWORKS } from '../network/NetworkContext'
+import { UnauditedNotice } from './UnauditedNotice'
 
 // The curve's argument-less views.
 type ViewFunction =
@@ -248,6 +249,7 @@ export function CurvePanel({ network, address, dexName = 'the DEX' }: { network:
         </div>
       )}
       {!graduated && <p className="text-xs text-ink-faint">Every buy and sell on the curve pays a 1% fee: 0.3% to its creator and 0.7% to the platform.</p>}
+      {!graduated && <UnauditedNotice native={native} />}
       {done && <p className="text-success">{done}</p>}
       {error && <InlineError>{error}</InlineError>}
     </div>

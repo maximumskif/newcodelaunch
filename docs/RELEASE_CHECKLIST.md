@@ -4,7 +4,7 @@ Work through this before pointing real users and mainnet networks at a deploymen
 
 In the commands, `$DOMAIN` is the deployment's domain (for example `export DOMAIN=launch.example.com`) and `$SHA` is the commit being released.
 
-Status as of 2026-11-02: **not ready for mainnet.** Items 1–5 and 9 are done, item 8 is half done, and items 6, 7 and 10–14 are open.
+Status as of 2026-11-02: **not ready for mainnet.** Items 1–5, 9 and 14 are done, item 8 is half done, and items 6, 7 and 10–13 are open.
 
 ## Code and CI
 
@@ -98,10 +98,10 @@ None exist (no routes for them in `frontend/src/App.tsx`). Add them and link the
 
 Pass: each page loads at its URL, the footer links work, and the curve launch page links the risk disclosure before the wallet prompt.
 
-### 14. Say that the contracts are unaudited
-The bonding curve holds buyers' ETH, and no independent audit has been done. Until one is (a business decision), the curve launch and trade panels must say so plainly. Nothing anywhere may imply an audit.
+### 14. Say that the contracts are unaudited — done
+The bonding curve holds buyers' ETH, and no independent audit has been done. Until one is (a business decision), the curve launch and trade panels must say so plainly. Nothing anywhere may imply an audit. `UnauditedNotice` (`frontend/src/features/tokens/UnauditedNotice.tsx`) is shown on the launch page's summary and in a curve's trade panel until it graduates; Vitest checks both.
 
-Pass: the notice is visible on `/tokens/curve` and on a curve's token page, and `grep -rn -i audit frontend/src` finds no claim of an audit.
+Pass: the notice is visible on `/tokens/curve` and on an ungraduated curve's token page, and `grep -rn -i audit frontend/src` finds no claim of an audit (the token checker's `audit` search keyword is not one). If an audit is ever done, change the notice to name the auditor and link the report.
 
 ## On release day
 

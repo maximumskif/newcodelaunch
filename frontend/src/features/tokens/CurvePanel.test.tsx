@@ -72,6 +72,7 @@ describe('CurvePanel', () => {
     expect(screen.getByRole('progressbar', { name: 'Raised toward graduation' })).toHaveAttribute('aria-valuenow', '25')
     expect(screen.getByText('On the bonding curve')).toBeInTheDocument()
     expect(screen.getByText('Every buy and sell on the curve pays a 1% fee: 0.3% to its creator and 0.7% to the platform.')).toBeInTheDocument()
+    expect(screen.getByTestId('unaudited-notice')).toHaveTextContent(/hasn't been independently audited.*holds the ETH its buyers pay in/)
     // Not the creator: no earnings to claim.
     expect(screen.queryByTestId('curve-creator-fees')).not.toBeInTheDocument()
   })
@@ -129,6 +130,8 @@ describe('CurvePanel', () => {
     expect(screen.getByText(/nobody can withdraw that liquidity/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Buy' })).not.toBeInTheDocument()
     expect(screen.queryByText(/pays a 1% fee/)).not.toBeInTheDocument()
+    // Graduated: the curve no longer holds buyers' ETH, the pool does.
+    expect(screen.queryByTestId('unaudited-notice')).not.toBeInTheDocument()
   })
 
   it("shows the creator their share and claims it, after graduation too", async () => {

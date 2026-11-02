@@ -26,6 +26,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useDeployTemplate } from '../contracts/useDeployTemplate'
 import { SummaryRow, short } from '../distribute/airdropParts'
 import { EVM_NETWORKS, isMainnetNetwork, useNetwork } from '../network/NetworkContext'
+import { UnauditedNotice } from './UnauditedNotice'
 import { CurvePanel } from './CurvePanel'
 
 const inputClass =
@@ -227,6 +228,7 @@ export function CurveLaunchPage() {
               share builds up in the curve and you claim it from its panel, even after graduation. Fees are kept apart from what the curve raises, so
               the pool still gets all of it. Trades on the DEX after graduation pay no fee.
             </p>
+            <UnauditedNotice native={native} />
             {isMainnet && (
               <MainnetConfirmCheckbox
                 checked={mainnetConfirmed}

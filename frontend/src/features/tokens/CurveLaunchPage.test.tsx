@@ -72,6 +72,7 @@ describe('CurveLaunchPage', () => {
     await userEvent.type(screen.getByPlaceholderText('NOVA'), 'MCAT')
     expect(screen.getByText('1%: 0.3% to you, 0.7% to the platform')).toBeInTheDocument()
     expect(screen.getByText(/0\.3% of the trade to you, as the creator/)).toBeInTheDocument()
+    expect(screen.getByTestId('unaudited-notice')).toHaveTextContent(/hasn't been independently audited/)
     const launch = await screen.findByRole('button', { name: '[ launch on the curve ]' })
     await vi.waitFor(() => expect(launch).toBeEnabled())
     await userEvent.click(launch)
