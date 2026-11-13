@@ -39,6 +39,10 @@ async function buildCollectionWithOneTrait(page: Page, collectionName: string) {
   await page.getByRole('button', { name: 'New collection' }).click()
   await page.getByLabel('Collection name').fill(collectionName)
   await page.getByRole('button', { name: 'Create' }).click()
+  // Wait for the new collection to be the one shown. Until then the page may
+  // still show an older collection (the e2e database keeps them), and the
+  // switch unmounts LayerEditor, wiping a layer name typed too early.
+  await expect(page.getByRole('heading', { level: 2, name: collectionName })).toBeVisible()
 
   // Add a layer via LayerEditor.
   await page.getByLabel('New layer name').fill('Background')
@@ -192,6 +196,10 @@ test('AI Trait Identifier: the inline per-trait rarity suggestion during upload 
   await page.getByRole('button', { name: 'New collection' }).click()
   await page.getByLabel('Collection name').fill('E2E AI Trait Collection')
   await page.getByRole('button', { name: 'Create' }).click()
+  // Wait for the new collection to be the one shown. Until then the page may
+  // still show an older collection (the e2e database keeps them), and the
+  // switch unmounts LayerEditor, wiping a layer name typed too early.
+  await expect(page.getByRole('heading', { level: 2, name: 'E2E AI Trait Collection' })).toBeVisible()
 
   await page.getByLabel('New layer name').fill('Background')
   await page.getByRole('button', { name: 'Add layer' }).click()
