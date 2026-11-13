@@ -4,7 +4,7 @@ Work through this before pointing real users and mainnet networks at a deploymen
 
 In the commands, `$DOMAIN` is the deployment's domain (for example `export DOMAIN=launch.example.com`) and `$SHA` is the commit being released.
 
-Status as of 2026-11-13: **not ready for mainnet.** Items 1–5, 9 and 14 are done, items 8, 11 and 13 are half done, and items 6, 7, 10 and 12 are open.
+Status as of 2026-11-13: **not ready for mainnet.** Items 1–5, 9 and 14 are done, items 8 and 11–13 are half done, and items 6, 7 and 10 are open.
 
 ## Code and CI
 
@@ -91,12 +91,12 @@ bash /opt/newcodelaunch/deploy/restore-check.sh --remote
 ```
 Pass: the timer is listed with a next run, a scheduled backup exists in `BACKUP_REMOTE`, and `restore-check.sh --remote` ends with `OK` and shows `users`, `projects` and `contract_deployments` counts matching production as of the backup.
 
-### 12. Monitoring and paid RPC
-- Error tracking or log shipping is wired in. No error-tracking service exists today; see OPERATIONS.md, "What to monitor".
-- An uptime alert on `/api/health/ready` fires within two minutes of a failure.
+### 12. Monitoring and paid RPC — watchdog done, external check and RPC due
+- `deploy/watchdog.sh` (every minute from a systemd timer, installed by `deploy/bootstrap.sh`) alerts on readiness failures within two minutes, on recovery, on 5xx and `ERROR` lines in the backend log, and on a stalled scheduler. It writes to the journal, and to Telegram once `ALERT_TELEGRAM_CHAT` is set in `deploy/.env`. CI's `docker` job checks it against a stopped sidecar.
+- Still to do (the owner's call): an external uptime check on `/api/health/ready`, since the watchdog can't report its own server going down (OPERATIONS.md, "What to monitor"), and the chat that alerts go to.
 - Paid RPC endpoints are set for every mainnet network you enable, for the backend, the sidecar and the frontend build (OPERATIONS.md, "RPC providers").
 
-Pass: stopping the sidecar on staging triggers the alert; a forced 500 shows up in the error tracker or log search; `grep -E '_RPC_URL' deploy/.env` shows no public endpoints for enabled mainnets.
+Pass: on staging, `docker compose ... stop candy-machine` produces a DOWN alert in the Telegram chat within two minutes, then RECOVERED after `start`; the 503s from that same test show up in an ERRORS alert and in `docker compose ... logs backend | grep '"status": 5'`; the external check alerts when the server is stopped; and `grep -E '_RPC_URL' deploy/.env` shows no public endpoints for enabled mainnets.
 
 ### 13. Terms, Privacy and risk-disclosure pages — pages done, legal review due
 `/terms`, `/privacy` and `/risks` exist (`frontend/src/features/legal/`), linked from every layout's footer (home page, the app's sidebar, public token and mint pages) and from `UnauditedNotice`, so the curve launch page and an ungraduated curve's trade panel link the risk disclosure above the launch and trade buttons. The texts are a factual first draft: what's stored, the fees, the third-party services and the risks, as the code does them today. Each page shows a "Draft" banner while `LEGAL_REVIEWED` in `legal.ts` is `false`. Still to do (the owner's call): set `VITE_OPERATOR_NAME` and `VITE_LEGAL_CONTACT` in `deploy/.env` (without them the pages say the details are still to come), have a lawyer review the texts for the jurisdictions you'll serve, and then set `LEGAL_REVIEWED = true`.

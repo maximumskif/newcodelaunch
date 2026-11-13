@@ -28,7 +28,9 @@
 # domain it uses <server-ip>.sslip.io, a public DNS name that resolves to
 # the IP inside it, so HTTPS works before you own a domain.
 #
-# Also installs a systemd timer that runs deploy/backup.sh daily. Set
+# Also installs a systemd timer that runs deploy/watchdog.sh every minute;
+# set ALERT_TELEGRAM_CHAT (a chat id or @channel the bot can post in) to get
+# its alerts on Telegram. And one that runs deploy/backup.sh daily. Set
 # BACKUP_REMOTE in deploy/.env (an rclone destination, after `rclone config`)
 # so the backups leave the server; see docs/OPERATIONS.md, "Backups".
 #
@@ -92,6 +94,7 @@ VITE_WALLETCONNECT_PROJECT_ID=${WALLETCONNECT_PROJECT_ID:-}
 VITE_OPERATOR_NAME=${OPERATOR_NAME:-}
 VITE_LEGAL_CONTACT=${LEGAL_CONTACT:-}
 BACKUP_REMOTE=${BACKUP_REMOTE:-}
+ALERT_TELEGRAM_CHAT=${ALERT_TELEGRAM_CHAT:-}
 EOF
 fi
 if [ ! -f backend/.env ]; then
@@ -150,7 +153,31 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 UNIT
+# Health and error watchdog every minute (deploy/watchdog.sh). Alerts reach
+# Telegram once ALERT_TELEGRAM_CHAT is set in deploy/.env.
+cat > /etc/systemd/system/newcodelaunch-watchdog.service <<UNIT
+[Unit]
+Description=Check newcodelaunch health and errors
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash $APP_DIR/deploy/watchdog.sh
+UNIT
+cat > /etc/systemd/system/newcodelaunch-watchdog.timer <<'UNIT'
+[Unit]
+Description=Run the newcodelaunch watchdog every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 systemctl daemon-reload
-systemctl enable --now newcodelaunch-backup.timer
+systemctl enable --now newcodelaunch-backup.timer newcodelaunch-watchdog.timer
 
 bash deploy/update.sh

@@ -188,6 +188,12 @@ The defaults are public RPC endpoints. They're fine for development, but they ra
 
 ## What to monitor
 
+**Built in: `deploy/watchdog.sh`.** `deploy/bootstrap.sh` runs it every minute from a systemd timer (`systemctl list-timers newcodelaunch-watchdog.timer`). It alerts when `/api/health/ready` fails two checks in a row (within about two minutes) and again when it recovers, when the backend log shows any 5xx or `ERROR` line (at most one alert per 15 minutes, with a count and the first lines), and when the scheduler goes 15 minutes without logging. Alerts always go to the journal (`journalctl -t newcodelaunch-watchdog`). To get them on Telegram, add the platform's bot to a private chat or channel and put its id or `@username` in `deploy/.env` as `ALERT_TELEGRAM_CHAT`; it uses the `TELEGRAM_BOT_TOKEN` already in `backend/.env`. CI's `docker` job stops the sidecar and checks that the watchdog reports DOWN, the errors and RECOVERED.
+
+**What it can't see:** the server itself being off or unreachable, since it runs there. Add one external check on `https://$DOMAIN/api/health/ready` from any uptime service (UptimeRobot, Better Stack, Healthchecks.io and others have free tiers), alerting after 1–2 minutes of failures. For searching logs, `docker compose ... logs backend | grep '"status": 5'` works on the server. A hosted log or error-tracking service is optional on top.
+
+The signals, in more detail:
+
 - **`/api/health/ready`**: alert on non-200 that lasts more than a minute or two. The `failed` field says whether the database or the sidecar is the problem.
 - **Backend logs** (one JSON line per request on stdout, with `status`, `duration_ms` and a `request_id` that's echoed as `X-Request-Id`, see `backend/app/logging_config.py`):
   - the rate of `status >= 500`
@@ -196,7 +202,7 @@ The defaults are public RPC endpoints. They're fine for development, but they ra
   - `Candy Machine service error on a public route`
   - `Readiness check failed`
 
-  No error-tracking service is wired in. Ship stdout to whatever the host provides.
+  No hosted error-tracking service is wired in; the watchdog above alerts on these, and stdout can be shipped to whatever the host provides.
 - **Scheduler logs**: `maintenance: flask ... FAILED` lines, or no lines at all for more than a couple of intervals (the loop has stopped).
 - **Database**: disk and connection count. Also watch NFT generation jobs in the `failed` state. A burst of reaped jobs, whose error says "No progress for over …s", means workers are dying mid-generation.
 - **RPC providers**: request volume and 429 or error rates on each provider's dashboard, for all three callers.

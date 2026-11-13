@@ -268,6 +268,27 @@ jobs:
           # Every table in counts.txt was compared, not just the first.
           for t in users projects contract_deployments; do grep -E "^$t " "$RUNNER_TEMP/restore-check.txt"; done
 
+      # Item 12 of docs/RELEASE_CHECKLIST.md: with the sidecar stopped,
+      # readiness fails and the second run (two minutes on the server's
+      # timer) raises DOWN and reports the 503s; restarted, RECOVERED.
+      - name: Watchdog alerts on an outage
+        run: |
+          set -xo pipefail
+          compose() { docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env "$@"; }
+          export WATCHDOG_STATE_DIR="$RUNNER_TEMP/watchdog"
+          bash deploy/watchdog.sh 2>&1 | tee "$RUNNER_TEMP/wd0.txt"
+          ! grep -E 'DOWN|SCHEDULER' "$RUNNER_TEMP/wd0.txt"
+          compose stop candy-machine
+          bash deploy/watchdog.sh 2>&1 | tee "$RUNNER_TEMP/wd1.txt"
+          ! grep DOWN "$RUNNER_TEMP/wd1.txt"
+          bash deploy/watchdog.sh 2>&1 | tee "$RUNNER_TEMP/wd2.txt"
+          grep 'ALERT: .*DOWN' "$RUNNER_TEMP/wd2.txt"
+          cat "$RUNNER_TEMP"/wd1.txt "$RUNNER_TEMP"/wd2.txt | grep 'ALERT: .*ERRORS'
+          compose start candy-machine
+          for _ in $(seq 1 30); do curl -kfsS https://localhost/api/health/ready >/dev/null && break; sleep 2; done
+          bash deploy/watchdog.sh 2>&1 | tee "$RUNNER_TEMP/wd3.txt"
+          grep 'ALERT: .*RECOVERED' "$RUNNER_TEMP/wd3.txt"
+
       - name: Logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env logs --tail 200
