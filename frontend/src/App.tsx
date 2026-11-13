@@ -31,6 +31,9 @@ const VestingPage = lazyPage(() => import('./features/distribute/VestingPage').t
 const BurnPage = lazyPage(() => import('./features/tokens/BurnPage').then((m) => m.BurnPage))
 const CurveLaunchPage = lazyPage(() => import('./features/tokens/CurveLaunchPage').then((m) => m.CurveLaunchPage))
 const LaunchesPage = lazyPage(() => import('./features/tokens/LaunchesPage').then((m) => m.LaunchesPage))
+const TermsPage = lazyPage(() => import('./features/legal/LegalPages').then((m) => m.TermsPage))
+const PrivacyPage = lazyPage(() => import('./features/legal/LegalPages').then((m) => m.PrivacyPage))
+const RisksPage = lazyPage(() => import('./features/legal/LegalPages').then((m) => m.RisksPage))
 
 // react-router's BrowserRouter doesn't scroll to `#hash` targets on its own —
 // this is what makes the nav's "How It Works" link land
@@ -97,6 +100,9 @@ export default function App() {
           <Route path="/mint/buy/:candyMachineId" element={<MintBuyPage />} />
           <Route path="/token/:network/:address" element={<TokenPage />} />
           <Route path="/launches" element={<LaunchesPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/risks" element={<RisksPage />} />
         </Route>
       </Routes>
     </>

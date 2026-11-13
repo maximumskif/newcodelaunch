@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render as rtlRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { parseEther } from 'viem'
 import { useAccount, useChainId, useConnect, usePublicClient, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -57,7 +58,13 @@ function mockCurve({ wallet = WALLET as string | null, graduated = false, held =
   } as unknown as ReturnType<typeof usePublicClient>)
 }
 
-const render = (ui: ReactElement) => rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>)
+// A router too: the unaudited notice links /risks, as it does in the app.
+const render = (ui: ReactElement) =>
+  rtlRender(
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
+    </MemoryRouter>,
+  )
 
 describe('CurvePanel', () => {
   beforeEach(() => {

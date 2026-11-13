@@ -4,7 +4,7 @@ Work through this before pointing real users and mainnet networks at a deploymen
 
 In the commands, `$DOMAIN` is the deployment's domain (for example `export DOMAIN=launch.example.com`) and `$SHA` is the commit being released.
 
-Status as of 2026-11-13: **not ready for mainnet.** Items 1–5, 9 and 14 are done, items 8 and 11 are half done, and items 6, 7, 10, 12 and 13 are open.
+Status as of 2026-11-13: **not ready for mainnet.** Items 1–5, 9 and 14 are done, items 8, 11 and 13 are half done, and items 6, 7, 10 and 12 are open.
 
 ## Code and CI
 
@@ -98,10 +98,10 @@ Pass: the timer is listed with a next run, a scheduled backup exists in `BACKUP_
 
 Pass: stopping the sidecar on staging triggers the alert; a forced 500 shows up in the error tracker or log search; `grep -E '_RPC_URL' deploy/.env` shows no public endpoints for enabled mainnets.
 
-### 13. Terms, Privacy and risk-disclosure pages
-None exist (no routes for them in `frontend/src/App.tsx`). Add them and link them from the footer and from the launch and trade flows.
+### 13. Terms, Privacy and risk-disclosure pages — pages done, legal review due
+`/terms`, `/privacy` and `/risks` exist (`frontend/src/features/legal/`), linked from every layout's footer (home page, the app's sidebar, public token and mint pages) and from `UnauditedNotice`, so the curve launch page and an ungraduated curve's trade panel link the risk disclosure above the launch and trade buttons. The texts are a factual first draft: what's stored, the fees, the third-party services and the risks, as the code does them today. Each page shows a "Draft" banner while `LEGAL_REVIEWED` in `legal.ts` is `false`. Still to do (the owner's call): set `VITE_OPERATOR_NAME` and `VITE_LEGAL_CONTACT` in `deploy/.env` (without them the pages say the details are still to come), have a lawyer review the texts for the jurisdictions you'll serve, and then set `LEGAL_REVIEWED = true`.
 
-Pass: each page loads at its URL, the footer links work, and the curve launch page links the risk disclosure before the wallet prompt.
+Pass: each page loads at its URL with the operator's name and contact, without the draft banner; the footer links work; and the curve launch page shows "Read the risks" before the wallet prompt. Vitest (`LegalPages.test.tsx`) checks the links, the stated fees and the no-audit wording.
 
 ### 14. Say that the contracts are unaudited — done
 The bonding curve holds buyers' ETH, and no independent audit has been done. Until one is (a business decision), the curve launch and trade panels must say so plainly. Nothing anywhere may imply an audit. `UnauditedNotice` (`frontend/src/features/tokens/UnauditedNotice.tsx`) is shown on the launch page's summary and in a curve's trade panel until it graduates; Vitest checks both.

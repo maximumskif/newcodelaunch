@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { SolanaWalletButton } from '../../features/auth/SolanaWalletButton'
+import { LegalLinks } from '../../features/legal/LegalLinks'
 import { PageFallback } from './PageFallback'
 
 // Pages meant for buyers, not creators (a drop's mint page, a token's public
@@ -28,8 +29,9 @@ export function PublicLayout() {
           <Outlet />
         </Suspense>
       </main>
-      <footer className="border-t border-border px-4 py-6 text-center text-xs text-ink-faint sm:px-6">
-        Powered by NewCodeLaunch · Every transaction is signed in your own wallet.
+      <footer className="space-y-2 border-t border-border px-4 py-6 text-center text-xs text-ink-faint sm:px-6">
+        <p>Powered by NewCodeLaunch · Every transaction is signed in your own wallet.</p>
+        <LegalLinks className="justify-center" />
       </footer>
     </div>
   )

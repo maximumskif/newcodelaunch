@@ -167,6 +167,10 @@ services:
         VITE_BASE_RPC_URL: ${VITE_BASE_RPC_URL:-}
         # Optional: phone wallets through WalletConnect (docs/OPERATIONS.md).
         VITE_WALLETCONNECT_PROJECT_ID: ${VITE_WALLETCONNECT_PROJECT_ID:-}
+        # Who runs the site, shown on /terms, /privacy and /risks
+        # (src/features/legal/legal.ts). Unset, those pages say "to come".
+        VITE_OPERATOR_NAME: ${VITE_OPERATOR_NAME:-}
+        VITE_LEGAL_CONTACT: ${VITE_LEGAL_CONTACT:-}
     container_name: launchpad-frontend
     ports:
       - '8080:80'

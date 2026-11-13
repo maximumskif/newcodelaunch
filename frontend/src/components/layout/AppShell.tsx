@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { WalletConnect } from '../../features/auth/WalletConnect'
+import { LegalLinks } from '../../features/legal/LegalLinks'
 import { EVM_NETWORKS, useNetwork } from '../../features/network/NetworkContext'
 import { PILLARS, pillarForPath, toolForPath, type Pillar } from '../../lib/pillars'
 import { IconArrowRight, IconGrid } from '../ui/icons'
@@ -150,6 +151,7 @@ export function AppShell() {
             ))}
           </div>
         </nav>
+        {!isCollapsed && <LegalLinks className="border-t border-border px-4 py-3 font-mono text-[11px] text-ink-faint" />}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">

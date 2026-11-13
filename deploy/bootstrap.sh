@@ -16,6 +16,9 @@
 # WALLETCONNECT_PROJECT_ID (free, from dashboard.reown.com) is optional and
 # lets phone wallets connect through WalletConnect.
 #
+# OPERATOR_NAME and LEGAL_CONTACT (an email address) are shown on /terms,
+# /privacy and /risks; without them those pages say the details are to come.
+#
 # X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN and X_ACCESS_TOKEN_SECRET (from the
 # X developer portal) are optional and post each new launch to the platform's X account.
 #
@@ -86,6 +89,9 @@ if [ ! -f deploy/.env ]; then
 DOMAIN=$DOMAIN
 POSTGRES_PASSWORD=$(secret)
 VITE_WALLETCONNECT_PROJECT_ID=${WALLETCONNECT_PROJECT_ID:-}
+VITE_OPERATOR_NAME=${OPERATOR_NAME:-}
+VITE_LEGAL_CONTACT=${LEGAL_CONTACT:-}
+BACKUP_REMOTE=${BACKUP_REMOTE:-}
 EOF
 fi
 if [ ! -f backend/.env ]; then

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { buttonClassName } from '../../components/ui/Button'
 import { PILLARS, pillarById, type Pillar } from '../../lib/pillars'
+import { LegalLinks } from '../legal/LegalLinks'
 
 // Every claim on this page maps to something that works today (see
 // docs/REBUILD_PROGRESS.md). Previews are labelled as examples; counts come
@@ -236,6 +237,7 @@ export function HomePage() {
               all tools
             </Link>
           </nav>
+          <LegalLinks />
         </div>
       </footer>
     </div>
