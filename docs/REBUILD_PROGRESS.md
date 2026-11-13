@@ -1277,6 +1277,13 @@ Both platform fees, run on real public networks through the real backend (`e2e/d
 - **Sepolia, `smoke.mjs --only curve`: 21/21.** A launch with a creator buy, a second wallet buying, selling and buying it out, graduation into the real Uniswap V2, then a router swap. The fees were split 0.7 : 0.3 (0.0000096 + 0.0000041 ETH), sent on by the buyer to the platform's wallet and claimed by the creator, and the curve kept nothing. The source was verified on the real Etherscan. It spent 0.00104 ETH; the smoke wallet has about 0.021 left. Curve [0xeaa6…747a](https://sepolia.etherscan.io/address/0xeaa6a60e023d8a8135973f51ea7aaae6188d747a).
 - **Solana devnet, `smoke.mjs`: 16/16, its first run on real devnet.** It now checks the fee: the storefront shows 0.01 SOL, and the allowlist mint and the public mint each paid the platform's wallet exactly 10,000,000 lamports. It needs `--fee-wallet` (or `PLATFORM_SOLANA_FEE_RECIPIENT`). It spent 0.051 SOL; the smoke wallet has about 1.89 left.
 
+## Backups, legal pages, and Foundry v1.9, 2026-11-13
+
+- **Backups** (release checklist 11): `deploy/backup.sh`, a daily systemd timer, and `deploy/restore-check.sh`, tested in CI's `docker` job. Off-server storage (`BACKUP_REMOTE`) is the owner's to pick.
+- **Terms, Privacy, Risks** (checklist 13): `/terms`, `/privacy`, `/risks`, a factual draft with a draft banner until a lawyer reviews it.
+- **Foundry v1.9.0** made anvil default to the Amsterdam hardfork, which broke the e2e suite from 2026-11-02 on. `run-anvil.sh` now pins `--hardfork osaka`, what Sepolia and mainnet run, and CI pins Foundry v1.9.0.
+- **Amsterdam watch:** as Foundry v1.9.0 implements it, Amsterdam reprices contract creation about 6.5x. Deploy gas measured on anvil (Osaka → Amsterdam): erc20_basic 0.76M → 4.9M, erc20_advanced 1.58M → 10.2M, erc721_basic 1.67M → 11.4M, token_vesting 0.39M → 2.6M, and **curve_token 4.38M → 31.05M**. That's over a 30M block and about twice the 16.7M per-transaction cap (EIP-7825), so a curve launch couldn't deploy in one transaction. The spec isn't final. When Amsterdam is scheduled for Sepolia, re-measure (anvil `--hardfork amsterdam`); if it still holds, the curve needs splitting (for example, the token deployed separately, or a clone-factory deploy). The curve's marketplace estimate was low even on Osaka (3.5M listed, 4.38M measured); it now says 4.4M.
+
 ## Where we left off, 2026-09-30
 
 Suggested order for the next session:

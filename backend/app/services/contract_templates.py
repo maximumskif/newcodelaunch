@@ -1128,7 +1128,7 @@ _TEMPLATES: dict[str, ContractTemplate] = {
             {"name": "FEE_RECIPIENT", "type": "address", "required": True, "description": "Where the platform's 0.7% of the trading fee goes (the creator gets 0.3%): the platform's fee wallet; filled in for you"},
         ],
         features=["Bonding Curve", "Graduates to a DEX", "Liquidity Burned", "No Owner", "1% Trading Fee", "0.3% to the Creator"],
-        gas_estimate=3_500_000,
+        gas_estimate=4_400_000,  # measured 4.38M on Osaka (anvil, 2026-11-13)
     ),
 }
 
