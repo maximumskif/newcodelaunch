@@ -12,4 +12,9 @@ if ! command -v anvil >/dev/null 2>&1; then
   exit 1
 fi
 
-exec anvil --chain-id 11155111 --port 8545 --silent
+# The hardfork is pinned to what Sepolia and mainnet run, not anvil's
+# default. Foundry v1.9.0 made Amsterdam the default, which reprices contract
+# creation about 6.6x (a 2.5 KB contract: 604k gas on Osaka, 3.99M on
+# Amsterdam), so Uniswap's Router02 no longer fits in a 30M-gas block and
+# gas figures stop matching the real networks. Move this when Sepolia does.
+exec anvil --chain-id 11155111 --port 8545 --hardfork osaka --silent

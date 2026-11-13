@@ -112,13 +112,13 @@ jobs:
       # anvil — a local, empty, throwaway EVM chain (chain-id matches
       # Sepolia's real one) the e2e suite deploys real contracts against
       # instead of a public testnet. See frontend/e2e/README.md.
-      # Pinned: v1.9.0 (2026-11-02) broke the local Uniswap V2 setup ("out of
-      # gas: gas required exceeds allowance: 30000000"), failing every e2e
-      # run since. v1.8.3 is the last version CI passed with and what the dev
-      # machine runs; move up only with a green e2e run.
+      # Pinned, so a new Foundry release can't change the chain under the
+      # tests unannounced: v1.9.0 made anvil default to the Amsterdam
+      # hardfork, which broke the e2e Uniswap setup until run-anvil.sh pinned
+      # --hardfork osaka. Move up only with a green e2e run.
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: v1.8.3
+          version: v1.9.0
 
       # solana-test-validator — the equivalent local chain for the Solana
       # (Candy Machine) e2e coverage. No maintained setup-solana action
