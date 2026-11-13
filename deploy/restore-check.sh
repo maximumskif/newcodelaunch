@@ -25,7 +25,9 @@ WORK=""
 
 cleanup() {
   docker rm -f "$SCRATCH" >/dev/null 2>&1 || true
-  [ -n "$WORK" ] && rm -rf "$WORK"
+  # An if, not `[ ] &&`: a false test as the trap's last command would
+  # become the script's exit status.
+  if [ -n "$WORK" ]; then rm -rf "$WORK"; fi
 }
 trap cleanup EXIT
 
@@ -52,20 +54,26 @@ echo "checking $SRC"
 docker rm -f "$SCRATCH" >/dev/null 2>&1 || true
 docker run -d --name "$SCRATCH" --network none \
   -e POSTGRES_PASSWORD=scratch -e POSTGRES_DB=restored postgres:16-alpine >/dev/null
+# The image's first start runs a temporary server on the Unix socket only,
+# then restarts. Only the final server listens on TCP, so connecting over
+# 127.0.0.1 (the container's own loopback, present even with no network)
+# can't catch the temporary one.
+spsql() { docker exec -i -e PGPASSWORD=scratch "$SCRATCH" psql -h 127.0.0.1 -U postgres -d restored "$@"; }
 for _ in $(seq 1 60); do
-  # pg_isready can pass during the image's init restart; a real query can't.
-  docker exec "$SCRATCH" psql -U postgres -d restored -tAc 'SELECT 1' >/dev/null 2>&1 && break
+  spsql -tAc 'SELECT 1' >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec "$SCRATCH" psql -U postgres -d restored -tAc 'SELECT 1' >/dev/null
+spsql -tAc 'SELECT 1' >/dev/null
 
-docker exec -i "$SCRATCH" pg_restore -U postgres -d restored --no-owner --no-privileges --exit-on-error < "$SRC/db.dump"
+docker exec -i -e PGPASSWORD=scratch "$SCRATCH" pg_restore -h 127.0.0.1 -U postgres -d restored --no-owner --no-privileges --exit-on-error < "$SRC/db.dump"
 
 FAIL=0
 printf '%-24s %10s %10s %10s\n' table backup restored live
+# Every command in this loop reads from /dev/null: docker exec -i and compose
+# exec -T forward stdin and would otherwise swallow the rest of counts.txt.
 while read -r table expected; do
-  restored="$(docker exec "$SCRATCH" psql -U postgres -d restored -tAc "SELECT count(*) FROM $table")"
-  live="$(compose exec -T postgres psql -U launchpad -d launchpad -tAc "SELECT count(*) FROM $table" 2>/dev/null || echo '?')"
+  restored="$(spsql -tAc "SELECT count(*) FROM $table" < /dev/null)"
+  live="$(compose exec -T postgres psql -U launchpad -d launchpad -tAc "SELECT count(*) FROM $table" < /dev/null 2>/dev/null || echo '?')"
   printf '%-24s %10s %10s %10s\n' "$table" "$expected" "$restored" "$live"
   [ "$restored" = "$expected" ] || FAIL=1
 done < "$SRC/counts.txt"

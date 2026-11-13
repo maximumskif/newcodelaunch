@@ -249,7 +249,7 @@ jobs:
       # upload first, so neither the counts nor the archive is trivially empty.
       - name: Back up and restore
         run: |
-          set -x
+          set -xo pipefail
           compose() { docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env "$@"; }
           compose exec -T postgres psql -U launchpad -d launchpad -v ON_ERROR_STOP=1 -c \
             "INSERT INTO users (id, wallet_address, chain, created_at) VALUES (gen_random_uuid()::text, '0x00000000000000000000000000000000000000c1', 'evm', now())"
@@ -258,7 +258,9 @@ jobs:
           bash deploy/backup.sh
           grep -E '^users [1-9]' "$BACKUP_DIR"/*/counts.txt
           tar -tzf "$BACKUP_DIR"/*/uploads.tgz | grep ci/probe.txt
-          bash deploy/restore-check.sh
+          bash deploy/restore-check.sh | tee "$RUNNER_TEMP/restore-check.txt"
+          # Every table in counts.txt was compared, not just the first.
+          for t in users projects contract_deployments; do grep -E "^$t " "$RUNNER_TEMP/restore-check.txt"; done
 
       - name: Logs on failure
         if: failure()
