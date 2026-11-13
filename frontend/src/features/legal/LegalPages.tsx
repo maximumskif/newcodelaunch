@@ -11,7 +11,7 @@ const operator = OPERATOR_NAME || 'the operator of this site'
 
 function Contact() {
   if (!LEGAL_CONTACT) return <>through the contact details that will be listed here before launch</>
-  if (LEGAL_CONTACT.includes('@')) return <a href={`mailto:${LEGAL_CONTACT}`} className="text-accent-400 hover:underline">{LEGAL_CONTACT}</a>
+  if (LEGAL_CONTACT.includes('@')) return <a href={`mailto:${LEGAL_CONTACT}`} className="text-accent-400 underline underline-offset-2">{LEGAL_CONTACT}</a>
   return <>{LEGAL_CONTACT}</>
 }
 
@@ -29,8 +29,8 @@ function LegalLayout({ title, children }: { title: string; children: ReactNode }
       )}
       {children}
       <footer className="border-t border-border pt-4 text-xs text-ink-faint">
-        See also: <Link to="/terms" className="hover:text-ink">Terms</Link> · <Link to="/privacy" className="hover:text-ink">Privacy</Link> ·{' '}
-        <Link to="/risks" className="hover:text-ink">Risks</Link>
+        See also: <Link to="/terms" className="underline underline-offset-2 hover:text-ink">Terms</Link> · <Link to="/privacy" className="underline underline-offset-2 hover:text-ink">Privacy</Link> ·{' '}
+        <Link to="/risks" className="underline underline-offset-2 hover:text-ink">Risks</Link>
       </footer>
     </article>
   )
@@ -76,7 +76,7 @@ export function TermsPage() {
           Nothing on the site is financial, legal or tax advice. Market data, token checks and holder snapshots come from third parties and public
           blockchains and can be wrong, late or incomplete. The site and its contracts are provided as they are, without warranties. To the extent
           the law allows, {operator} isn&apos;t liable for losses from using the site, its contracts or tokens created with it. Read the{' '}
-          <Link to="/risks" className="text-accent-400 hover:underline">risk disclosure</Link> before you put money in.
+          <Link to="/risks" className="text-accent-400 underline underline-offset-2">risk disclosure</Link> before you put money in.
         </p>
       </Section>
       <Section title="Content you publish">
@@ -174,7 +174,7 @@ export function RisksPage() {
       <Section title="Rules where you live">
         <p>
           Tokens and NFTs may be regulated, restricted or taxed where you or your buyers live. Checking that is your responsibility. See the{' '}
-          <Link to="/terms" className="text-accent-400 hover:underline">terms</Link>.
+          <Link to="/terms" className="text-accent-400 underline underline-offset-2">terms</Link>.
         </p>
       </Section>
     </LegalLayout>
