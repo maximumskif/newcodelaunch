@@ -4,7 +4,7 @@ Work through this before pointing real users and mainnet networks at a deploymen
 
 In the commands, `$DOMAIN` is the deployment's domain (for example `export DOMAIN=launch.example.com`) and `$SHA` is the commit being released.
 
-Status as of 2026-11-02: **not ready for mainnet.** Items 1–5, 9 and 14 are done, item 8 is half done, and items 6, 7 and 10–13 are open.
+Status as of 2026-11-13: **not ready for mainnet.** Items 1–5, 9 and 14 are done, items 8 and 11 are half done, and items 6, 7, 10, 12 and 13 are open.
 
 ## Code and CI
 
@@ -81,10 +81,15 @@ curl -s "https://$DOMAIN/api/health/ready"
 ```
 Pass: `200 {"status":"ok",...}` over HTTPS with a valid certificate, and items 2–6 pass against this server.
 
-### 11. Backups are automated and a restore has been tested
-Today backups are a manual `pg_dump` (OPERATIONS.md, "Hosting"). Schedule a daily dump of Postgres and of the `uploads` volume to storage off the server.
+### 11. Backups are automated and a restore has been tested — scripts done, server setup due
+`deploy/backup.sh` (daily systemd timer, installed by `deploy/bootstrap.sh`) dumps Postgres and the `uploads` volume, and `deploy/restore-check.sh` restores a backup into a scratch Postgres and compares row counts. CI's `docker` job runs both on every push. Still to do on the server: pick off-server storage, run `rclone config`, and set `BACKUP_REMOTE` in `deploy/.env` (OPERATIONS.md, "Hosting", **Backups**).
 
-Pass: a dump from the schedule exists off the server, and restoring it into a scratch Postgres gives the same `users`, `projects` and `contract_deployments` row counts as production.
+```bash
+systemctl list-timers newcodelaunch-backup.timer
+bash /opt/newcodelaunch/deploy/backup.sh          # once by hand, then let the timer run
+bash /opt/newcodelaunch/deploy/restore-check.sh --remote
+```
+Pass: the timer is listed with a next run, a scheduled backup exists in `BACKUP_REMOTE`, and `restore-check.sh --remote` ends with `OK` and shows `users`, `projects` and `contract_deployments` counts matching production as of the backup.
 
 ### 12. Monitoring and paid RPC
 - Error tracking or log shipping is wired in. No error-tracking service exists today; see OPERATIONS.md, "What to monitor".

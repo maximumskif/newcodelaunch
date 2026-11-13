@@ -25,6 +25,10 @@
 # domain it uses <server-ip>.sslip.io, a public DNS name that resolves to
 # the IP inside it, so HTTPS works before you own a domain.
 #
+# Also installs a systemd timer that runs deploy/backup.sh daily. Set
+# BACKUP_REMOTE in deploy/.env (an rclone destination, after `rclone config`)
+# so the backups leave the server; see docs/OPERATIONS.md, "Backups".
+#
 # Re-running is safe: existing env files are kept. deploy/update.sh
 # redeploys after a push.
 set -euo pipefail
@@ -54,7 +58,7 @@ if [ -n "$SOLANA_FEE_RECIPIENT" ] && ! [[ "$SOLANA_FEE_RECIPIENT" =~ ^[1-9A-HJ-N
 fi
 
 apt-get update -q
-apt-get install -y -q docker.io docker-compose-v2 git ufw openssl curl
+apt-get install -y -q docker.io docker-compose-v2 git ufw openssl curl rclone
 systemctl enable --now docker
 
 ufw allow OpenSSH
@@ -115,5 +119,32 @@ SOLANA_MAINNET_RPC_URL=$MAINNET_RPC
 SOLANA_DEVNET_RPC_URL=$DEVNET_RPC
 EOF
 fi
+
+# Daily backup at 03:30 UTC, plus up to 30 minutes' jitter. Persistent=true
+# runs a missed one after the server was off.
+cat > /etc/systemd/system/newcodelaunch-backup.service <<UNIT
+[Unit]
+Description=Back up the newcodelaunch database and uploads
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash $APP_DIR/deploy/backup.sh
+UNIT
+cat > /etc/systemd/system/newcodelaunch-backup.timer <<'UNIT'
+[Unit]
+Description=Daily newcodelaunch backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now newcodelaunch-backup.timer
 
 bash deploy/update.sh
