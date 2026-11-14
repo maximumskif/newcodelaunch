@@ -42,8 +42,8 @@ Pass: `Content-Security-Policy` contains `frame-ancestors 'none'`, and `Content-
 
 ## Before mainnet
 
-### 6. Enforce the full CSP
-The full policy is report-only today. WalletConnect needs `VITE_WALLETCONNECT_PROJECT_ID` in `deploy/.env` (free from dashboard.reown.com, with the site's domain allowed), otherwise phone browsers can't connect an EVM wallet. Use the live site with MetaMask, Phantom and WalletConnect (from a phone): connect, sign in, launch a token, trade on a curve, mint a drop. Then read the reports:
+### 6. Enforce the full CSP — headless crawl clean, wallet session due
+The full policy is report-only today. What a headless browser can check is done: `frontend/e2e/csp/crawl.mjs` crawls every page reachable from `/` and `/tools` (27 on 2026-11-14) through Caddy with the production headers, opening the Solana wallet modal and WalletConnect's QR modal on each, and fails on any violation, report-only ones included. CI's `docker` job runs it on every push, and it found none. Browser wallet extensions (MetaMask, Phantom) and a real WalletConnect session can't run headless, so they still need the manual pass below. WalletConnect needs `VITE_WALLETCONNECT_PROJECT_ID` in `deploy/.env` (free from dashboard.reown.com, with the site's domain allowed), otherwise phone browsers can't connect an EVM wallet. Use the live site with MetaMask, Phantom and WalletConnect (from a phone): connect, sign in, launch a token, trade on a curve, mint a drop. Then read the reports:
 
 ```bash
 docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml logs backend | grep 'CSP violation'

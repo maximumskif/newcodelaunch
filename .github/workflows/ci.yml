@@ -221,7 +221,9 @@ jobs:
         run: |
           secret() { openssl rand -hex 32; }
           shared=$(secret)
-          printf 'DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\n' "$(secret)" > deploy/.env
+          # A placeholder WalletConnect id, so the bundle includes the QR modal
+          # and the CSP crawl below opens it (its relay rejects the id; fine).
+          printf 'DOMAIN=localhost\nPOSTGRES_PASSWORD=%s\nVITE_WALLETCONNECT_PROJECT_ID=00000000000000000000000000000000\n' "$(secret)" > deploy/.env
           printf 'SECRET_KEY=%s\nJWT_SECRET_KEY=%s\nCANDY_MACHINE_SHARED_SECRET=%s\nPLATFORM_FEE_RECIPIENT=0x000000000000000000000000000000000000FEE0\nPLATFORM_SOLANA_FEE_RECIPIENT=GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB\n' "$(secret)" "$(secret)" "$shared" > backend/.env
           printf 'PORT=4000\nCANDY_MACHINE_SHARED_SECRET=%s\n' "$shared" > services/candy-machine/.env
 
@@ -249,6 +251,21 @@ jobs:
           # The scheduler ran a maintenance round against the migrated database.
           sleep 5
           docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml --env-file deploy/.env logs scheduler | grep -i prune
+
+      # Item 6 of docs/RELEASE_CHECKLIST.md: crawl every page through Caddy,
+      # under the production headers, opening the wallet modals, and fail on
+      # any CSP violation, report-only ones included.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: CSP crawl
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          node e2e/csp/crawl.mjs https://localhost --insecure
 
       # Item 11 of docs/RELEASE_CHECKLIST.md: back up the running stack, then
       # restore into a scratch Postgres and compare row counts. A user and an
